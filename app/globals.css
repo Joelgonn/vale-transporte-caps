@@ -1,26 +1,55 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f9fb;
+  --foreground: #1c3150;
 }
 
-@theme inline {
+/* Identidade visual oficial — Vale Transporte CAPS (Sprint 24).
+   Paleta única (sem dark mode nesta sprint): azul institucional profundo
+   (brand) para marca/títulos/navegação, turquesa (accent) para destaques/
+   links/indicadores, verde (success) para ações principais/sucesso e neutros
+   muito claros. Os componentes usam estes tokens via Tailwind utilities
+   (bg-brand-600, text-accent-600, etc.) — fonte única de verdade aqui. */
+@theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  /* Azul institucional profundo */
+  --color-brand-50: #eef4fb;
+  --color-brand-100: #dbe7f7;
+  --color-brand-200: #bcd2ee;
+  --color-brand-300: #93b3e0;
+  --color-brand-400: #5f8ccd;
+  --color-brand-500: #3a6cb5;
+  --color-brand-600: #2c5899;
+  --color-brand-700: #25477b;
+  --color-brand-800: #213a61;
+  --color-brand-900: #1c3150;
+  --color-brand-950: #11203a;
+
+  /* Turquesa de destaque */
+  --color-accent-50: #f0faf9;
+  --color-accent-100: #d2f1ee;
+  --color-accent-200: #a6e4df;
+  --color-accent-300: #6ecfca;
+  --color-accent-400: #38b3b0;
+  --color-accent-500: #1c9996;
+  --color-accent-600: #147c7b;
+  --color-accent-700: #136463;
+  --color-accent-800: #13504f;
+  --color-accent-900: #134241;
+  --color-accent-950: #082524;
+
+  /* Verde — ação principal/sucesso (usa a escala padrão do Tailwind) */
+  --color-success: #16a34a;
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
 }

@@ -33,8 +33,14 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# launcher local do ambiente (contém AGNES_API_KEY — nunca commitar)
+terminal.bat
+
 # vercel
 .vercel
+
+# supabase — artefatos locais do CLI (contêm URLs de conexão sem valor)
+supabase/.temp/
 
 # typescript
 *.tsbuildinfo

@@ -1,0 +1,125 @@
+// Tipos da consulta de relatórios (Sprint 37 — Fase 8 do ROADMAP).
+// Espelham as tabelas public.liberacoes, public.retiradas e public.pacientes.
+// Nada aqui inventa campos: a fonte de dados é o banco e o que ele armazena.
+// Os relatórios NÃO incluem CPF (o contrato não exige; somente o Gestor lê
+// pacientes_com_cpf, e essa coluna não entra nas consultas de relatório).
+
+// Relatórios disponíveis. Ordem exibida na UI (seletor de abas).
+export const TIPOS_RELATORIO = ["liberacoes", "retiradas", "consolidado", "historico"] as const;
+export type TipoRelatorio = (typeof TIPOS_RELATORIO)[number];
+
+// Filtros da consulta. Todos são opcionais e aplicados NO SERVIDOR (PostgREST
+// eq/gte/lte + range) — nunca filtramos no navegador sobre dados incompletos.
+// `status` e `origem` existem somente no histórico por paciente; `paciente`
+// seleciona o paciente do histórico (id de v_pacientes).
+export type FiltrosRelatorio = {
+  tipo: TipoRelatorio;
+  de?: string | null; // YYYY-MM-DD (início do período)
+  ate?: string | null; // YYYY-MM-DD (fim do período — inclui o dia todo)
+  busca?: string | null; // nome / Gestor SUS do paciente
+  tipoLiberacao?: string | null; // somente no relatório de liberações
+  paciente?: string | null; // id do paciente (somente histórico)
+  status?: string | null; // status_liberacao (somente histórico)
+  origem?: string | null; // "original" | "renovacao" (somente histórico)
+  pagina: number;
+};
+
+export const POR_PAGINA_RELATORIO = 20;
+
+// Linha do relatório de LIBERAÇÕES. `totalRetirado` é somado no repositório a
+// partir do embed retiradas(quantidade) — mesma derivação do saldo de retiradas.
+export type LinhaLiberacoes = {
+  id: string;
+  paciente: { id: string; gestor_sus: string; nome: string } | null;
+  tipo: string;
+  quantidade: number;
+  periodoMeses: number | null;
+  dataInicio: string;
+  dataFim: string;
+  status: string;
+  autorizador: { id: string; nome: string } | null;
+  totalRetirado: number;
+};
+
+// Linha do relatório de RETIRADAS.
+export type LinhaRetiradas = {
+  id: string;
+  dataHora: string;
+  paciente: { id: string; gestor_sus: string; nome: string } | null;
+  liberacao: { id: string; tipo: string; quantidade: number } | null;
+  quantidade: number;
+  recepcionista: { id: string; nome: string } | null;
+};
+
+// Linha do relatório CONSOLIDADO (autorizado vs. entregue por liberação).
+// `saldo` é derivado no servidor: quantidade autorizada − total retirado.
+export type LinhaConsolidado = {
+  liberacaoId: string;
+  paciente: { id: string; gestor_sus: string; nome: string } | null;
+  tipo: string;
+  quantidadeAutorizada: number;
+  quantidadeRetirada: number;
+  saldo: number;
+};
+
+// Origem de uma renovação: a liberação anterior da cadeia (via renovacao_de_id).
+export type OrigemHistorico = {
+  id: string;
+  dataInicio: string;
+  tipo: string;
+  quantidade: number;
+};
+
+// Item do HISTÓRICO POR PACIENTE (Sprint 38). Representa UMA liberação da cadeia
+// do paciente — original (renovacao_de_id nulo) ou renovação (aponta para a
+// anterior). Nenhum campo é inventado: autorizado = quantidade; retirado = Σ
+// retiradas; saldo é derivado no servidor. `ultimaRetirada` é a maior data_hora
+// entre as retiradas da liberação.
+export type ItemHistorico = {
+  id: string;
+  dataInicio: string;
+  dataFim: string;
+  tipo: string;
+  quantidade: number;
+  periodoMeses: number | null;
+  status: string;
+  renovacaoDeId: string | null;
+  autorizador: { id: string; nome: string } | null;
+  registrador: { id: string; nome: string } | null;
+  origem: OrigemHistorico | null;
+  quantidadeRetirada: number;
+  numeroRetiradas: number;
+  ultimaRetirada: string | null;
+  saldo: number;
+};
+
+export type ResultadoListaRelatorio =
+  | {
+      tipo: "liberacoes";
+      linhas: LinhaLiberacoes[];
+      total: number;
+      pagina: number;
+      porPagina: number;
+    }
+  | {
+      tipo: "retiradas";
+      linhas: LinhaRetiradas[];
+      total: number;
+      pagina: number;
+      porPagina: number;
+    }
+  | {
+      tipo: "consolidado";
+      linhas: LinhaConsolidado[];
+      total: number;
+      pagina: number;
+      porPagina: number;
+    }
+  | {
+      tipo: "historico";
+      paciente: { id: string; gestor_sus: string; nome: string } | null;
+      linhas: ItemHistorico[];
+      total: number;
+      pagina: number;
+      porPagina: number;
+    };
