@@ -21,8 +21,19 @@ vi.mock("@/app/actions/pacientes", () => ({
   listarPacientesAction: (...args: unknown[]) => mocks.listarPacientesAction(...args),
 }));
 
-function paciente() {
-  return { id: "p1", gestor_sus: "123456", nome: "Maria da Silva", status: "ativo" };
+function paciente(sobre?: { origem?: string; nome?: string }) {
+  return {
+    id: "p1",
+    gestor_sus: "123456",
+    nome: sobre?.nome ?? "Maria da Silva",
+    status: "ativo",
+    origem: sobre?.origem ?? "regular",
+    data_inicio_acompanhamento: null,
+    data_fim_acompanhamento: null,
+    unidade_id: null,
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+  };
 }
 
 function origem(): LiberacaoComPaciente {
@@ -46,14 +57,17 @@ function origem(): LiberacaoComPaciente {
   };
 }
 
-async function selecionarPaciente() {
+async function selecionarPaciente(sobre?: { origem?: string; nome?: string }) {
   fireEvent.click(screen.getByRole("button", { name: "Buscar paciente por nome ou Gestor SUS" }));
   fireEvent.change(screen.getByLabelText("Buscar paciente"), {
     target: { value: "maria" },
   });
-  mocks.listarPacientesAction.mockResolvedValue({ ok: true, data: [paciente()] });
+  mocks.listarPacientesAction.mockResolvedValue({
+    ok: true,
+    data: [paciente(sobre)],
+  });
   fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
-  fireEvent.click(await screen.findByText("Maria da Silva"));
+  fireEvent.click(await screen.findByText(sobre?.nome ?? "Maria da Silva"));
 }
 
 // Avança pelos passos 1→2→3→4 (Paciente, Tipo e quantidade, Período, Revisão).
@@ -143,6 +157,23 @@ describe("LiberacaoForm — criar (fluxo em etapas)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Não foi possível criar a liberação."
     );
+  });
+
+  it("RN29 — paciente esporádico: contínua desabilitada e avulsa forçada", async () => {
+    render(<LiberacaoForm modo="criar" onClose={() => {}} onSalvo={() => {}} />);
+
+    await selecionarPaciente({ origem: "esporadico", nome: "José Esporádico" });
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+
+    expect(screen.getByLabelText("Contínua")).toBeDisabled();
+    expect(
+      screen.getByText(/Paciente esporádico: somente liberação avulsa/)
+    ).toBeInTheDocument();
+
+    // Avança até a revisão — o tipo enviado deve ser avulsa (forçado).
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    expect(screen.getByRole("button", { name: "Criar liberação" })).toBeInTheDocument();
   });
 
   it("volta ao passo anterior sem perder os dados já informados", async () => {

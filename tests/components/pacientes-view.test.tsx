@@ -30,6 +30,7 @@ function paciente(sobre?: Partial<PacienteSemCpf>): PacienteSemCpf {
     gestor_sus: "123456",
     nome: "Maria da Silva",
     status: "ativo",
+    origem: "regular",
     data_inicio_acompanhamento: "2026-01-10",
     data_fim_acompanhamento: null,
     unidade_id: null,
@@ -138,35 +139,38 @@ describe("PacientesView — leitura", () => {
 });
 
 describe("PacientesView — permissões por perfil (política de UI)", () => {
-  it("recepcionista NÃO recebe controles de escrita", () => {
+  it("recepcionista recebe SOMENTE o botão de paciente esporádico", () => {
     renderizar({ perfil: PERFIS.RECEPCIONISTA });
 
+    expect(screen.getByRole("button", { name: "Paciente Esporádico" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Novo paciente" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Inativar" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reativar" })).not.toBeInTheDocument();
   });
 
-  it("profissional autorizador NÃO recebe controle de alteração de status", () => {
+  it("profissional autorizador recebe cadastro regular e edição, sem alteração de status", () => {
     renderizar({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
 
     expect(screen.getByRole("button", { name: "Novo paciente" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Paciente Esporádico" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Editar" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Inativar" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reativar" })).not.toBeInTheDocument();
   });
 
-  it("gestor recebe controle de status, mas não cadastro nem edição de dados", () => {
+  it("gestor recebe cadastro regular e controle de status, mas não edição de dados", () => {
     renderizar({ perfil: PERFIS.GESTOR });
 
+    expect(screen.getByRole("button", { name: "Novo paciente" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Paciente Esporádico" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Inativar" }).length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: "Novo paciente" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
   });
 });
 
 describe("PacientesView — interações", () => {
-  it("autorizador abre o formulário de novo paciente", () => {
+  it("autorizador abre o formulário de novo paciente (origem regular)", () => {
     renderizar({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
 
     fireEvent.click(screen.getByRole("button", { name: "Novo paciente" }));
@@ -175,6 +179,25 @@ describe("PacientesView — interações", () => {
       screen.getByRole("dialog", { name: "Novo paciente" })
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Gestor SUS")).toBeInTheDocument();
+  });
+
+  it("recepcionista abre o formulário de paciente esporádico", () => {
+    renderizar({ perfil: PERFIS.RECEPCIONISTA });
+
+    fireEvent.click(screen.getByRole("button", { name: "Paciente Esporádico" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "Paciente esporádico" })
+    ).toBeInTheDocument();
+  });
+
+  it("paciente esporádico é exibido com o selo de origem", () => {
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacientes: [paciente({ id: "p2", origem: "esporadico", nome: "José" })],
+    });
+
+    expect(screen.getAllByText("Esporádico").length).toBeGreaterThan(0);
   });
 
   it("autorizador abre o formulário de edição preenchido", () => {

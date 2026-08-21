@@ -87,7 +87,7 @@ describe("PacienteRepositoryPostgres", () => {
     expect(await repo.buscarCpf("p1")).toBeNull();
   });
 
-  it("criar insere em pacientes", async () => {
+  it("criar insere em pacientes com origem regular por padrão", async () => {
     const { repo, calls } = makeRepo({
       insertResultado: { data: { id: "p1", gestor_sus: "123", nome: "Ana" }, error: null },
     });
@@ -96,6 +96,41 @@ describe("PacienteRepositoryPostgres", () => {
 
     expect(calls.from).toHaveBeenCalledWith("pacientes");
     expect(criado.id).toBe("p1");
+  });
+
+  it("criar persiste a origem informada (esporadico)", async () => {
+    let inserido: Record<string, unknown> | null = null;
+    const calls = { from: vi.fn(), rpc: vi.fn() };
+    const qb = {
+      select: () => qb,
+      eq: () => qb,
+      or: () => qb,
+      ilike: () => qb,
+      order: () => qb,
+      insert: (payload: Record<string, unknown>) => {
+        inserido = payload;
+        return qb;
+      },
+      update: () => qb,
+      single: () =>
+        Promise.resolve({
+          data: { id: "p1", gestor_sus: "123", nome: "Ana" },
+          error: null,
+        }),
+      maybeSingle: () => qb,
+      then: (resolve: (v: unknown) => unknown) =>
+        Promise.resolve({ data: [], error: null }).then(resolve),
+    };
+    calls.from.mockReturnValue(qb);
+    const repo = new PacienteRepositoryPostgres(calls as unknown as SupabaseClient);
+
+    await repo.criar({
+      gestor_sus: "123",
+      nome: "Ana",
+      origem: "esporadico",
+    });
+
+    expect(inserido).toMatchObject({ origem: "esporadico" });
   });
 
   it("propaga AppError mapeado quando o banco nega acesso", async () => {

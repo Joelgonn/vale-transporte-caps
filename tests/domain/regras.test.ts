@@ -4,6 +4,7 @@ import {
   calcularDataFim,
   isPeriodoValido,
   isQuantidadeValida,
+  origemPermitidaPorPerfil,
   permissoesLiberacoes,
   permissoesPacientes,
   permissoesRelatorios,
@@ -19,6 +20,7 @@ import {
   validarTrocaDeSenha,
 } from "@/lib/domain/regras";
 import {
+  ORIGENS_PACIENTE,
   PERFIS,
   PROFISSOES,
   TIPOS_LIBERACAO,
@@ -95,6 +97,52 @@ describe("validarLiberacao — períodos", () => {
   });
 });
 
+describe("validarLiberacao — RN29 (paciente esporádico somente avulsa)", () => {
+  it("aceita avulsa para paciente esporádico", () => {
+    expect(() =>
+      validarLiberacao({
+        tipo: TIPOS_LIBERACAO.AVULSA,
+        quantidade: 1,
+        origemPaciente: ORIGENS_PACIENTE.ESPORADICO,
+      })
+    ).not.toThrow();
+  });
+
+  it("rejeita contínua para paciente esporádico", () => {
+    expectValidacao(
+      () =>
+        validarLiberacao({
+          tipo: TIPOS_LIBERACAO.CONTINUA,
+          quantidade: 4,
+          periodoMeses: 3,
+          origemPaciente: ORIGENS_PACIENTE.ESPORADICO,
+        }),
+      /RN29/
+    );
+  });
+
+  it("aceita contínua para paciente regular", () => {
+    expect(() =>
+      validarLiberacao({
+        tipo: TIPOS_LIBERACAO.CONTINUA,
+        quantidade: 4,
+        periodoMeses: 3,
+        origemPaciente: ORIGENS_PACIENTE.REGULAR,
+      })
+    ).not.toThrow();
+  });
+
+  it("sem origem informada mantém o comportamento anterior", () => {
+    expect(() =>
+      validarLiberacao({
+        tipo: TIPOS_LIBERACAO.CONTINUA,
+        quantidade: 4,
+        periodoMeses: 1,
+      })
+    ).not.toThrow();
+  });
+});
+
 describe("isQuantidadeValida / isPeriodoValido", () => {
   it("reconhece valores válidos", () => {
     expect(isQuantidadeValida(4)).toBe(true);
@@ -139,12 +187,59 @@ describe("validarNovoPaciente", () => {
     expect(() => validarNovoPaciente({ gestor_sus: "123456", nome: "Maria" })).not.toThrow();
   });
 
+  it("aceita origem regular e esporadico explícitas", () => {
+    expect(() =>
+      validarNovoPaciente({
+        gestor_sus: "123456",
+        nome: "Maria",
+        origem: ORIGENS_PACIENTE.REGULAR,
+      })
+    ).not.toThrow();
+    expect(() =>
+      validarNovoPaciente({
+        gestor_sus: "123456",
+        nome: "Maria",
+        origem: ORIGENS_PACIENTE.ESPORADICO,
+      })
+    ).not.toThrow();
+  });
+
+  it("rejeita origem inválida", () => {
+    expectValidacao(() =>
+      validarNovoPaciente({
+        gestor_sus: "123456",
+        nome: "Maria",
+        origem: "temporario" as never,
+      })
+    );
+  });
+
   it("rejeita gestor_sus vazio", () => {
     expectValidacao(() => validarNovoPaciente({ gestor_sus: "  ", nome: "Maria" }));
   });
 
   it("rejeita nome vazio", () => {
     expectValidacao(() => validarNovoPaciente({ gestor_sus: "123", nome: "" }));
+  });
+});
+
+describe("origemPermitidaPorPerfil (Sprint 38)", () => {
+  it("gestor cadastra somente regular", () => {
+    expect(origemPermitidaPorPerfil(PERFIS.GESTOR)).toBe(
+      ORIGENS_PACIENTE.REGULAR
+    );
+  });
+
+  it("profissional autorizador cadastra somente regular", () => {
+    expect(origemPermitidaPorPerfil(PERFIS.PROFISSIONAL_AUTORIZADOR)).toBe(
+      ORIGENS_PACIENTE.REGULAR
+    );
+  });
+
+  it("recepcionista cadastra somente esporadico", () => {
+    expect(origemPermitidaPorPerfil(PERFIS.RECEPCIONISTA)).toBe(
+      ORIGENS_PACIENTE.ESPORADICO
+    );
   });
 });
 
@@ -289,7 +384,8 @@ describe("permissoesPacientes (política de UI espelhando a RLS)", () => {
   it("usuário sem perfil funcional não acessa", () => {
     const p = permissoesPacientes(null, true);
     expect(p.podeAcessar).toBe(false);
-    expect(p.podeCriar).toBe(false);
+    expect(p.podeCriarRegular).toBe(false);
+    expect(p.podeCriarEsporadico).toBe(false);
     expect(p.podeEditarDados).toBe(false);
     expect(p.podeAlterarStatus).toBe(false);
   });
@@ -297,31 +393,35 @@ describe("permissoesPacientes (política de UI espelhando a RLS)", () => {
   it("usuário inativo não acessa dados operacionais", () => {
     const p = permissoesPacientes(PERFIS.GESTOR, false);
     expect(p.podeAcessar).toBe(false);
-    expect(p.podeCriar).toBe(false);
+    expect(p.podeCriarRegular).toBe(false);
+    expect(p.podeCriarEsporadico).toBe(false);
     expect(p.podeEditarDados).toBe(false);
     expect(p.podeAlterarStatus).toBe(false);
   });
 
-  it("gestor ativo: acesso + alterar status (sem criar/editar dados, conforme RLS)", () => {
+  it("gestor ativo: acesso + criar regular + alterar status (sem editar dados)", () => {
     const p = permissoesPacientes(PERFIS.GESTOR, true);
     expect(p.podeAcessar).toBe(true);
-    expect(p.podeCriar).toBe(false);
+    expect(p.podeCriarRegular).toBe(true);
+    expect(p.podeCriarEsporadico).toBe(false);
     expect(p.podeEditarDados).toBe(false);
     expect(p.podeAlterarStatus).toBe(true);
   });
 
-  it("profissional autorizador ativo: acesso + criar + editar dados (sem alterar status)", () => {
+  it("profissional autorizador ativo: acesso + criar regular + editar dados (sem alterar status)", () => {
     const p = permissoesPacientes(PERFIS.PROFISSIONAL_AUTORIZADOR, true);
     expect(p.podeAcessar).toBe(true);
-    expect(p.podeCriar).toBe(true);
+    expect(p.podeCriarRegular).toBe(true);
+    expect(p.podeCriarEsporadico).toBe(false);
     expect(p.podeEditarDados).toBe(true);
     expect(p.podeAlterarStatus).toBe(false);
   });
 
-  it("recepcionista ativa: somente leitura", () => {
+  it("recepcionista ativa: criar esporádico + leitura (sem criar regular/editar/status)", () => {
     const p = permissoesPacientes(PERFIS.RECEPCIONISTA, true);
     expect(p.podeAcessar).toBe(true);
-    expect(p.podeCriar).toBe(false);
+    expect(p.podeCriarRegular).toBe(false);
+    expect(p.podeCriarEsporadico).toBe(true);
     expect(p.podeEditarDados).toBe(false);
     expect(p.podeAlterarStatus).toBe(false);
   });

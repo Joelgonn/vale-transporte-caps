@@ -387,18 +387,18 @@ describe("regressão Sprint 41: recomposição da grade (sem col-span, sem órf�
     return el!;
   }
 
-  it("Gestor: 3 ações rápidas em grid de colunas iguais (base 1 col, desktop 3)", () => {
+  it("Gestor: 4 ações rápidas em grid de colunas iguais (base 1 col, desktop 3)", () => {
     renderizarHome();
     const ul = secao("dashboard-acoes-rapidas").querySelector("ul")!;
     expect(ul.className).toContain("grid-cols-1");
     expect(ul.className).toContain("lg:grid-cols-3");
     const itens = Array.from(ul.querySelectorAll("li"));
-    expect(itens).toHaveLength(3);
+    expect(itens).toHaveLength(4);
     for (const item of itens) {
       expect(item.className).not.toMatch(/col-span/);
       expect(item.querySelector("a")).not.toBeNull();
     }
-    for (const rotulo of ["Gerenciar usuários", "Consultar auditoria", "Consultar relatórios"]) {
+    for (const rotulo of ["Novo paciente", "Gerenciar usuários", "Consultar auditoria", "Consultar relatórios"]) {
       expect(screen.getByRole("link", { name: new RegExp(`^${rotulo}`) })).toBeInTheDocument();
     }
   });
@@ -426,7 +426,7 @@ describe("regressão Sprint 41: recomposição da grade (sem col-span, sem órf�
     expect(pacientes.className).not.toMatch(/col-span/);
   });
 
-  it("recepcionista: grade se adapta naturalmente (2 ações, 3 módulos, sem placeholders)", () => {
+  it("recepcionista: grade se adapta naturalmente (3 ações, 3 módulos, sem placeholders)", () => {
     render(
       <RouterContext.Provider value={router()}>
         <DashboardHome
@@ -438,10 +438,11 @@ describe("regressão Sprint 41: recomposição da grade (sem col-span, sem órf�
     );
     const ulAcoes = secao("dashboard-acoes-rapidas").querySelector("ul")!;
     const itensAcoes = Array.from(ulAcoes.querySelectorAll("li"));
-    expect(itensAcoes).toHaveLength(2);
+    expect(itensAcoes).toHaveLength(3);
     for (const item of itensAcoes) {
       expect(item.className).not.toMatch(/col-span/);
     }
+    expect(screen.getByRole("link", { name: /^Paciente esporádico/ })).toBeInTheDocument();
     const gradeModulos = secao("dashboard-modulos").querySelector("div.grid")!;
     const cards = Array.from(gradeModulos.querySelectorAll("a"));
     expect(cards).toHaveLength(3);

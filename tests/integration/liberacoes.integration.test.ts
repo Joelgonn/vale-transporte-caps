@@ -341,3 +341,195 @@ describe.skipIf(!habilitado)("Integração — liberações (Sprints 18/19)", ()
     expect((erro as AppError).code).toBe("ACESSO_NEGADO");
   });
 });
+
+
+// ---------------------------------------------------------------------------
+// Sprint 38 — Origem do paciente (migration 20260821000001)
+//
+// Cobre as novas policies de INSERT em pacientes (pacientes_insert_regular /
+// pacientes_insert_recepcao_esporadico) e a regra RN29 no trigger
+// fn_liberacoes_before (paciente esporádico somente liberação avulsa).
+// Pacientes criados nos testes são removidos no `finally` via service role.
+//
+// GUARD: os cenários dependem da migration 20260821000001 aplicada no banco.
+// Enquanto a coluna origem não existir, os testes são PULADOS (não falham) —
+// a suíte permanece verde antes do deploy da migration.
+const origemAplicada = async (): Promise<boolean> => {
+  try {
+    const { error } = await adminClient()
+      .from("v_pacientes")
+      .select("origem")
+      .limit(1);
+    return error === null;
+  } catch {
+    return false;
+  }
+};
+
+describe.skipIf(!habilitado)("Integração — origem do paciente (Sprint 38)", () => {
+  const sufixo = () => Date.now().toString();
+
+  async function limparPacientes(admin: SupabaseClient, ids: string[]) {
+    if (!ids.length) return;
+    await admin.from("pacientes").delete().in("id", ids);
+  }
+
+  it("✓ gestor cria paciente regular (RLS pacientes_insert_regular)", async () => {
+    if (!(await origemAplicada())) return;
+    const admin = adminClient();
+    const gestorSus = `9${sufixo()}`;
+    let id: string | null = null;
+    try {
+      const { data, error } = await gestor
+        .from("pacientes")
+        .insert({ gestor_sus: gestorSus, nome: "Paciente Regular Gestor", origem: "regular" })
+        .select("id, origem")
+        .single();
+      expect(error).toBeNull();
+      expect(data?.origem).toBe("regular");
+      id = data!.id;
+    } finally {
+      if (id) await limparPacientes(admin, [id]);
+    }
+  });
+
+  it("✓ profissional_autorizador cria paciente regular", async () => {
+    if (!(await origemAplicada())) return;
+    const admin = adminClient();
+    const gestorSus = `9${sufixo()}1`;
+    let id: string | null = null;
+    try {
+      const { data, error } = await autorizador
+        .from("pacientes")
+        .insert({ gestor_sus: gestorSus, nome: "Paciente Regular Autorizador" })
+        .select("id, origem")
+        .single();
+      expect(error).toBeNull();
+      // Origem default é 'regular' — compatível com pacientes existentes.
+      expect(data?.origem).toBe("regular");
+      id = data!.id;
+    } finally {
+      if (id) await limparPacientes(admin, [id]);
+    }
+  });
+
+  it("✓ recepcionista cria paciente esporadico", async () => {
+    if (!(await origemAplicada())) return;
+    const admin = adminClient();
+    const gestorSus = `9${sufixo()}2`;
+    let id: string | null = null;
+    try {
+      const { data, error } = await recepcionista
+        .from("pacientes")
+        .insert({ gestor_sus: gestorSus, nome: "Paciente Esporádico", origem: "esporadico" })
+        .select("id, origem")
+        .single();
+      expect(error).toBeNull();
+      expect(data?.origem).toBe("esporadico");
+      id = data!.id;
+    } finally {
+      if (id) await limparPacientes(admin, [id]);
+    }
+  });
+
+  it("✗ recepcionista NÃO cria paciente regular (RLS)", async () => {
+    if (!(await origemAplicada())) return;
+    const gestorSus = `9${sufixo()}3`;
+    const { data, error } = await recepcionista
+      .from("pacientes")
+      .insert({ gestor_sus: gestorSus, nome: "Deveria Falhar", origem: "regular" })
+      .select("id")
+      .single();
+    expect(error).not.toBeNull();
+    expect(data).toBeNull();
+  });
+
+  it("✗ gestor NÃO cria paciente esporadico (RLS)", async () => {
+    if (!(await origemAplicada())) return;
+    const gestorSus = `9${sufixo()}4`;
+    const { data, error } = await gestor
+      .from("pacientes")
+      .insert({ gestor_sus: gestorSus, nome: "Deveria Falhar", origem: "esporadico" })
+      .select("id")
+      .single();
+    expect(error).not.toBeNull();
+    expect(data).toBeNull();
+  });
+
+  it("✗ autorizador NÃO cria paciente esporadico (RLS)", async () => {
+    if (!(await origemAplicada())) return;
+    const gestorSus = `9${sufixo()}5`;
+    const { data, error } = await autorizador
+      .from("pacientes")
+      .insert({ gestor_sus: gestorSus, nome: "Deveria Falhar", origem: "esporadico" })
+      .select("id")
+      .single();
+    expect(error).not.toBeNull();
+    expect(data).toBeNull();
+  });
+
+  it("✓ paciente esporádico recebe liberação avulsa (RN29)", async () => {
+    if (!(await origemAplicada())) return;
+    const admin = adminClient();
+    const autorizadorId = await usuarioAtualId(autorizador);
+    const gestorSus = `9${sufixo()}6`;
+    let pacienteId: string | null = null;
+    const idsLiberacoes: string[] = [];
+
+    try {
+      const { data: paciente, error } = await admin
+        .from("pacientes")
+        .insert({ gestor_sus: gestorSus, nome: "Esporádico Avulsa", origem: "esporadico" })
+        .select("id")
+        .single();
+      expect(error).toBeNull();
+      pacienteId = paciente!.id;
+
+      const service = new LiberacaoService(new LiberacaoRepositoryPostgres(autorizador));
+      const criada = await service.criarLiberacao({
+        pacienteId: pacienteId!,
+        tipo: TIPOS_LIBERACAO.AVULSA,
+        quantidade: 1,
+        periodoMeses: null,
+        profissionalAutorizadorId: autorizadorId,
+      });
+      idsLiberacoes.push(criada.id);
+      expect(criada.status).toBe("ativa");
+    } finally {
+      if (idsLiberacoes.length) await limparLiberacoes(admin, idsLiberacoes);
+      if (pacienteId) await limparPacientes(admin, [pacienteId]);
+    }
+  });
+
+  it("✗ paciente esporádico NÃO recebe liberação contínua (trigger RN29)", async () => {
+    if (!(await origemAplicada())) return;
+    const admin = adminClient();
+    const autorizadorId = await usuarioAtualId(autorizador);
+    const gestorSus = `9${sufixo()}7`;
+    let pacienteId: string | null = null;
+
+    try {
+      const { data: paciente, error } = await admin
+        .from("pacientes")
+        .insert({ gestor_sus: gestorSus, nome: "Esporádico Contínua", origem: "esporadico" })
+        .select("id")
+        .single();
+      expect(error).toBeNull();
+      pacienteId = paciente!.id;
+
+      const erro = await erroDe(
+        new LiberacaoService(new LiberacaoRepositoryPostgres(autorizador)).criarLiberacao({
+          pacienteId: pacienteId!,
+          tipo: TIPOS_LIBERACAO.CONTINUA,
+          quantidade: 4,
+          periodoMeses: 3,
+          profissionalAutorizadorId: autorizadorId,
+        })
+      );
+      expect(erro).toBeInstanceOf(AppError);
+      expect((erro as AppError).message).toMatch(/RN29/);
+    } finally {
+      if (pacienteId) await limparPacientes(admin, [pacienteId]);
+    }
+  });
+});

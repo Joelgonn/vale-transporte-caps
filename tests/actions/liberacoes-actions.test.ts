@@ -23,6 +23,7 @@ const { mocks, state } = vi.hoisted(() => ({
   mocks: {
     getUsuarioFuncional: vi.fn(),
     createService: vi.fn(),
+    buscarPaciente: vi.fn(),
   },
   state: { supabase: null as AuthSupabaseMock | null },
 }));
@@ -38,6 +39,14 @@ vi.mock("@/lib/auth/profile", () => ({
 vi.mock("@/lib/services/liberacao-service", () => ({
   LiberacaoService: {
     create: (...args: unknown[]) => mocks.createService(...args),
+  },
+}));
+
+vi.mock("@/lib/services/paciente-service", () => ({
+  PacienteService: {
+    create: vi.fn(async () => ({
+      buscarPaciente: mocks.buscarPaciente,
+    })),
   },
 }));
 
@@ -184,6 +193,7 @@ describe("criarLiberacaoAction — identidade da sessão", () => {
     vi.clearAllMocks();
     comSessao();
     comPerfil();
+    mocks.buscarPaciente.mockResolvedValue({ id: "p1", origem: "regular" });
   });
 
   it("autorizador ativo: profissionalAutorizadorId é resolvido da sessão (cliente não informa)", async () => {
@@ -199,12 +209,55 @@ describe("criarLiberacaoAction — identidade da sessão", () => {
     const resultado = await criarLiberacaoAction(dados);
 
     expect(resultado.ok).toBe(true);
-    expect(fake.criarLiberacao).toHaveBeenCalledWith({
-      ...dados,
-      profissionalAutorizadorId: "u-autor",
-    });
+    expect(fake.criarLiberacao).toHaveBeenCalledWith(
+      {
+        ...dados,
+        profissionalAutorizadorId: "u-autor",
+      },
+      "regular"
+    );
     expect(fake.criarLiberacao.mock.calls[0][0]).not.toHaveProperty("registrado_por_id");
     expect(fake.criarLiberacao.mock.calls[0][0]).not.toHaveProperty("data_fim");
+  });
+
+  it("RN29 — action repassa a origem do paciente ao serviço (esporádico + contínua é barrado no service/banco)", async () => {
+    const fake = serviceFake();
+    mocks.createService.mockResolvedValue(fake);
+    mocks.buscarPaciente.mockResolvedValue({ id: "p1", origem: "esporadico" });
+
+    const resultado = await criarLiberacaoAction({
+      pacienteId: "p1",
+      tipo: TIPOS_LIBERACAO.CONTINUA,
+      quantidade: 4,
+      periodoMeses: 3,
+    });
+
+    // A validação RN29 vive no LiberacaoService real (e no trigger do banco);
+    // aqui verificamos que a action repassa a origem correta para a validação.
+    expect(fake.criarLiberacao).toHaveBeenCalledWith(
+      expect.objectContaining({ tipo: TIPOS_LIBERACAO.CONTINUA }),
+      "esporadico"
+    );
+    void resultado;
+  });
+
+  it("✓ paciente esporádico aceita liberação avulsa", async () => {
+    const fake = serviceFake();
+    mocks.createService.mockResolvedValue(fake);
+    mocks.buscarPaciente.mockResolvedValue({ id: "p1", origem: "esporadico" });
+
+    const resultado = await criarLiberacaoAction({
+      pacienteId: "p1",
+      tipo: TIPOS_LIBERACAO.AVULSA,
+      quantidade: 1,
+      periodoMeses: null,
+    });
+
+    expect(resultado.ok).toBe(true);
+    expect(fake.criarLiberacao).toHaveBeenCalledWith(
+      expect.objectContaining({ tipo: TIPOS_LIBERACAO.AVULSA }),
+      "esporadico"
+    );
   });
 
   it("autorizador ativo sem usuarios.id (sem vínculo) é bloqueado", async () => {
@@ -241,14 +294,17 @@ describe("criarLiberacaoAction — identidade da sessão", () => {
     expect(resultado.ok).toBe(true);
     expect(fake.buscarLiberacao).toHaveBeenCalledWith("l-origem");
     // Autorizador original preservado e parâmetros copiados da original.
-    expect(fake.criarLiberacao).toHaveBeenCalledWith({
-      pacienteId: "p1",
-      tipo: TIPOS_LIBERACAO.CONTINUA,
-      quantidade: 4,
-      periodoMeses: 3,
-      profissionalAutorizadorId: "u-autor",
-      renovacaoDeId: "l-origem",
-    });
+    expect(fake.criarLiberacao).toHaveBeenCalledWith(
+      {
+        pacienteId: "p1",
+        tipo: TIPOS_LIBERACAO.CONTINUA,
+        quantidade: 4,
+        periodoMeses: 3,
+        profissionalAutorizadorId: "u-autor",
+        renovacaoDeId: "l-origem",
+      },
+      "regular"
+    );
     expect(fake.criarLiberacao.mock.calls[0][0]).not.toHaveProperty("registrado_por_id");
     expect(fake.criarLiberacao.mock.calls[0][0]).not.toHaveProperty("data_fim");
   });

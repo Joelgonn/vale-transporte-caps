@@ -2,6 +2,53 @@
 
 > Histórico de entregas por sprint. Consulte `docs/ROADMAP.md` para as fases futuras.
 
+## Sprint 38 — Cadastro de pacientes por origem (RN29)
+
+# SPRINT 38 — CADASTRO DE PACIENTES POR ORIGEM
+
+## 1. Escopo
+Fecha a decisão institucional pendente "quem pode cadastrar pacientes":
+- **Gestor** e **Profissional Autorizador** cadastram pacientes **regulares**;
+- **Recepcionista** cadastra pacientes **esporádicos**, exclusivamente para
+  atendimento pontual (liberação avulsa).
+
+## 2. Banco (migration incremental `20260821000001_pacientes_origem.sql`)
+- Novo enum `public.origem_paciente` (`regular`, `esporadico`);
+- Coluna `public.pacientes.origem` (`NOT NULL DEFAULT 'regular'`) — pacientes
+  existentes tornam-se `regular` (nenhum dado alterado);
+- `v_pacientes` e `pacientes_com_cpf()` recriadas incluindo `origem`;
+- RLS de INSERT substituída:
+  - `pacientes_insert_regular` — gestor/autorizador ativos, `origem = 'regular'`;
+  - `pacientes_insert_recepcao_esporadico` — recepcionista ativa,
+    `origem = 'esporadico'`;
+  - (a antiga `pacientes_insert_autorizador` é removida);
+- **RN29 no banco**: `fn_liberacoes_before` rejeita liberação não-avulsa para
+  paciente esporádico (RN01/RN02/RN27/RN23 e cálculo RN13/RN21 preservados).
+
+## 3. Aplicação
+- `lib/domain/enums.ts`: `ORIGENS_PACIENTE` + `ROTULO_ORIGEM_PACIENTE`;
+- types de paciente com `origem`; `NovoPaciente.origem` resolvido no servidor;
+- `regras.ts`: `validarLiberacao({ origemPaciente })` (RN29),
+  `origemPermitidaPorPerfil()`, `permissoesPacientes` com `podeCriarRegular`
+  e `podeCriarEsporadico` (sem permissão genérica);
+- `criarPacienteAction`: origem derivada do perfil da SESSÃO; origem indevida
+  enviada pelo cliente → ACESSO_NEGADO;
+- `criarLiberacaoAction`: lê a origem do paciente e repassa à validação RN29;
+- UI Pacientes: gestor/autorizador → botão **"Novo paciente"**; recepcionista →
+  **"Paciente Esporádico"**; selo de origem na listagem;
+- UI Liberações: Contínua desabilitada/forçada para Avulsa quando o paciente é
+  esporádico (espelho da regra do banco, que continua sendo a autoridade);
+- Auditoria: rótulo/formato do campo `origem`.
+
+## 4. Testes
+Domínio (permissões por perfil × origem, RN29 em validarLiberacao,
+origemPermitidaPorPerfil), actions de pacientes (✓ gestor/autorizador criam
+regular; ✓ recepcionista cria esporadico; ✗ recepcionista/gestor/autorizador
+com origem indevida), service/repository de pacientes e liberações,
+componentes (PacientesView/PacienteForm/LiberacaoForm/navegação/dashboard) e
+integração real env-guarded (`origemAplicada()` pula os cenários até a
+migration ser aplicada no remoto).
+
 ## Sprint 37 — Estabilização do Auth nos testes (Fase A) + Relatórios (Fase B)
 
 # SPRINT 37 — ESTABILIZAÇÃO DO AUTH NOS TESTES + RELATÓRIOS FASE 8

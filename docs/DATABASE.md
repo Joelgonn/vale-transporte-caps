@@ -22,6 +22,7 @@
 | `nome` | text | sim | — | |
 | `cpf` | text | não | null | Dado sensível — LGPD. UNIQUE quando preenchido. **Mantido OPCIONAL (Sprint 05)** — obrigatoriedade permanece DECISÃO INSTITUCIONAL PENDENTE; não aplicar NOT NULL. |
 | `status` | enum `status_paciente` (`ativo`, `inativo`) | sim | `ativo` | Status do direito ao benefício (RN01). |
+| `origem` | enum `origem_paciente` (`regular`, `esporadico`) | sim | `regular` | **Sprint 38 (RN29):** `regular` = acompanhamento contínuo (cadastro por gestor/autorizador); `esporadico` = atendimento pontual criado pela recepção, recebe SOMENTE liberação avulsa. Pacientes pré-existentes = `regular`. |
 | `data_inicio_acompanhamento` | date | não | null | |
 | `data_fim_acompanhamento` | date | não | null | |
 | `unidade_id` | uuid | não | null | Expansão futura (RN17). |
@@ -33,7 +34,7 @@
 **Índices:** `UNIQUE(gestor_sus)`; `UNIQUE(cpf)`; índice em `(status)`.
 **Campos de status:** `status`.
 **Campos de data/hora:** `data_inicio_acompanhamento`, `data_fim_acompanhamento`, `created_at`, `updated_at`.
-**Regras de integridade:** RN01 (apenas ativos recebem vales); RN25 (Gestor SUS principal); RN20 (minimização — evitar dados sensíveis desnecessários).
+**Regras de integridade:** RN01 (apenas ativos recebem vales); RN25 (Gestor SUS principal); RN20 (minimização — evitar dados sensíveis desnecessários); **RN29 (Sprint 38): origem do paciente — esporádico somente liberação avulsa (trigger `fn_liberacoes_before`); INSERT por perfil × origem via RLS (`pacientes_insert_regular` para gestor/autorizador, `pacientes_insert_recepcao_esporadico` para a recepção — migration `20260821000001`).**
 
 ## Entidade 2 — `usuarios`
 

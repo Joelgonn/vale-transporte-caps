@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { criarLiberacaoAction } from "@/app/actions/liberacoes";
 import { listarPacientesAction } from "@/app/actions/pacientes";
 import {
+  ORIGENS_PACIENTE,
   PERIODOS_LIBERACAO,
   QUANTIDADES_LIBERACAO,
   ROTULO_TIPO_LIBERACAO,
@@ -13,7 +14,7 @@ import {
   type TipoLiberacao,
 } from "@/lib/domain/enums";
 import { isPeriodoValido, isQuantidadeValida } from "@/lib/domain/regras";
-import type { LiberacaoComPaciente, PacienteResumo } from "@/lib/domain/liberacoes/types";
+import type { LiberacaoComPaciente } from "@/lib/domain/liberacoes/types";
 import type { PacienteSemCpf } from "@/lib/domain/pacientes/types";
 import {
   BOTAO_PRIMARIO,
@@ -78,15 +79,9 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
   const isRenovacao = props.modo === "renovar";
   const origem = isRenovacao ? props.origem : null;
 
-  const [paciente, setPaciente] = useState<PacienteResumo | null>(
-    isRenovacao && origem?.paciente
-      ? {
-          id: origem.paciente.id,
-          gestor_sus: origem.paciente.gestor_sus,
-          nome: origem.paciente.nome,
-        }
-      : null
-  );
+  // Paciente selecionado (somente no modo criar). Guarda o registro completo de
+  // v_pacientes para conhecer a ORIGEM e aplicar RN29 na UI.
+  const [paciente, setPaciente] = useState<PacienteSemCpf | null>(null);
   const [tipo, setTipo] = useState<TipoLiberacao>(
     (origem?.tipo as TipoLiberacao | undefined) ?? TIPOS_LIBERACAO.CONTINUA
   );
@@ -120,6 +115,18 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
       const erros: ErroCampo[] = [];
       if (tipo !== TIPOS_LIBERACAO.CONTINUA && tipo !== TIPOS_LIBERACAO.AVULSA) {
         erros.push({ campo: "tipo", mensagem: "Selecione o tipo de liberação." });
+      }
+      // RN29 — paciente esporádico somente liberação avulsa (o banco também
+      // bloqueia via trigger fn_liberacoes_before).
+      if (
+        paciente?.origem === ORIGENS_PACIENTE.ESPORADICO &&
+        tipo !== TIPOS_LIBERACAO.AVULSA
+      ) {
+        erros.push({
+          campo: "tipo",
+          mensagem:
+            "Paciente esporádico somente recebe liberação avulsa (RN29).",
+        });
       }
       if (!isQuantidadeValida(quantidade)) {
         erros.push({
@@ -188,6 +195,18 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
     const tipoSel = selecionarTipo(String(formData.get("tipo") ?? ""));
     if (!tipoSel) {
       erros.push({ campo: "tipo", mensagem: "Selecione o tipo de liberação." });
+    }
+    // RN29 — espelho local da regra do banco.
+    if (
+      tipoSel &&
+      paciente?.origem === ORIGENS_PACIENTE.ESPORADICO &&
+      tipoSel !== TIPOS_LIBERACAO.AVULSA
+    ) {
+      erros.push({
+        campo: "tipo",
+        mensagem:
+          "Paciente esporádico somente recebe liberação avulsa (RN29).",
+      });
     }
 
     const qtdSel = selecionarQuantidade(String(formData.get("quantidade") ?? ""));
@@ -447,6 +466,15 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
                                   setResultados(null);
                                   setSeletorAberto(false);
                                   limparErro("paciente");
+                                  // RN29 — paciente esporádico só pode avulsa:
+                                  // força o tipo e limpa erro de período.
+                                  if (
+                                    p.origem === ORIGENS_PACIENTE.ESPORADICO &&
+                                    tipo !== TIPOS_LIBERACAO.AVULSA
+                                  ) {
+                                    setTipo(TIPOS_LIBERACAO.AVULSA);
+                                    limparErro("periodo");
+                                  }
                                 }}
                                 className="flex w-full flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
                               >
@@ -455,6 +483,8 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
                                 </span>
                                 <span className="text-xs text-zinc-500">
                                   Gestor SUS {p.gestor_sus}
+                                  {p.origem === ORIGENS_PACIENTE.ESPORADICO &&
+                                    " · Esporádico (somente avulsa)"}
                                 </span>
                               </button>
                             </li>
@@ -476,22 +506,31 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
             <div className={passo === 2 ? "flex flex-col gap-2" : "hidden"}>
               <fieldset>
                 <legend className={ROTULO}>Tipo de liberação</legend>
+                {paciente?.origem === ORIGENS_PACIENTE.ESPORADICO && (
+                  <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    Paciente esporádico: somente liberação avulsa (RN29).
+                  </p>
+                )}
                 <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                  {Object.values(TIPOS_LIBERACAO).map((valor) => (
+                  {Object.values(TIPOS_LIBERACAO).map((valor) => {
+                    const bloqueado =
+                      paciente?.origem === ORIGENS_PACIENTE.ESPORADICO &&
+                      valor !== TIPOS_LIBERACAO.AVULSA;
+                    return (
                     <label
                       key={valor}
-                      className={`flex h-11 flex-1 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors ${
+                      className={`flex h-11 flex-1 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors ${
                         tipo === valor
                           ? "border-brand-600 bg-brand-600 text-white"
                           : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"
-                      }`}
+                      } ${bloqueado ? "cursor-not-allowed opacity-40" : "cursor-pointer"}`}
                     >
                       <input
                         type="radio"
                         name="tipo"
                         value={valor}
                         checked={tipo === valor}
-                        disabled={bloq}
+                        disabled={bloq || bloqueado}
                         onChange={() => {
                           setTipo(valor);
                           limparErro("tipo");
@@ -500,7 +539,8 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
                       />
                       {ROTULO_TIPO_LIBERACAO[valor]}
                     </label>
-                  ))}
+                    );
+                  })}
                 </div>
                 {erroDe("tipo") && (
                   <p id="erro-tipo" className="mt-1 text-sm text-red-600">

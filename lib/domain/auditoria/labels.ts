@@ -4,6 +4,7 @@
 // inventado: eventos/entidades/campos desconhecidos caem em fallback técnico.
 
 import {
+  ROTULO_ORIGEM_PACIENTE,
   ROTULO_PERFIL,
   ROTULO_PROFISSAO,
   ROTULO_STATUS_LIBERACAO,
@@ -83,6 +84,7 @@ const CAMPOS_PACIENTE: Record<string, string> = {
   gestor_sus: "Gestor SUS",
   nome: "Nome",
   status: "Status",
+  origem: "Origem",
   data_inicio_acompanhamento: "Início do acompanhamento",
   data_fim_acompanhamento: "Fim do acompanhamento",
   unidade_id: "Unidade",
@@ -183,6 +185,15 @@ export function formatarValorCampoAuditoria(
     typeof valor === "string"
   ) {
     return valor.charAt(0).toUpperCase() + valor.slice(1);
+  }
+  if (
+    campo === "origem" &&
+    typeof valor === "string" &&
+    valor in ROTULO_ORIGEM_PACIENTE
+  ) {
+    return (
+      ROTULO_ORIGEM_PACIENTE[valor as keyof typeof ROTULO_ORIGEM_PACIENTE]
+    );
   }
   if (campo === "status_ativo" && typeof valor === "boolean") {
     return valor ? "Sim" : "Não";

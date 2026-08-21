@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { AppError } from "@/lib/domain/app-error";
+import { ORIGENS_PACIENTE } from "@/lib/domain/enums";
 import { PacienteService } from "@/lib/services/paciente-service";
 import type { PacienteRepository } from "@/lib/repositories/paciente-repository";
 import type { PacienteSemCpf } from "@/lib/domain/pacientes/types";
@@ -10,6 +11,7 @@ function pacienteSemCpf(sobre?: Partial<PacienteSemCpf>): PacienteSemCpf {
     gestor_sus: "123456",
     nome: "Maria",
     status: "ativo",
+    origem: "regular",
     data_inicio_acompanhamento: null,
     data_fim_acompanhamento: null,
     unidade_id: null,
@@ -47,8 +49,12 @@ describe("PacienteService", () => {
     expect(repo.listar).toHaveBeenCalledWith("maria");
   });
 
-  it("criarPaciente válido delega ao repositório", async () => {
-    const dados = { gestor_sus: "789", nome: "Ana" };
+  it("criarPaciente válido delega ao repositório (com origem)", async () => {
+    const dados = {
+      gestor_sus: "789",
+      nome: "Ana",
+      origem: ORIGENS_PACIENTE.REGULAR,
+    };
     const repo = {
       criar: vi.fn(async () => pacienteSemCpf({ gestor_sus: "789", nome: "Ana" })),
     } as unknown as PacienteRepository;
@@ -58,6 +64,42 @@ describe("PacienteService", () => {
 
     expect(repo.criar).toHaveBeenCalledWith(dados);
     expect(criado.nome).toBe("Ana");
+  });
+
+  it("criarPaciente esporadico delega ao repositório com a origem informada", async () => {
+    const dados = {
+      gestor_sus: "789",
+      nome: "Ana",
+      origem: ORIGENS_PACIENTE.ESPORADICO,
+    };
+    const repo = {
+      criar: vi.fn(async () =>
+        pacienteSemCpf({
+          gestor_sus: "789",
+          nome: "Ana",
+          origem: ORIGENS_PACIENTE.ESPORADICO,
+        })
+      ),
+    } as unknown as PacienteRepository;
+    const service = makeService(repo);
+
+    await service.criarPaciente(dados);
+
+    expect(repo.criar).toHaveBeenCalledWith(dados);
+  });
+
+  it("criarPaciente com origem inválida lança VALIDACAO e não chama o repositório", async () => {
+    const repo = { criar: vi.fn() } as unknown as PacienteRepository;
+    const service = makeService(repo);
+
+    await expect(
+      service.criarPaciente({
+        gestor_sus: "789",
+        nome: "Ana",
+        origem: "temporario" as never,
+      })
+    ).rejects.toMatchObject({ code: "VALIDACAO" });
+    expect(repo.criar).not.toHaveBeenCalled();
   });
 
   it("criarPaciente sem gestor_sus lança VALIDACAO e não chama o repositório", async () => {

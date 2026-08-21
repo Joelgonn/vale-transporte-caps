@@ -211,6 +211,7 @@ Auditoria (N) ───< (1) Entidade Afetada  // Log referencia qualquer entida
 | RN26 | Perfis do MVP: Profissional Autorizador, Recepcionista, Gestor (Auditor fora do MVP) |
 | RN27 | Profissional autorizador deve ter cadastro ativo; inativo não autoriza; alertas claros para inativos |
 | RN28 | Auditoria distingue quem autorizou, quem registrou, quem retirou e a data/hora de cada ação |
+| RN29 | Origem do paciente (`regular`/`esporadico`): gestor e autorizador cadastram regulares; recepcionista cadastra somente esporádicos; paciente esporádico recebe SOMENTE liberação avulsa (Sprint 38) |
 
 ## Fechamento Sprint 01 — Decisões Consolidadas
 
@@ -237,8 +238,10 @@ Auditoria (N) ───< (1) Entidade Afetada  // Log referencia qualquer entida
 ### Matriz de Permissões (perfil × ação) — MVP (Sprint 03)
 
 | Ação | Prof. Autorizador | Recepcionista | Gestor |
-|---|---|---|---|---|
-| Cadastrar/alterar paciente | Sim | PENDENTE | Não |
+|---|---|---|---|
+| Cadastrar paciente regular | Sim | Não (Sprint 38) | Sim |
+| Cadastrar paciente esporádico | Não | Sim — somente avulsas (RN29, Sprint 38) | Não |
+| Alterar dados/status do paciente | Alterar dados | Não | Status |
 | Consultar paciente | Sim (sem CPF) | Sim (sem CPF) | Sim (com CPF) |
 | Criar liberação | Sim (profissões habilitadas e cadastro ativo) | Não | Não |
 | Registrar renovação | Não | Sim (mantendo profissional autorizador) | Não |
@@ -356,10 +359,12 @@ Auditoria (N) ───< (1) Entidade Afetada  // Log referencia qualquer entida
 
 **REGRA DEFINIDA (RN25):** o **identificador principal** do paciente é o número do **Gestor SUS**; o **CPF** também é armazenado.
 
-**PENDENTE (parcial):** campos adicionais além dos mínimos; quem pode cadastrar/alterar pacientes (tratado no item 11).
+**REGRA DEFINIDA (RN29 — Sprint 38):** todo paciente possui uma **origem** (`origem_paciente`: `regular` | `esporadico`). Paciente **esporádico** é cadastrado exclusivamente pela recepção para atendimento pontual e **somente pode receber liberação avulsa** (nunca contínua). A regra é garantida no banco (trigger `fn_liberacoes_before`), não apenas na UI. Pacientes regulares são cadastrados por Gestor ou profissional autorizador.
 
-**Status: VALIDADA — REGRA DEFINIDA (identificação).**
-**Bloqueia modelagem: RESOLVIDO (identificação).**
+**PENDENTE (parcial):** campos adicionais além dos mínimos.
+
+**Status: VALIDADA — REGRA DEFINIDA (identificação e origem).**
+**Bloqueia modelagem: RESOLVIDO (identificação e origem).**
 
 ### 11. Perfis e permissões — VALIDADA (Sprint 03)
 
@@ -369,7 +374,7 @@ Auditoria (N) ───< (1) Entidade Afetada  // Log referencia qualquer entida
 **REGRA DEFINIDA (RN23):** a recepção registra **renovações** (nova liberação mantendo o profissional autorizador).
 
 **PENDENTE (perguntas em aberto):**
-1. A recepção pode cadastrar/alterar pacientes? — PENDENTE.
+1. A recepção pode cadastrar/alterar pacientes? — **PARCIALMENTE RESOLVIDO (Sprint 38):** a recepção cadastra **somente pacientes esporádicos** (origem `esporadico`, apenas liberação avulsa — RN29); alteração de dados e status de pacientes continua exclusiva do autorizador/gestor.
 2. Profissionais autorizadores podem consultar relatórios? — PENDENTE.
 3. Quem pode alterar/cancelar liberações? — PENDENTE.
 
@@ -392,7 +397,7 @@ Auditoria (N) ───< (1) Entidade Afetada  // Log referencia qualquer entida
 3. **Múltiplas liberações ativas** - paciente pode ter mais de uma simultaneamente?
 4. **Limite de vales por paciente/período** - existe teto?
 5. **Comprovante de retirada** - impresso, digital, confirmação do paciente?
-6. **Cadastro de pacientes pela recepção** - recepcionista pode cadastrar/alterar pacientes?
+6. **Cadastro de pacientes pela recepção** — **RESOLVIDO (Sprint 38):** a recepção cadastra exclusivamente pacientes esporádicos (origem `esporadico`, somente liberação avulsa — RN29); alteração de dados de pacientes permanece com o autorizador; status com o Gestor.
 7. **Relatórios para profissionais autorizadores** - podem consultar relatórios?
 8. **Quem pode alterar/cancelar liberações** - autorizador da liberação, qualquer autorizador, Gestor?
 9. **Campos adicionais do paciente** - além de Gestor SUS, nome e CPF.

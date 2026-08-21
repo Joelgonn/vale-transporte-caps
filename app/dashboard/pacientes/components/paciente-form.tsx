@@ -14,10 +14,19 @@ import {
   INPUT,
   ROTULO,
 } from "@/components/ui/visual-tokens";
+import {
+  ORIGENS_PACIENTE,
+  type OrigemPaciente,
+} from "@/lib/domain/enums";
 import type { PacienteSemCpf } from "@/lib/domain/pacientes/types";
 
 type PacienteFormProps =
-  | { modo: "criar"; onClose: () => void; onSalvo: () => void }
+  | {
+      modo: "criar";
+      origem: OrigemPaciente;
+      onClose: () => void;
+      onSalvo: () => void;
+    }
   | { modo: "editar"; paciente: PacienteSemCpf; onClose: () => void; onSalvo: () => void };
 
 type FormState = { error?: string; sucesso?: boolean };
@@ -30,6 +39,10 @@ function lerCampo(formData: FormData, nome: string): string | null {
 export default function PacienteForm(props: PacienteFormProps) {
   const isEdicao = props.modo === "editar";
   const paciente = isEdicao ? props.paciente : null;
+  // Origem fixada pelo perfil (nunca escolhida pelo usuário): regular para
+  // gestor/autorizador, esporadico para recepcionista.
+  const origem = isEdicao ? null : props.origem;
+  const esporadico = origem === ORIGENS_PACIENTE.ESPORADICO;
 
   const executar = async (
     _prev: FormState,
@@ -51,6 +64,7 @@ export default function PacienteForm(props: PacienteFormProps) {
       : await criarPacienteAction({
           gestor_sus: camposComuns.gestor_sus ?? "",
           nome: camposComuns.nome ?? "",
+          origem: origem ?? ORIGENS_PACIENTE.REGULAR,
           cpf: lerCampo(formData, "cpf"),
           data_inicio_acompanhamento: camposComuns.data_inicio_acompanhamento,
           data_fim_acompanhamento: camposComuns.data_fim_acompanhamento,
@@ -76,7 +90,7 @@ export default function PacienteForm(props: PacienteFormProps) {
       className="fixed inset-0 z-10 flex items-end justify-center bg-black/40 p-0 outline-none sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
-      aria-label={isEdicao ? "Editar paciente" : "Novo paciente"}
+      aria-label={isEdicao ? "Editar paciente" : esporadico ? "Paciente esporádico" : "Novo paciente"}
     >
       <form
         action={formAction}
@@ -84,12 +98,18 @@ export default function PacienteForm(props: PacienteFormProps) {
       >
         <div>
           <h2 className="text-lg font-semibold text-brand-900">
-            {isEdicao ? "Editar paciente" : "Novo paciente"}
+            {isEdicao
+              ? "Editar paciente"
+              : esporadico
+                ? "Paciente esporádico"
+                : "Novo paciente"}
           </h2>
           <p className="text-sm text-zinc-500">
             {isEdicao
               ? "Altere os dados abaixo. O CPF não é editado por esta tela."
-              : "Cadastro de acompanhamento no CAPS."}
+              : esporadico
+                ? "Cadastro para atendimento pontual — somente liberações avulsas (RN29)."
+                : "Cadastro de acompanhamento no CAPS."}
           </p>
         </div>
 

@@ -8,6 +8,7 @@ import type {
   NovaLiberacao,
 } from "@/lib/domain/liberacoes/types";
 import { LiberacaoService } from "@/lib/services/liberacao-service";
+import { PacienteService } from "@/lib/services/paciente-service";
 import { createClient } from "@/lib/supabase/server";
 import { getUsuarioFuncional } from "@/lib/auth/profile";
 import type { AcaoResultado } from "@/app/actions/resultado";
@@ -84,7 +85,9 @@ export async function buscarLiberacaoAction(
 //     parâmetros (paciente/tipo/quantidade/período) são copiados da liberação
 //     original pelo servidor (buscarLiberacao + renovacao_de_id). O cliente
 //     envia APENAS renovacaoDeId — nunca profissional_autorizador_id.
-// A autoridade final continua no banco (RLS liberacoes_insert_* + trigger).
+// RN29 (Sprint 38): a origem do paciente é lida no servidor e repassada à
+// validação — paciente esporádico somente liberação avulsa. A autoridade final
+// continua no banco (RLS liberacoes_insert_* + trigger fn_liberacoes_before).
 // Entrada: RenovacaoLiberacao ({ renovacaoDeId }) OU NovaLiberacao ({ pacienteId,
 // tipo, quantidade, periodoMeses }) — a união é discriminada pela presença de
 // pacienteId.
@@ -112,6 +115,11 @@ export async function criarLiberacaoAction(
         );
       }
 
+      const pacienteService = await PacienteService.create();
+      const paciente = await pacienteService.buscarPaciente(
+        original.paciente_id
+      );
+
       const dadosRenovacao: NovaLiberacao = {
         pacienteId: original.paciente_id,
         tipo: original.tipo,
@@ -121,7 +129,10 @@ export async function criarLiberacaoAction(
         renovacaoDeId: original.id,
       };
 
-      return { ok: true, data: await service.criarLiberacao(dadosRenovacao) };
+      return {
+        ok: true,
+        data: await service.criarLiberacao(dadosRenovacao, paciente?.origem),
+      };
     }
 
     // Nova liberação pelo próprio autorizador (liberacoes_insert_autorizador).
@@ -139,6 +150,9 @@ export async function criarLiberacaoAction(
     }
 
     const service = await LiberacaoService.create();
+    const pacienteService = await PacienteService.create();
+    const paciente = await pacienteService.buscarPaciente(dados.pacienteId);
+
     const dadosFinais: NovaLiberacao = {
       pacienteId: dados.pacienteId,
       tipo: dados.tipo,
@@ -147,7 +161,10 @@ export async function criarLiberacaoAction(
       profissionalAutorizadorId: usuario.usuarioId,
     };
 
-    return { ok: true, data: await service.criarLiberacao(dadosFinais) };
+    return {
+      ok: true,
+      data: await service.criarLiberacao(dadosFinais, paciente?.origem),
+    };
   } catch (erro) {
     return { ok: false, error: mensagemDaAcao(erro) };
   }

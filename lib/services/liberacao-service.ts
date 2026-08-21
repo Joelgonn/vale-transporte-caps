@@ -3,6 +3,7 @@ import type {
   LiberacaoComPaciente,
   NovaLiberacao,
 } from "@/lib/domain/liberacoes/types";
+import type { OrigemPaciente } from "@/lib/domain/enums";
 import {
   LiberacaoRepositoryPostgres,
   type LiberacaoRepository,
@@ -20,8 +21,13 @@ export class LiberacaoService {
     return new LiberacaoService(new LiberacaoRepositoryPostgres(await createClient()));
   }
 
-  async criarLiberacao(dados: NovaLiberacao): Promise<LiberacaoComPaciente> {
-    validarLiberacao(dados);
+  // origemPaciente alimenta a validação RN29 (esporádico somente avulsa).
+  // O trigger fn_liberacoes_before permanece a autoridade final no banco.
+  async criarLiberacao(
+    dados: NovaLiberacao,
+    origemPaciente?: OrigemPaciente | null
+  ): Promise<LiberacaoComPaciente> {
+    validarLiberacao({ ...dados, origemPaciente });
     return this.repo.criar(dados);
   }
 

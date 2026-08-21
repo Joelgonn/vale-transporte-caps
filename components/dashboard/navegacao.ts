@@ -117,10 +117,18 @@ export function acoesRapidasPorPerfil(
 ): AcaoRapida[] {
   const acoes: AcaoRapida[] = [];
 
-  if (permissoesPacientes(perfil, statusAtivo).podeCriar) {
+  if (permissoesPacientes(perfil, statusAtivo).podeCriarRegular) {
     acoes.push({
       rotulo: "Novo paciente",
       descricao: "Cadastrar um novo beneficiário",
+      href: "/dashboard/pacientes",
+      icone: "pacientes",
+    });
+  }
+  if (permissoesPacientes(perfil, statusAtivo).podeCriarEsporadico) {
+    acoes.push({
+      rotulo: "Paciente esporádico",
+      descricao: "Cadastrar paciente para atendimento pontual",
       href: "/dashboard/pacientes",
       icone: "pacientes",
     });

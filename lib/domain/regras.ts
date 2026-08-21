@@ -4,10 +4,12 @@
 
 import { AppError } from "@/lib/domain/app-error";
 import {
+  ORIGENS_PACIENTE,
   PERFIS,
   PERIODOS_LIBERACAO,
   QUANTIDADES_LIBERACAO,
   TIPOS_LIBERACAO,
+  type OrigemPaciente,
   type PerfilUsuario,
   type Profissao,
   type QuantidadeLiberacao,
@@ -25,14 +27,26 @@ export function isPeriodoValido(periodo: number): periodo is PeriodoLiberacao {
   return (PERIODOS_LIBERACAO as readonly number[]).includes(periodo);
 }
 
-// RN04 (quantidade 1/2/4/8) e RN13 (contínua 1/3/6 meses; avulsa sem período).
+// RN04 (quantidade 1/2/4/8), RN13 (contínua 1/3/6 meses; avulsa sem período)
+// e RN29 (paciente esporádico somente avulsa).
 export function validarLiberacao(params: {
   tipo: TipoLiberacao;
   quantidade: number;
   periodoMeses?: number | null;
+  origemPaciente?: OrigemPaciente | null;
 }): void {
   if (!isQuantidadeValida(params.quantidade)) {
     throw new AppError("VALIDACAO", "Quantidade deve ser 1, 2, 4 ou 8 (RN04).");
+  }
+
+  if (
+    params.origemPaciente === ORIGENS_PACIENTE.ESPORADICO &&
+    params.tipo !== TIPOS_LIBERACAO.AVULSA
+  ) {
+    throw new AppError(
+      "VALIDACAO",
+      "Paciente esporádico somente recebe liberação avulsa (RN29)."
+    );
   }
 
   if (params.tipo === TIPOS_LIBERACAO.CONTINUA) {
@@ -77,6 +91,7 @@ export function calcularDataFim(
 export function validarNovoPaciente(dados: {
   gestor_sus: string;
   nome: string;
+  origem?: OrigemPaciente | null;
 }): void {
   if (!dados.gestor_sus?.trim()) {
     throw new AppError("VALIDACAO", "Gestor SUS é obrigatório (RN25).");
@@ -84,6 +99,25 @@ export function validarNovoPaciente(dados: {
   if (!dados.nome?.trim()) {
     throw new AppError("VALIDACAO", "Nome do paciente é obrigatório.");
   }
+  if (
+    dados.origem != null &&
+    dados.origem !== ORIGENS_PACIENTE.REGULAR &&
+    dados.origem !== ORIGENS_PACIENTE.ESPORADICO
+  ) {
+    throw new AppError("VALIDACAO", "Origem do paciente inválida.");
+  }
+}
+
+// Sprint 38 — origem de cadastro permitida por perfil (espelha as policies
+// pacientes_insert_regular / pacientes_insert_recepcao_esporadico):
+//   * gestor / profissional_autorizador → 'regular';
+//   * recepcionista → 'esporadico' (exclusivamente atendimento esporádico).
+export function origemPermitidaPorPerfil(
+  perfil: PerfilUsuario
+): OrigemPaciente {
+  return perfil === PERFIS.RECEPCIONISTA
+    ? ORIGENS_PACIENTE.ESPORADICO
+    : ORIGENS_PACIENTE.REGULAR;
 }
 
 // Padrão de e-mail aceito pelo produto (validação de cadastro e formulários).
@@ -192,7 +226,10 @@ export function podeAutorizar(
 // Espelham o que as policies RLS/triggers do banco de fato permitem (a autoridade
 // continua no banco):
 //  - leitura: qualquer perfil reconhecido e ativo (v_pacientes / policy select);
-//  - INSERT: somente profissional_autorizador ativo (policy pacientes_insert_autorizador);
+//  - INSERT regular (gestor/autorizador ativos): policy pacientes_insert_regular
+//    (migration 20260821000001) — origem obrigatória 'regular';
+//  - INSERT esporádico (recepcionista ativa): policy
+//    pacientes_insert_recepcao_esporadico — origem obrigatória 'esporadico';
 //  - UPDATE de dados: somente profissional_autorizador ativo (trigger bloqueia status);
 //  - UPDATE de status: somente gestor ativo (trigger bloqueia demais campos).
 export function permissoesPacientes(
@@ -200,14 +237,19 @@ export function permissoesPacientes(
   statusAtivo: boolean | null
 ): {
   podeAcessar: boolean;
-  podeCriar: boolean;
+  podeCriarRegular: boolean;
+  podeCriarEsporadico: boolean;
   podeEditarDados: boolean;
   podeAlterarStatus: boolean;
 } {
   const ativo = perfil != null && statusAtivo === true;
   return {
     podeAcessar: ativo,
-    podeCriar: ativo && perfil === PERFIS.PROFISSIONAL_AUTORIZADOR,
+    podeCriarRegular:
+      ativo &&
+      (perfil === PERFIS.GESTOR ||
+        perfil === PERFIS.PROFISSIONAL_AUTORIZADOR),
+    podeCriarEsporadico: ativo && perfil === PERFIS.RECEPCIONISTA,
     podeEditarDados: ativo && perfil === PERFIS.PROFISSIONAL_AUTORIZADOR,
     podeAlterarStatus: ativo && perfil === PERFIS.GESTOR,
   };

@@ -5,7 +5,10 @@ import Link from "next/link";
 import { useEffect, useTransition, useState } from "react";
 import { atualizarPacienteAction } from "@/app/actions/pacientes";
 import {
+  ORIGENS_PACIENTE,
+  ROTULO_ORIGEM_PACIENTE,
   STATUS_PACIENTE,
+  type OrigemPaciente,
   type PerfilUsuario,
 } from "@/lib/domain/enums";
 import { permissoesPacientes } from "@/lib/domain/regras";
@@ -27,7 +30,7 @@ import PacienteForm from "./paciente-form";
 import { PacienteStatus } from "./paciente-status";
 
 type FormAberto =
-  | { modo: "criar" }
+  | { modo: "criar"; origem: OrigemPaciente }
   | { modo: "editar"; paciente: PacienteSemCpf }
   | null;
 
@@ -109,13 +112,31 @@ export default function PacientesView(props: PacientesViewProps) {
           titulo="Pacientes"
           descricao="Acompanhamento no CAPS — pesquisa por nome ou Gestor SUS."
           acao={
-            permissoes.podeCriar ? (
+            permissoes.podeCriarRegular ? (
               <button
                 type="button"
-                onClick={() => setFormAberto({ modo: "criar" })}
+                onClick={() =>
+                  setFormAberto({
+                    modo: "criar",
+                    origem: ORIGENS_PACIENTE.REGULAR,
+                  })
+                }
                 className={BOTAO_PRIMARIO}
               >
                 Novo paciente
+              </button>
+            ) : permissoes.podeCriarEsporadico ? (
+              <button
+                type="button"
+                onClick={() =>
+                  setFormAberto({
+                    modo: "criar",
+                    origem: ORIGENS_PACIENTE.ESPORADICO,
+                  })
+                }
+                className={BOTAO_PRIMARIO}
+              >
+                Paciente Esporádico
               </button>
             ) : undefined
           }
@@ -197,7 +218,14 @@ export default function PacientesView(props: PacientesViewProps) {
                       className="transition-colors duration-150 hover:bg-brand-50/40 motion-reduce:transition-none"
                     >
                       <td className="px-4 py-3 font-medium text-brand-900">
-                        {paciente.nome}
+                        <span className="flex items-center gap-2">
+                          {paciente.nome}
+                          {paciente.origem === ORIGENS_PACIENTE.ESPORADICO && (
+                            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                              {ROTULO_ORIGEM_PACIENTE[paciente.origem]}
+                            </span>
+                          )}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-zinc-600">
                         {paciente.gestor_sus}
@@ -259,8 +287,13 @@ export default function PacientesView(props: PacientesViewProps) {
                 <li key={paciente.id} className={`${CARTAO} p-4`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-base font-semibold text-brand-900">
+                      <p className="flex flex-wrap items-center gap-2 text-base font-semibold text-brand-900">
                         {paciente.nome}
+                        {paciente.origem === ORIGENS_PACIENTE.ESPORADICO && (
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                            {ROTULO_ORIGEM_PACIENTE[paciente.origem]}
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs text-zinc-500">
                         Gestor SUS {paciente.gestor_sus}
@@ -320,7 +353,10 @@ export default function PacientesView(props: PacientesViewProps) {
         {formAberto && (
           <PacienteForm
             {...(formAberto.modo === "criar"
-              ? { modo: "criar" as const }
+              ? {
+                  modo: "criar" as const,
+                  origem: formAberto.origem,
+                }
               : { modo: "editar" as const, paciente: formAberto.paciente })}
             onClose={() => {
               setFormAberto(null);

@@ -38,6 +38,23 @@ export const STATUS_PACIENTE = {
 
 export type StatusPaciente = (typeof STATUS_PACIENTE)[keyof typeof STATUS_PACIENTE];
 
+// Sprint 38 — origem do paciente (enum origem_paciente, migration
+// 20260821000001). 'regular' = acompanhamento contínuo no CAPS;
+// 'esporadico' = atendimento pontual criado pela recepção, que só pode
+// receber liberação avulsa (RN29).
+export const ORIGENS_PACIENTE = {
+  REGULAR: "regular",
+  ESPORADICO: "esporadico",
+} as const;
+
+export type OrigemPaciente =
+  (typeof ORIGENS_PACIENTE)[keyof typeof ORIGENS_PACIENTE];
+
+export const ROTULO_ORIGEM_PACIENTE: Record<OrigemPaciente, string> = {
+  [ORIGENS_PACIENTE.REGULAR]: "Regular",
+  [ORIGENS_PACIENTE.ESPORADICO]: "Esporádico",
+};
+
 export const TIPOS_LIBERACAO = {
   CONTINUA: "continua",
   AVULSA: "avulsa",

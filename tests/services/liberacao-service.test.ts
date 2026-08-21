@@ -105,6 +105,45 @@ describe("LiberacaoService", () => {
     ).rejects.toMatchObject({ code: "VALIDACAO" });
   });
 
+  it("RN29 — rejeita contínua para paciente esporádico sem chamar o banco", async () => {
+    const repo = { criar: vi.fn() } as unknown as LiberacaoRepository;
+    const service = makeService(repo);
+
+    await expect(
+      service.criarLiberacao(
+        {
+          pacienteId: "p1",
+          profissionalAutorizadorId: "u1",
+          tipo: TIPOS_LIBERACAO.CONTINUA,
+          quantidade: 4,
+          periodoMeses: 3,
+        },
+        "esporadico"
+      )
+    ).rejects.toMatchObject({ code: "VALIDACAO", message: expect.stringContaining("RN29") });
+    expect(repo.criar).not.toHaveBeenCalled();
+  });
+
+  it("RN29 — aceita avulsa para paciente esporádico", async () => {
+    const repo = {
+      criar: vi.fn(async () => liberacao({ tipo: TIPOS_LIBERACAO.AVULSA })),
+    } as unknown as LiberacaoRepository;
+    const service = makeService(repo);
+
+    await expect(
+      service.criarLiberacao(
+        {
+          pacienteId: "p1",
+          profissionalAutorizadorId: "u1",
+          tipo: TIPOS_LIBERACAO.AVULSA,
+          quantidade: 1,
+          periodoMeses: null,
+        },
+        "esporadico"
+      )
+    ).resolves.toBeTruthy();
+  });
+
   it("criarLiberacao NÃO envia registrado_por_id nem data_fim (banco é a autoridade)", async () => {
     const repo = { criar: vi.fn(async () => liberacao()) } as unknown as LiberacaoRepository;
     const service = makeService(repo);

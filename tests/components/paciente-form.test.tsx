@@ -3,6 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import PacienteForm from "@/app/dashboard/pacientes/components/paciente-form";
+import { ORIGENS_PACIENTE } from "@/lib/domain/enums";
 import type { PacienteSemCpf } from "@/lib/domain/pacientes/types";
 
 const { mocks } = vi.hoisted(() => ({
@@ -24,6 +25,7 @@ function paciente(): PacienteSemCpf {
     gestor_sus: "123456",
     nome: "Maria da Silva",
     status: "ativo",
+    origem: "regular",
     data_inicio_acompanhamento: "2026-01-10",
     data_fim_acompanhamento: null,
     unidade_id: null,
@@ -38,7 +40,14 @@ beforeEach(() => {
 
 describe("PacienteForm — criar", () => {
   it("exibe os campos de cadastro (inclusive CPF opcional)", () => {
-    render(<PacienteForm modo="criar" onClose={() => {}} onSalvo={() => {}} />);
+    render(
+      <PacienteForm
+        modo="criar"
+        origem={ORIGENS_PACIENTE.REGULAR}
+        onClose={() => {}}
+        onSalvo={() => {}}
+      />
+    );
 
     expect(screen.getByRole("dialog", { name: "Novo paciente" })).toBeInTheDocument();
     expect(screen.getByLabelText("Gestor SUS")).toBeInTheDocument();
@@ -49,12 +58,33 @@ describe("PacienteForm — criar", () => {
     ).toBeInTheDocument();
   });
 
-  it("envia os dados preenchidos à action e mostra sucesso", async () => {
+  it("modo esporádico ajusta título e descrição (RN29)", () => {
+    render(
+      <PacienteForm
+        modo="criar"
+        origem={ORIGENS_PACIENTE.ESPORADICO}
+        onClose={() => {}}
+        onSalvo={() => {}}
+      />
+    );
+
+    expect(screen.getByRole("dialog", { name: "Paciente esporádico" })).toBeInTheDocument();
+    expect(screen.getByText(/somente liberações avulsas/)).toBeInTheDocument();
+  });
+
+  it("envia os dados preenchidos à action com a origem regular", async () => {
     mocks.criarPacienteAction.mockResolvedValue({
       ok: true,
       data: paciente(),
     });
-    render(<PacienteForm modo="criar" onClose={() => {}} onSalvo={() => {}} />);
+    render(
+      <PacienteForm
+        modo="criar"
+        origem={ORIGENS_PACIENTE.REGULAR}
+        onClose={() => {}}
+        onSalvo={() => {}}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText("Gestor SUS"), {
       target: { value: "123456" },
@@ -71,6 +101,7 @@ describe("PacienteForm — criar", () => {
       expect(mocks.criarPacienteAction).toHaveBeenCalledWith({
         gestor_sus: "123456",
         nome: "Maria da Silva",
+        origem: ORIGENS_PACIENTE.REGULAR,
         cpf: "12345678900",
         data_inicio_acompanhamento: null,
         data_fim_acompanhamento: null,
@@ -81,12 +112,48 @@ describe("PacienteForm — criar", () => {
     ).toBeInTheDocument();
   });
 
+  it("envia origem esporadico quando o formulário é aberto pela recepção", async () => {
+    mocks.criarPacienteAction.mockResolvedValue({
+      ok: true,
+      data: { ...paciente(), origem: ORIGENS_PACIENTE.ESPORADICO },
+    });
+    render(
+      <PacienteForm
+        modo="criar"
+        origem={ORIGENS_PACIENTE.ESPORADICO}
+        onClose={() => {}}
+        onSalvo={() => {}}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText("Gestor SUS"), {
+      target: { value: "123456" },
+    });
+    fireEvent.change(screen.getByLabelText("Nome"), {
+      target: { value: "Maria" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Cadastrar" }));
+
+    await waitFor(() => {
+      expect(mocks.criarPacienteAction).toHaveBeenCalledWith(
+        expect.objectContaining({ origem: ORIGENS_PACIENTE.ESPORADICO })
+      );
+    });
+  });
+
   it("exibe erro de validação retornado pela action", async () => {
     mocks.criarPacienteAction.mockResolvedValue({
       ok: false,
       error: "Já existe um paciente com este Gestor SUS (ou CPF).",
     });
-    render(<PacienteForm modo="criar" onClose={() => {}} onSalvo={() => {}} />);
+    render(
+      <PacienteForm
+        modo="criar"
+        origem={ORIGENS_PACIENTE.REGULAR}
+        onClose={() => {}}
+        onSalvo={() => {}}
+      />
+    );
 
     fireEvent.change(screen.getByLabelText("Gestor SUS"), {
       target: { value: "123456" },

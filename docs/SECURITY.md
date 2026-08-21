@@ -20,13 +20,14 @@
 
 ### 2. Autorização por Perfil
 - Ações são permitidas conforme o perfil do usuário. **Perfis do MVP (Sprint 03, RN26):**
-  - **Profissional Autorizador** → criar liberações (Assistente Social, Psicólogo, Terapeuta Ocupacional, **com cadastro ativo** — RN27)
-  - **Recepcionista** → registrar retiradas e renovações
-  - **Gestor** → administrar usuários e consultar relatórios
+  - **Profissional Autorizador** → criar liberações (Assistente Social, Psicólogo, Terapeuta Ocupacional, **com cadastro ativo** — RN27) e cadastrar **pacientes regulares**
+  - **Recepcionista** → registrar retiradas e renovações; cadastrar **pacientes esporádicos** (somente liberação avulsa — RN29, Sprint 38)
+  - **Gestor** → administrar usuários e consultar relatórios; cadastrar **pacientes regulares** (Sprint 38)
   - **Auditor** → fora do MVP (perfil futuro, somente leitura de logs)
 - Matriz de permissões por perfil: ver `DOMAIN.md`.
 - Autorização verificada em **todas as camadas** (middleware, server actions e RLS), nunca apenas na UI.
-- **DECISÃO INSTITUCIONAL PENDENTE:** hierarquia de perfis, permissões granulares, múltiplos perfis por usuário, cadastro de pacientes pela recepção, consulta de relatórios por profissionais autorizadores.
+- **RESOLVIDO (Sprint 38): cadastro de pacientes pela recepção** — a recepção cadastra exclusivamente pacientes com `origem = 'esporadico'` (policies `pacientes_insert_regular` / `pacientes_insert_recepcao_esporadico` + trigger RN29 no banco; a origem é derivada do perfil da sessão no servidor).
+- **DECISÃO INSTITUCIONAL PENDENTE:** hierarquia de perfis, permissões granulares, múltiplos perfis por usuário, consulta de relatórios por profissionais autorizadores.
 
 ### 3. Princípio do Menor Privilégio
 - Cada usuário acessa apenas o necessário para sua função.

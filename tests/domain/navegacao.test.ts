@@ -77,9 +77,10 @@ describe("moduloAtual", () => {
 });
 
 describe("acoesRapidasPorPerfil", () => {
-  it("Gestor ativo gerencia usuários e consulta auditoria e relatórios", () => {
+  it("Gestor ativo cria paciente regular, gerencia usuários e consulta auditoria e relatórios", () => {
     const acoes = acoesRapidasPorPerfil(PERFIS.GESTOR, true);
     expect(acoes.map((a) => a.rotulo)).toEqual([
+      "Novo paciente",
       "Gerenciar usuários",
       "Consultar auditoria",
       "Consultar relatórios",
@@ -96,8 +97,9 @@ describe("acoesRapidasPorPerfil", () => {
     ]);
   });
 
-  it("recepcionista ativa renova liberação e registra retirada", () => {
+  it("recepcionista ativa cadastra esporádico, renova liberação e registra retirada", () => {
     expect(acoesRapidasPorPerfil(PERFIS.RECEPCIONISTA, true).map((a) => a.rotulo)).toEqual([
+      "Paciente esporádico",
       "Renovar liberação",
       "Registrar retirada",
     ]);

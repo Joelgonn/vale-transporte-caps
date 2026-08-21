@@ -18,7 +18,7 @@ export interface PacienteRepository {
 }
 
 const COLUNAS_SEM_CPF =
-  "id, gestor_sus, nome, status, data_inicio_acompanhamento, " +
+  "id, gestor_sus, nome, status, origem, data_inicio_acompanhamento, " +
   "data_fim_acompanhamento, unidade_id, created_at, updated_at";
 
 // Remove caracteres de padrão/wildcard e limita o tamanho para uso seguro como
@@ -88,6 +88,9 @@ export class PacienteRepositoryPostgres implements PacienteRepository {
       .insert({
         gestor_sus: dados.gestor_sus,
         nome: dados.nome,
+        // Origem resolvida no servidor (criarPacienteAction) — a RLS
+        // (pacientes_insert_regular / _recepcao_esporadico) é a autoridade.
+        origem: dados.origem ?? "regular",
         cpf: dados.cpf ?? null,
         data_inicio_acompanhamento: dados.data_inicio_acompanhamento ?? null,
         data_fim_acompanhamento: dados.data_fim_acompanhamento ?? null,
