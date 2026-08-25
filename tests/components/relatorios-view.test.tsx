@@ -6,6 +6,7 @@ import RelatoriosView from "@/app/dashboard/relatorios/components/relatorios-vie
 import type {
   FiltrosRelatorio,
   ResultadoListaRelatorio,
+  ResultadoResumoRelatorio,
 } from "@/lib/domain/relatorios/types";
 
 function filtros(sobre?: Partial<FiltrosRelatorio>): FiltrosRelatorio {
@@ -47,12 +48,14 @@ function resultadoLiberacoes(sobre?: Partial<Extract<ResultadoListaRelatorio, { 
 function renderizar(opts: {
   filtros?: FiltrosRelatorio;
   resultado?: ResultadoListaRelatorio | null;
+  resumo?: ResultadoResumoRelatorio | null;
   erroInicial?: string | null;
 } = {}) {
   return render(
     <RelatoriosView
       filtros={opts.filtros ?? filtros()}
       resultado={opts.resultado ?? resultadoLiberacoes()}
+      resumo={opts.resumo ?? null}
       erroInicial={opts.erroInicial ?? null}
     />
   );
@@ -216,5 +219,139 @@ describe("RelatoriosView — filtros", () => {
     expect(screen.getByLabelText("De")).toBeInTheDocument();
     expect(screen.getByLabelText("Até")).toBeInTheDocument();
     expect(screen.getByLabelText("Tipo de liberação")).toBeInTheDocument();
+  });
+});
+describe("RelatoriosView — aba Resumo (Sprint 40)", () => {
+  const resumoCheio: ResultadoResumoRelatorio = {
+    totalPacientes: 2,
+    totalLiberacoes: 3,
+    totalValesAutorizados: 9,
+    totalValesRetirados: 4,
+    saldoTotal: 5,
+    totalLiberacoesContinuas: 2,
+    totalLiberacoesAvulsas: 1,
+    linhas: [
+      {
+        pacienteId: "p1",
+        nomePaciente: "Maria da Silva",
+        gestorSus: "123456",
+        quantidadeAutorizada: 8,
+        quantidadeRetirada: 4,
+        saldo: 4,
+        quantidadeLiberacoes: 2,
+      },
+      {
+        pacienteId: "p2",
+        nomePaciente: "José Souza",
+        gestorSus: "654321",
+        quantidadeAutorizada: 1,
+        quantidadeRetirada: 0,
+        saldo: 1,
+        quantidadeLiberacoes: 1,
+      },
+    ],
+  };
+
+  function renderizarResumo(sobre?: {
+    resumo?: ResultadoResumoRelatorio | null;
+    erroInicial?: string | null;
+  }) {
+    return renderizar({
+      filtros: filtros({ tipo: "resumo" }),
+      resultado: null,
+      resumo: sobre?.resumo ?? resumoCheio,
+      erroInicial: sobre?.erroInicial ?? null,
+    });
+  }
+
+  it("aba Resumo aparece primeiro no seletor e fica ativa", () => {
+    renderizarResumo();
+    const resumo = screen.getByRole("link", { name: "Resumo" });
+    expect(resumo).toHaveAttribute("aria-current", "page");
+    expect(resumo.getAttribute("href")).toContain("tipo=resumo");
+    // Abas existentes continuam presentes.
+    expect(screen.getByRole("link", { name: "Liberações" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Retiradas" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Consolidado" })).toBeInTheDocument();
+  });
+
+  // O painel renderiza tabela desktop E cards mobile no mesmo DOM — textos
+  // se repetem. Os cards são os <dt>/<dd>; a tabela, o <tr> da primeira linha.
+  function valorDoCard(rotulo: string): string | null {
+    const dt = screen
+      .getAllByText(rotulo)
+      .find((el) => el.tagName === "DT")
+      ?.closest("div");
+    return dt?.querySelector("dd")?.textContent ?? null;
+  }
+
+  function linhaTabela(nomePaciente: string): HTMLTableRowElement {
+    return screen
+      .getAllByText(nomePaciente)
+      .map((el) => el.closest("tr"))
+      .find((tr): tr is HTMLTableRowElement => tr !== null)!;
+  }
+
+  it("exibe os cinco cards principais com os valores do resumo", () => {
+    renderizarResumo();
+    expect(valorDoCard("Pacientes")).toBe("2");
+    expect(valorDoCard("Liberações")).toBe("3");
+    expect(valorDoCard("Vales autorizados")).toBe("9");
+    expect(valorDoCard("Vales retirados")).toBe("4");
+    expect(valorDoCard("Saldo")).toBe("5");
+  });
+
+  it("exibe a distribuição por tipo de liberação", () => {
+    renderizarResumo();
+    expect(screen.getByText(/Liberações contínuas:/)).toHaveTextContent(
+      "Liberações contínuas: 2 · Liberações avulsas: 1"
+    );
+  });
+
+  it("exibe a tabela por paciente com autorizado, retirado e saldo", () => {
+    renderizarResumo();
+    expect(screen.getAllByText("Maria da Silva").length).toBeGreaterThan(0);
+    const linha = linhaTabela("Maria da Silva");
+    const celulas = Array.from(linha.querySelectorAll("td")).map((td) => td.textContent);
+    // Paciente, SUS, Liberações, Autorizado, Retirado, Saldo.
+    expect(celulas).toEqual(["Maria da Silva", "SUS 123456", "2", "8", "4", "4"]);
+  });
+
+  it("documenta a semântica do período na UI", () => {
+    renderizarResumo();
+    expect(
+      screen.getByText(/liberações iniciadas no período/i)
+    ).toHaveTextContent(/retiradas realizadas no período/i);
+  });
+
+  it("período sem dados mostra estado vazio sem cards enganosos", () => {
+    renderizarResumo({ resumo: { ...resumoCheio, totalPacientes: 0, linhas: [] } });
+    expect(screen.getByText("Nenhum dado encontrado para os filtros selecionados.")).toBeInTheDocument();
+    expect(screen.queryByText("Vales autorizados")).not.toBeInTheDocument();
+  });
+
+  it("erro inicial é exibido sem cards nem estado vazio", () => {
+    renderizarResumo({ erroInicial: "Falha ao carregar o resumo." });
+    expect(screen.getByRole("alert")).toHaveTextContent("Falha ao carregar o resumo.");
+    expect(screen.queryByText("Nenhum dado encontrado para os filtros selecionados.")).not.toBeInTheDocument();
+  });
+
+  it("oferece os filtros obrigatórios do resumo", () => {
+    renderizarResumo();
+    expect(screen.getByLabelText("Paciente (nome ou Gestor SUS)")).toBeInTheDocument();
+    expect(screen.getByLabelText("De")).toBeInTheDocument();
+    expect(screen.getByText("Até", { selector: "label" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Tipo de liberação")).toBeInTheDocument();
+  });
+
+  it("saldo negativo é destacado em vermelho", () => {
+    renderizarResumo({
+      resumo: { ...resumoCheio, saldoTotal: -2 },
+    });
+    const saldoCard = screen
+      .getAllByText("Saldo")
+      .find((el) => el.tagName === "DT")!
+      .closest("div")!;
+    expect(saldoCard.querySelector("dd")).toHaveClass("text-red-700");
   });
 });

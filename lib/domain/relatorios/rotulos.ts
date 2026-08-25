@@ -15,10 +15,11 @@ import {
 } from "@/lib/domain/relatorios/types";
 
 export const ROTULO_TIPO_RELATORIO: Record<TipoRelatorio, string> = {
-  [TIPOS_RELATORIO[0]]: "Liberações",
-  [TIPOS_RELATORIO[1]]: "Retiradas",
-  [TIPOS_RELATORIO[2]]: "Consolidado",
-  [TIPOS_RELATORIO[3]]: "Histórico",
+  [TIPOS_RELATORIO[0]]: "Resumo",
+  [TIPOS_RELATORIO[1]]: "Liberações",
+  [TIPOS_RELATORIO[2]]: "Retiradas",
+  [TIPOS_RELATORIO[3]]: "Consolidado",
+  [TIPOS_RELATORIO[4]]: "Histórico",
 };
 
 export function rotuloTipoRelatorio(tipo: string): string {

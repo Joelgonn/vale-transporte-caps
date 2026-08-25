@@ -24,6 +24,16 @@ function repoFake() {
     listarLiberacoes: vi.fn(async () => resultado),
     listarRetiradas: vi.fn(async () => ({ ...resultado, tipo: "retiradas" as const })),
     listarConsolidado: vi.fn(async () => ({ ...resultado, tipo: "consolidado" as const })),
+    obterResumo: vi.fn(async () => ({
+      totalPacientes: 0,
+      totalLiberacoes: 0,
+      totalValesAutorizados: 0,
+      totalValesRetirados: 0,
+      saldoTotal: 0,
+      totalLiberacoesContinuas: 0,
+      totalLiberacoesAvulsas: 0,
+      linhas: [],
+    })),
   } as unknown as RelatorioRepository;
   return repo;
 }
@@ -74,5 +84,33 @@ describe("RelatorioService", () => {
     };
     await service.consultar(filtros);
     expect(repo.listarLiberacoes).toHaveBeenCalledWith(filtros);
+  });
+});
+
+describe("RelatorioService.obterResumo (Sprint 40)", () => {
+  it("delega ao repositório com os filtros do resumo", async () => {
+    const repo = repoFake();
+    const service = makeService(repo);
+    const filtros: FiltrosRelatorio = { tipo: "resumo", de: "2026-01-01", pagina: 1 };
+
+    await service.obterResumo(filtros);
+    expect(repo.obterResumo).toHaveBeenCalledWith(filtros);
+  });
+
+  it("rejeita obterResumo com tipo diferente de resumo", async () => {
+    const service = makeService(repoFake());
+    await expect(
+      service.obterResumo({ tipo: "liberacoes", pagina: 1 })
+    ).rejects.toMatchObject({ code: "VALIDACAO" });
+  });
+
+  it("consultar NÃO roteia o resumo pelo fluxo de listas paginadas", async () => {
+    const repo = repoFake();
+    const service = makeService(repo);
+    await expect(
+      service.consultar({ tipo: "resumo", pagina: 1 })
+    ).rejects.toMatchObject({ code: "VALIDACAO" });
+    expect(repo.listarLiberacoes).not.toHaveBeenCalled();
+    expect(repo.obterResumo).not.toHaveBeenCalled();
   });
 });

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUsuarioFuncional } from "@/lib/auth/profile";
 import { permissoesRelatorios } from "@/lib/domain/regras";
 import { TIPOS_RELATORIO, type FiltrosRelatorio } from "@/lib/domain/relatorios/types";
-import { consultarRelatorioAction } from "@/app/actions/relatorios";
+import { consultarRelatorioAction, relatorioResumoAction } from "@/app/actions/relatorios";
 import { listarPacientesAction } from "@/app/actions/pacientes";
 import RelatoriosView from "./components/relatorios-view";
 import { PageHeader } from "@/components/ui/page-header";
@@ -66,6 +66,28 @@ export default async function RelatoriosPage({
     (TIPOS_RELATORIO as readonly string[]).includes(params.tipo ?? "")
       ? (params.tipo as FiltrosRelatorio["tipo"])
       : "liberacoes";
+
+  // === Fluxo do RESUMO gerencial (Sprint 40) ===
+  if (tipo === "resumo") {
+    const filtros: FiltrosRelatorio = {
+      tipo: "resumo",
+      de: somenteData(params.de),
+      ate: somenteData(params.ate),
+      busca: params.busca?.trim() || null,
+      tipoLiberacao: params.tl?.trim() || null,
+      pagina: 1,
+    };
+    const resultado = await relatorioResumoAction(filtros);
+    return (
+      <RelatoriosView
+        filtros={filtros}
+        resultado={null}
+        resumo={resultado.ok ? resultado.data : null}
+        erroInicial={resultado.ok ? null : resultado.error}
+        candidatos={[]}
+      />
+    );
+  }
 
   // === Fluxo do Histórico por Paciente (Sprint 38) ===
   if (tipo === "historico") {

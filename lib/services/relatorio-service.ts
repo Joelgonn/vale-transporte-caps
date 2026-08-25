@@ -3,6 +3,7 @@ import {
   TIPOS_RELATORIO,
   type FiltrosRelatorio,
   type ResultadoListaRelatorio,
+  type ResultadoResumoRelatorio,
 } from "@/lib/domain/relatorios/types";
 import {
   RelatorioRepositoryPostgres,
@@ -33,6 +34,12 @@ export class RelatorioService {
 
     const filtrosNormatizados: FiltrosRelatorio = { ...filtros, pagina };
 
+    // O resumo tem método dedicado (obterResumo) e action dedicada — nunca
+    // passa pelo fluxo de listas paginadas.
+    if (filtros.tipo === "resumo") {
+      throw new AppError("VALIDACAO", "Use obterResumo para o relatório Resumo.");
+    }
+
     switch (filtros.tipo) {
       case "liberacoes":
         return this.repo.listarLiberacoes(filtrosNormatizados);
@@ -43,5 +50,17 @@ export class RelatorioService {
       case "historico":
         return this.repo.listarHistorico(filtrosNormatizados);
     }
+  }
+
+  // Resumo gerencial de vales (Sprint 40). Mesmo gate e mesmos filtros das
+  // abas existentes; o agregador puro (agregarResumo) deriva os totais.
+  async obterResumo(
+    filtros: FiltrosRelatorio
+  ): Promise<ResultadoResumoRelatorio> {
+    if (filtros.tipo !== "resumo") {
+      throw new AppError("VALIDACAO", "Tipo de relatório inválido.");
+    }
+
+    return this.repo.obterResumo(filtros);
   }
 }

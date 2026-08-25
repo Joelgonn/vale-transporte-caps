@@ -2,6 +2,42 @@
 
 > Histórico de entregas por sprint. Consulte `docs/ROADMAP.md` para as fases futuras.
 
+## Sprint 40 — Relatório Resumo de Vales
+
+**Escopo:** visão gerencial agregada em `/dashboard/relatorios` (aba **Resumo**, primeira na
+ordem) — agrega dados JÁ existentes; **sem migration, sem RLS/trigger novos, sem mudança nos
+fluxos de cadastro/liberação/retirada**.
+
+- **Banco:** NENHUMA alteração (agregação em memória no servidor sobre `liberacoes` e `retiradas`).
+- **Domínio:** `lib/domain/relatorios/resumo.ts` — agregador PURO `agregarResumo()` (totais,
+  contínuas/avulsas, linhas por paciente ordenadas por autorizado desc, saldo sempre derivado);
+  tipos `ResultadoResumoRelatorio`/`LinhaResumoPaciente`; aba `"resumo"` adicionada a
+  `TIPOS_RELATORIO` (rótulo "Resumo").
+- **Repository:** `RelatorioRepository.obterResumo(filtros)` — duas consultas paralelas
+  (sem N+1): liberações por `data_inicio` no período (+ tipo/paciente) e retiradas por
+  `data_hora` no período.
+- **Service/Action:** `RelatorioService.obterResumo` (rejeita tipo ≠ resumo em `consultar`) +
+  `relatorioResumoAction` (mesmo gate: somente Gestor ativo).
+- **UI:** aba Resumo com 5 cards (Pacientes, Liberações, Vales autorizados, Vales retirados,
+  Saldo), distribuição contínuas/avulsas, tabela por paciente (desktop + cards mobile), estados
+  vazio/erro e nota explícita da semântica do período.
+- **SEMÂNTICA DO PERÍODO:** AUTORIZADO = liberações com `data_inicio` no período; RETIRADO =
+  retiradas com `data_hora` no período (independentes — retirada contra liberação anterior ao
+  período conta no período da retirada); SALDO = autorizado − retirado (derivado).
+- **Testes:** 661 (30+ novos): agregador puro (saldo, somas, vazio, ordenação, contagens),
+  repository (filtros/duas consultas/busca), service (delegação e rejeição de tipo),
+  action (gate Gestor × recepcionista × autorizador), componentes (cards, tabela, vazio, erro).
+
+### Sprint 40.1 — Correções do Resumo
+
+- **Filtro por tipo nas retiradas:** `obterResumo` propaga `tipoLiberacao` à consulta B via
+  relação PostgREST (`eq("liberacoes.tipo", …)` — FK NOT NULL, sem N+1 e sem filtragem em
+  memória); sem filtro, retiradas de ambos os tipos continuam entrando.
+- **Paciente só-retirada identificado:** consulta B embute `pacientes(id, gestor_sus, nome)`;
+  o acumulador atualiza nome/SUS desconhecidos ("—") independente da ordem dos registros.
+- **Testes novos:** consistência CARD × TABELA em cenário combinado; filtro CONTÍNUA exclui
+  retirada avulsa; AVULSA exclui contínua; só-retirada compatível/incompatível com o filtro.
+
 ## Sprint 38 — Cadastro de pacientes por origem (RN29)
 
 # SPRINT 38 — CADASTRO DE PACIENTES POR ORIGEM

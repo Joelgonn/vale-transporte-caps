@@ -5,6 +5,7 @@ import { PERFIS } from "@/lib/domain/enums";
 import type {
   FiltrosRelatorio,
   ResultadoListaRelatorio,
+  ResultadoResumoRelatorio,
 } from "@/lib/domain/relatorios/types";
 import { RelatorioService } from "@/lib/services/relatorio-service";
 import { createClient } from "@/lib/supabase/server";
@@ -70,6 +71,29 @@ export async function consultarRelatorioAction(
 
     const service = await RelatorioService.create();
     return { ok: true, data: await service.consultar(filtros) };
+  } catch (erro) {
+    return { ok: false, error: mensagemDaAcao(erro) };
+  }
+}
+
+// Resumo gerencial de vales (Sprint 40). Mesmo gate do Gestor ativo; a
+// agregação é feita no servidor sobre dados já existentes (sem migration/RLS
+// novas). Semântica do período documentada em DOMAIN.md e no repositório.
+export async function relatorioResumoAction(
+  filtros: FiltrosRelatorio
+): Promise<AcaoResultado<ResultadoResumoRelatorio>> {
+  try {
+    const usuario = await exigirUsuarioAtivo();
+
+    if (usuario.perfil !== PERFIS.GESTOR) {
+      throw new AppError(
+        "ACESSO_NEGADO",
+        "Somente o Gestor pode consultar relatórios."
+      );
+    }
+
+    const service = await RelatorioService.create();
+    return { ok: true, data: await service.obterResumo(filtros) };
   } catch (erro) {
     return { ok: false, error: mensagemDaAcao(erro) };
   }

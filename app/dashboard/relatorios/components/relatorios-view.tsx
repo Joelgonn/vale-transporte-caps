@@ -6,6 +6,7 @@ import {
   TIPOS_RELATORIO,
   type FiltrosRelatorio,
   type ResultadoListaRelatorio,
+  type ResultadoResumoRelatorio,
 } from "@/lib/domain/relatorios/types";
 import {
   ROTULO_TIPO_RELATORIO,
@@ -35,6 +36,7 @@ import {
 type RelatoriosViewProps = {
   filtros: FiltrosRelatorio;
   resultado: ResultadoListaRelatorio | null;
+  resumo?: ResultadoResumoRelatorio | null;
   erroInicial: string | null;
   candidatos?: { id: string; gestor_sus: string; nome: string }[];
 };
@@ -62,7 +64,7 @@ const INPUT =
   "h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none";
 
 export default function RelatoriosView(props: RelatoriosViewProps) {
-  const { filtros, resultado, erroInicial, candidatos } = props;
+  const { filtros, resultado, resumo, erroInicial, candidatos } = props;
 
   const ehHistorico = filtros.tipo === "historico";
   const total = resultado?.total ?? 0;
@@ -71,8 +73,205 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
   const semFiltros =
     !filtros.de && !filtros.ate && !filtros.busca && !filtros.tipoLiberacao;
   const mostraFiltroTipo =
-    filtros.tipo === "liberacoes" || filtros.tipo === "consolidado";
+    filtros.tipo === "liberacoes" ||
+    filtros.tipo === "consolidado" ||
+    filtros.tipo === "resumo";
   let temFiltrosAdicionais = false;
+
+  // ---------------------------------------------------------------
+  // Ramificação RESUMO gerencial (Sprint 40)
+  // ---------------------------------------------------------------
+  if (filtros.tipo === "resumo") {
+    return (
+      <div className="flex flex-1 flex-col py-6">
+        <div className={`${CONTAINER} flex flex-col gap-6`}>
+          <PageHeader
+            titulo="Relatórios"
+            descricao="Consultas de liberações, retiradas e consolidado — exclusivas do Gestor."
+          />
+
+          {erroInicial && <FeedbackErro>{erroInicial}</FeedbackErro>}
+
+          {/* Seletor de tipo (compartilhado com as demais abas). */}
+          <nav aria-label="Tipo de relatório" className="flex flex-wrap gap-2">
+            {TIPOS_RELATORIO.map((tipo) => {
+              const ativo = filtros.tipo === tipo;
+              return (
+                <Link
+                  key={tipo}
+                  href={construirUrl(filtros, {
+                    tipo,
+                    pagina: 1,
+                    paciente: null,
+                    status: null,
+                    origem: null,
+                  })}
+                  aria-current={ativo ? "page" : undefined}
+                  className={
+                    ativo
+                      ? "inline-flex h-10 items-center rounded-md bg-brand-900 px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                      : "inline-flex h-10 items-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:border-brand-300 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-reduce:transition-none"
+                  }
+                >
+                  {ROTULO_TIPO_RELATORIO[tipo]}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Filtros — mesmos campos das demais abas, aplicados no servidor. */}
+          <form
+            method="get"
+            action="/dashboard/relatorios"
+            aria-label="Filtros do resumo"
+            className={`flex flex-col gap-3 p-4 lg:flex-row lg:items-end ${CARTAO}`}
+          >
+            <input type="hidden" name="tipo" value="resumo" />
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="relatorios-resumo-tipo" className="text-xs font-medium text-zinc-600">
+                Tipo de liberação
+              </label>
+              <select
+                id="relatorios-resumo-tipo"
+                name="tl"
+                defaultValue={filtros.tipoLiberacao ?? ""}
+                className={INPUT}
+              >
+                <option value="">Todos</option>
+                {Object.values(TIPOS_LIBERACAO).map((tipo) => (
+                  <option key={tipo} value={tipo}>
+                    {rotuloTipoLiberacao(tipo)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="relatorios-resumo-busca" className="text-xs font-medium text-zinc-600">
+                Paciente (nome ou Gestor SUS)
+              </label>
+              <input
+                id="relatorios-resumo-busca"
+                name="busca"
+                type="search"
+                defaultValue={filtros.busca ?? ""}
+                placeholder="Buscar paciente"
+                className={INPUT}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="relatorios-resumo-de" className="text-xs font-medium text-zinc-600">
+                De
+              </label>
+              <input
+                id="relatorios-resumo-de"
+                name="de"
+                type="date"
+                defaultValue={filtros.de ?? ""}
+                className={INPUT}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="relatorios-resumo-ate" className="text-xs font-medium text-zinc-500">
+                Até
+              </label>
+              <input
+                id="relatorios-resumo-ate"
+                name="ate"
+                type="date"
+                defaultValue={filtros.ate ?? ""}
+                className={INPUT}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5 lg:ml-1 lg:flex-row">
+              <button
+                type="submit"
+                className="inline-flex h-11 items-center justify-center rounded-md bg-green-600 px-5 text-sm font-medium text-white transition-colors hover:bg-green-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+              >
+                Filtrar
+              </button>
+              <Link
+                href={construirUrl(filtros, {
+                  de: null,
+                  ate: null,
+                  busca: null,
+                  tipoLiberacao: null,
+                  pagina: 1,
+                  paciente: null,
+                  status: null,
+                  origem: null,
+                })}
+                className={BOTAO_SECUNDARIO}
+              >
+                Limpar
+              </Link>
+            </div>
+          </form>
+
+          {/* Semântica do período — explícita para não misturar interpretações. */}
+          {resumo && resumo.totalPacientes > 0 && !erroInicial && (
+            <p className="text-xs text-zinc-500" aria-live="polite">
+              Vales autorizados: liberações iniciadas no período. Vales
+              retirados: retiradas realizadas no período.
+            </p>
+          )}
+
+          {!erroInicial && (!resumo || resumo.totalPacientes === 0) && (
+            <EstadoVazio mensagem="Nenhum dado encontrado para os filtros selecionados." />
+          )}
+
+          {!erroInicial && resumo && resumo.totalPacientes > 0 && (
+            <>
+              {/* Cards principais. */}
+              <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                {[
+                  { rotulo: "Pacientes", valor: resumo.totalPacientes },
+                  { rotulo: "Liberações", valor: resumo.totalLiberacoes },
+                  { rotulo: "Vales autorizados", valor: resumo.totalValesAutorizados },
+                  { rotulo: "Vales retirados", valor: resumo.totalValesRetirados },
+                  { rotulo: "Saldo", valor: resumo.saldoTotal },
+                ].map((card) => (
+                  <div key={card.rotulo} className={`${CARTAO} p-4`}>
+                    <dt className="text-xs uppercase tracking-wide text-zinc-500">
+                      {card.rotulo}
+                    </dt>
+                    <dd
+                      className={`mt-1 text-2xl font-semibold ${
+                        card.rotulo === "Saldo" && card.valor < 0
+                          ? "text-red-700"
+                          : "text-brand-900"
+                      }`}
+                    >
+                      {card.valor}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+
+              {/* Distribuição por tipo. */}
+              <p className="text-sm text-zinc-600">
+                Liberações contínuas:{" "}
+                <span className="font-medium text-brand-900">
+                  {resumo.totalLiberacoesContinuas}
+                </span>{" "}
+                · Liberações avulsas:{" "}
+                <span className="font-medium text-brand-900">
+                  {resumo.totalLiberacoesAvulsas}
+                </span>
+              </p>
+
+              {/* Tabela por paciente — desktop + cards mobile. */}
+              <PainelResumoPacientes linhas={resumo.linhas} />
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // ---------------------------------------------------------------
   // Ramificação HISTÓRICO POR PACIENTE (Sprint 38)
@@ -749,6 +948,87 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
         )}
       </div>
     </div>
+  );
+}
+
+// Tabela desktop + cards mobile do RESUMO por paciente (Sprint 40).
+// Ordenação padrão: maior quantidade autorizada primeiro (definida no
+// agregador puro agregarResumo — a view não reordena).
+function PainelResumoPacientes({
+  linhas,
+}: {
+  linhas: ResultadoResumoRelatorio["linhas"];
+}) {
+  return (
+    <>
+      <div className={`${CARTAO} hidden overflow-x-auto md:block`}>
+        <table className="w-full text-left text-sm">
+          <CabecalhoTabela
+            colunas={["Paciente", "Gestor SUS", "Liberações", "Autorizado", "Retirado", "Saldo"]}
+          />
+          <tbody className="divide-y divide-zinc-100">
+            {linhas.map((linha) => (
+              <tr key={linha.pacienteId} className="transition-colors duration-150 hover:bg-brand-50/40 motion-reduce:transition-none">
+                <td className="px-4 py-3">
+                  <p className="font-medium text-brand-900">{linha.nomePaciente}</p>
+                </td>
+                <td className="px-4 py-3 text-zinc-600">SUS {linha.gestorSus}</td>
+                <td className="px-4 py-3 text-zinc-700">{linha.quantidadeLiberacoes}</td>
+                <td className="px-4 py-3 text-zinc-700">{linha.quantidadeAutorizada}</td>
+                <td className="px-4 py-3 text-zinc-700">{linha.quantidadeRetirada}</td>
+                <td className="px-4 py-3">
+                  <span
+                    className={
+                      linha.saldo < 0
+                        ? "font-semibold text-red-700"
+                        : "font-semibold text-brand-900"
+                    }
+                  >
+                    {linha.saldo}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <ul className="flex flex-col gap-3 md:hidden">
+        {linhas.map((linha) => (
+          <li key={linha.pacienteId} className={`${CARTAO} p-4`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold text-brand-900">
+                  {linha.nomePaciente}
+                </p>
+                <p className="text-xs text-zinc-500">SUS {linha.gestorSus}</p>
+              </div>
+              <p
+                className={`shrink-0 text-sm font-semibold ${
+                  linha.saldo < 0 ? "text-red-700" : "text-brand-900"
+                }`}
+              >
+                Saldo {linha.saldo}
+              </p>
+            </div>
+            <dl className="mt-3 flex flex-col gap-2 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-xs text-zinc-500">Liberações</dt>
+                <dd className="font-medium text-brand-900">{linha.quantidadeLiberacoes}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-xs text-zinc-500">Autorizado</dt>
+                <dd className="font-medium text-brand-900">{linha.quantidadeAutorizada}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-xs text-zinc-500">Retirado</dt>
+                <dd className="font-medium text-brand-900">{linha.quantidadeRetirada}</dd>
+              </div>
+            </dl>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 

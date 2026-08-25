@@ -166,6 +166,20 @@ Registro imutável de ações relevantes no sistema.
 - Retenção dos logs: prazo legal, arquivamento
 - Imutabilidade técnica: append-only, hash chain, WORM storage?
 
+
+### Resumo de Vales (Relatórios — Sprint 40)
+
+A aba **Resumo** de /dashboard/relatorios (exclusiva do Gestor ativo) agrega dados já
+existentes — sem nova estrutura no banco. Semântica do período:
+
+- **AUTORIZADO**: liberações cuja data_inicio está dentro do período selecionado;
+- **RETIRADO**: retiradas cuja data_hora está dentro do período selecionado (conjunto
+  independente do anterior — uma retirada contra liberação iniciada antes do período conta
+  no período em que ocorreu);
+- **SALDO**: sempre derivado = autorizado − retirado. Nunca armazenado.
+
+A UI declara explicitamente essa semântica para evitar interpretações mistas dos totais.
+
 ## Relacionamentos entre Entidades
 
 ```

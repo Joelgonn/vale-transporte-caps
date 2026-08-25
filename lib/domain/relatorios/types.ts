@@ -4,8 +4,15 @@
 // Os relatórios NÃO incluem CPF (o contrato não exige; somente o Gestor lê
 // pacientes_com_cpf, e essa coluna não entra nas consultas de relatório).
 
-// Relatórios disponíveis. Ordem exibida na UI (seletor de abas).
-export const TIPOS_RELATORIO = ["liberacoes", "retiradas", "consolidado", "historico"] as const;
+// Relatórios disponíveis. Ordem exibida na UI (seletor de abas). "Resumo"
+// (Sprint 40) é a visão gerencial agregada; os demais são listas detalhadas.
+export const TIPOS_RELATORIO = [
+  "resumo",
+  "liberacoes",
+  "retiradas",
+  "consolidado",
+  "historico",
+] as const;
 export type TipoRelatorio = (typeof TIPOS_RELATORIO)[number];
 
 // Filtros da consulta. Todos são opcionais e aplicados NO SERVIDOR (PostgREST
@@ -123,3 +130,31 @@ export type ResultadoListaRelatorio =
       pagina: number;
       porPagina: number;
     };
+
+// ── Resumo gerencial (Sprint 40) ─────────────────────────────────────────────
+// SEMÂNTICA DO PERÍODO (documentada em DOMAIN.md):
+//   * AUTORIZADO → liberações cuja data_inicio está dentro do período;
+//   * RETIRADO   → retiradas cuja data_hora está dentro do período.
+// São conjuntos independentes (uma retirada de liberação antiga conta no
+// período em que ocorreu; uma liberação do período conta mesmo que suas
+// retiradas sejam futuras). O saldo é DERIVADO — nunca armazenado.
+export type LinhaResumoPaciente = {
+  pacienteId: string;
+  nomePaciente: string;
+  gestorSus: string;
+  quantidadeAutorizada: number;
+  quantidadeRetirada: number;
+  saldo: number;
+  quantidadeLiberacoes: number;
+};
+
+export type ResultadoResumoRelatorio = {
+  totalPacientes: number;
+  totalLiberacoes: number;
+  totalValesAutorizados: number;
+  totalValesRetirados: number;
+  saldoTotal: number;
+  totalLiberacoesContinuas: number;
+  totalLiberacoesAvulsas: number;
+  linhas: LinhaResumoPaciente[];
+};

@@ -404,3 +404,266 @@ describe("listarHistorico", () => {
     expect(resultado.linhas).toEqual([]);
   });
 });
+describe("obterResumo (Sprint 40)", () => {
+  const filtrosResumo: FiltrosRelatorio = { tipo: "resumo", pagina: 1 };
+
+  it("consulta liberacoes (data_inicio) e retiradas (data_hora) e agrega o resumo", async () => {
+    const { repo, registros } = makeRepo({
+      liberacoesResultado: {
+        data: [
+          linhaLiberacao({ quantidade: 4, retiradas: [] }),
+          linhaLiberacao({
+            id: "l2",
+            paciente_id: "p2",
+            tipo: TIPOS_LIBERACAO.AVULSA,
+            quantidade: 1,
+            pacientes: { id: "p2", gestor_sus: "222", nome: "José" },
+            retiradas: [],
+          }),
+        ],
+        error: null,
+      },
+      retiradasResultado: { data: [{ paciente_id: "p1", quantidade: 3 }], error: null },
+    });
+
+    const resultado = await repo.obterResumo(filtrosResumo);
+
+    const chamadaLib = registros.calls.find((c) => c.tabela === "liberacoes")!;
+    const selectLib = chamadaLib.metodos.find((m) => m.startsWith("select:"))!;
+    expect(selectLib).toContain("pacientes(id, gestor_sus, nome)");
+    expect(selectLib).not.toContain("cpf");
+    expect(chamadaLib.metodos.some((m) => m.startsWith("order:data_inicio"))).toBe(true);
+
+    const chamadaRet = registros.calls.find((c) => c.tabela === "retiradas")!;
+    const selectRet = chamadaRet.metodos.find((m) => m.startsWith("select:"))!;
+    expect(selectRet).toBe(
+      "select:paciente_id, quantidade, pacientes(id, gestor_sus, nome), liberacoes!inner(tipo)"
+    );
+
+    expect(resultado.totalLiberacoes).toBe(2);
+    expect(resultado.totalValesAutorizados).toBe(5);
+    expect(resultado.totalValesRetirados).toBe(3);
+    expect(resultado.saldoTotal).toBe(2);
+    expect(resultado.totalPacientes).toBe(2);
+    // Ordenação padrão: maior autorizado primeiro.
+    expect(resultado.linhas[0].nomePaciente).toBe("Maria da Silva");
+    expect(resultado.linhas[0].saldo).toBe(1);
+  });
+
+  it("aplica período e tipo de liberação no PostgREST", async () => {
+    const { repo, registros } = makeRepo({
+      liberacoesResultado: { data: [], error: null },
+      retiradasResultado: { data: [], error: null },
+    });
+
+    await repo.obterResumo({
+      ...filtrosResumo,
+      de: "2026-02-01",
+      ate: "2026-02-28",
+      tipoLiberacao: TIPOS_LIBERACAO.AVULSA,
+    });
+
+    const chamadaLib = registros.calls.find((c) => c.tabela === "liberacoes")!;
+    expect(chamadaLib.metodos).toContain("gte:data_inicio=2026-02-01");
+    expect(chamadaLib.metodos).toContain("lte:data_inicio=2026-02-28T23:59:59.999");
+    expect(chamadaLib.metodos).toContain(`eq:tipo=${TIPOS_LIBERACAO.AVULSA}`);
+
+    const chamadaRet = registros.calls.find((c) => c.tabela === "retiradas")!;
+    expect(chamadaRet.metodos).toContain("gte:data_hora=2026-02-01");
+    expect(chamadaRet.metodos).toContain("lte:data_hora=2026-02-28T23:59:59.999");
+  });
+
+  it("busca por paciente resolve ids via v_pacientes e filtra as duas consultas", async () => {
+    const { repo, registros } = makeRepo({
+      pacientesResultado: { data: [{ id: "p1" }, { id: "p2" }], error: null },
+      liberacoesResultado: { data: [], error: null },
+      retiradasResultado: { data: [], error: null },
+    });
+
+    await repo.obterResumo({ ...filtrosResumo, busca: "Maria" });
+
+    const chamadaLib = registros.calls.find((c) => c.tabela === "liberacoes")!;
+    const chamadaRet = registros.calls.find((c) => c.tabela === "retiradas")!;
+    expect(chamadaLib.metodos).toContain("in:paciente_id=p1,p2");
+    expect(chamadaRet.metodos).toContain("in:paciente_id=p1,p2");
+  });
+
+  it("busca sem correspondência retorna resumo vazio sem consultar as tabelas", async () => {
+    const { repo, registros } = makeRepo({
+      pacientesResultado: { data: [], error: null },
+    });
+
+    const resultado = await repo.obterResumo({ ...filtrosResumo, busca: "ninguém" });
+
+    expect(registros.calls.some((c) => c.tabela === "liberacoes")).toBe(false);
+    expect(registros.calls.some((c) => c.tabela === "retiradas")).toBe(false);
+    expect(resultado.totalPacientes).toBe(0);
+    expect(resultado.linhas).toEqual([]);
+  });
+});
+
+describe("obterResumo — filtro de tipo e identificação (Sprint 40.1)", () => {
+  const filtrosResumo: FiltrosRelatorio = { tipo: "resumo", pagina: 1 };
+
+  // Dados-base dos cenários 1–3 da Sprint 40.1:
+  // liberações contínua=4 e avulsa=2; retiradas de contínua=1 e avulsa=1.
+  function liberacoesMistas() {
+    return {
+      data: [
+        linhaLiberacao({
+          id: "lc",
+          tipo: TIPOS_LIBERACAO.CONTINUA,
+          quantidade: 4,
+          retiradas: [],
+        }),
+        linhaLiberacao({
+          id: "la",
+          paciente_id: "p1",
+          tipo: TIPOS_LIBERACAO.AVULSA,
+          quantidade: 2,
+          pacientes: { id: "p1", gestor_sus: "111", nome: "Ana" },
+          retiradas: [],
+        }),
+      ],
+      error: null,
+    };
+  }
+
+  it("SEM filtro de tipo: retiradas de ambos os tipos entram (autorizado=6, retirado=2)", async () => {
+    const { repo, registros } = makeRepo({
+      liberacoesResultado: liberacoesMistas(),
+      retiradasResultado: {
+        data: [
+          { paciente_id: "p1", quantidade: 1, pacientes: { id: "p1", gestor_sus: "111", nome: "Ana" } },
+          { paciente_id: "p1", quantidade: 1, pacientes: { id: "p1", gestor_sus: "111", nome: "Ana" } },
+        ],
+        error: null,
+      },
+    });
+
+    const resultado = await repo.obterResumo(filtrosResumo);
+
+    const chamadaRet = registros.calls.find((c) => c.tabela === "retiradas")!;
+    expect(chamadaRet.metodos.some((m) => m.startsWith("eq:liberacoes.tipo"))).toBe(false);
+    expect(resultado.totalValesAutorizados).toBe(6);
+    expect(resultado.totalValesRetirados).toBe(2);
+    expect(resultado.saldoTotal).toBe(4);
+  });
+
+  it("filtro CONTÍNUA: propaga eq:liberacoes.tipo à consulta B; só retiram-se contínuas (retirado=1)", async () => {
+    const { repo, registros } = makeRepo({
+      // O PostgREST devolveria somente as contínuas:
+      liberacoesResultado: {
+        data: [linhaLiberacao({ id: "lc", tipo: TIPOS_LIBERACAO.CONTINUA, quantidade: 4, retiradas: [] })],
+        error: null,
+      },
+      // ...e somente retiradas vinculadas a contínuas:
+      retiradasResultado: {
+        data: [
+          { paciente_id: "p1", quantidade: 1, pacientes: { id: "p1", gestor_sus: "111", nome: "Ana" } },
+        ],
+        error: null,
+      },
+    });
+
+    const resultado = await repo.obterResumo({
+      ...filtrosResumo,
+      tipoLiberacao: TIPOS_LIBERACAO.CONTINUA,
+    });
+
+    const chamadaLib = registros.calls.find((c) => c.tabela === "liberacoes")!;
+    expect(chamadaLib.metodos).toContain(`eq:tipo=${TIPOS_LIBERACAO.CONTINUA}`);
+    const chamadaRet = registros.calls.find((c) => c.tabela === "retiradas")!;
+    // !inner é obrigatório: sem ele o filtro por relação afetaria apenas o
+    // embed, não as linhas de topo (semântica PostgREST).
+    expect(chamadaRet.metodos.find((m) => m.startsWith("select:"))).toContain(
+      "liberacoes!inner(tipo)"
+    );
+    expect(chamadaRet.metodos).toContain(`eq:liberacoes.tipo=${TIPOS_LIBERACAO.CONTINUA}`);
+
+    expect(resultado.totalValesAutorizados).toBe(4);
+    expect(resultado.totalValesRetirados).toBe(1);
+    expect(resultado.saldoTotal).toBe(3);
+  });
+
+  it("filtro AVULSA: retirada de liberação contínua NÃO entra (retirado=1, autorizado=2)", async () => {
+    const { repo, registros } = makeRepo({
+      // O PostgREST devolveria somente as avulsas:
+      liberacoesResultado: {
+        data: [
+          linhaLiberacao({
+            id: "la",
+            tipo: TIPOS_LIBERACAO.AVULSA,
+            quantidade: 2,
+            pacientes: { id: "p1", gestor_sus: "111", nome: "Ana" },
+            retiradas: [],
+          }),
+        ],
+        error: null,
+      },
+      // ...e somente retiradas vinculadas a avulsas:
+      retiradasResultado: {
+        data: [
+          { paciente_id: "p1", quantidade: 1, pacientes: { id: "p1", gestor_sus: "111", nome: "Ana" } },
+        ],
+        error: null,
+      },
+    });
+
+    const resultado = await repo.obterResumo({
+      ...filtrosResumo,
+      tipoLiberacao: TIPOS_LIBERACAO.AVULSA,
+    });
+
+    const chamadaRet = registros.calls.find((c) => c.tabela === "retiradas")!;
+    expect(chamadaRet.metodos).toContain(`eq:liberacoes.tipo=${TIPOS_LIBERACAO.AVULSA}`);
+    expect(resultado.totalValesAutorizados).toBe(2);
+    expect(resultado.totalValesRetirados).toBe(1);
+    expect(resultado.saldoTotal).toBe(1);
+  });
+
+  it("paciente SÓ-RETIRADA com filtro COMPATÍVEL aparece com nome e Gestor SUS", async () => {
+    const { repo } = makeRepo({
+      liberacoesResultado: { data: [], error: null },
+      retiradasResultado: {
+        data: [
+          {
+            paciente_id: "p9",
+            quantidade: 2,
+            pacientes: { id: "p9", gestor_sus: "999", nome: "João Só-Retirada" },
+          },
+        ],
+        error: null,
+      },
+    });
+
+    const resultado = await repo.obterResumo(filtrosResumo);
+
+    expect(resultado.linhas).toHaveLength(1);
+    const linha = resultado.linhas[0];
+    expect(linha.nomePaciente).toBe("João Só-Retirada");
+    expect(linha.gestorSus).toBe("999");
+    expect(linha.quantidadeAutorizada).toBe(0);
+    expect(linha.quantidadeRetirada).toBe(2);
+    expect(linha.saldo).toBe(-2); // saldo negativo continua permitido
+  });
+
+  it("paciente SÓ-RETIRADA com filtro INCOMPATÍVEL NÃO aparece (cenário 5)", async () => {
+    // Retirada vinculada a liberação CONTÍNUA, filtro = AVULSA: o PostgREST
+    // (INNER JOIN via !inner) devolve NENHUMA retirada — o paciente não entra.
+    const { repo, registros } = makeRepo({
+      liberacoesResultado: { data: [], error: null },
+      retiradasResultado: { data: [], error: null },
+    });
+
+    const resultado = await repo.obterResumo({
+      ...filtrosResumo,
+      tipoLiberacao: TIPOS_LIBERACAO.AVULSA,
+    });
+
+    const chamadaRet = registros.calls.find((c) => c.tabela === "retiradas")!;
+    expect(chamadaRet.metodos).toContain(`eq:liberacoes.tipo=${TIPOS_LIBERACAO.AVULSA}`);
+    expect(resultado.linhas).toEqual([]);
+    expect(resultado.totalPacientes).toBe(0);
+  });
+});

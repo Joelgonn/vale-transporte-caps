@@ -4,6 +4,7 @@ import {
   POR_PAGINA_RELATORIO,
   type FiltrosRelatorio,
   type ResultadoListaRelatorio,
+  type ResultadoResumoRelatorio,
 } from "@/lib/domain/relatorios/types";
 import {
   mapearLinhaConsolidado,
@@ -17,6 +18,11 @@ import {
   mapearItemHistorico,
   type LinhaHistoricoBruta,
 } from "@/lib/domain/relatorios/historico";
+import {
+  agregarResumo,
+  type LiberacaoResumoBruta,
+  type RetiradaResumoBruta,
+} from "@/lib/domain/relatorios/resumo";
 
 // Contrato usado pelos services (permite injeção de fakes nos testes).
 export interface RelatorioRepository {
@@ -24,6 +30,7 @@ export interface RelatorioRepository {
   listarRetiradas(filtros: FiltrosRelatorio): Promise<ResultadoListaRelatorio>;
   listarConsolidado(filtros: FiltrosRelatorio): Promise<ResultadoListaRelatorio>;
   listarHistorico(filtros: FiltrosRelatorio): Promise<ResultadoListaRelatorio>;
+  obterResumo(filtros: FiltrosRelatorio): Promise<ResultadoResumoRelatorio>;
 }
 
 // Colunas do paciente embutidas nos relatórios (nunca CPF — o contrato de
@@ -284,5 +291,79 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
       pagina: filtros.pagina,
       porPagina,
     };
+  }
+
+  // Resumo gerencial de vales (Sprint 40) — agregação de dados já existentes.
+  //
+  // SEMÂNTICA DO PERÍODO (as duas consultas são independentes, sem N+1):
+  //   Consulta A — liberações com data_inicio no período (+ tipo + paciente):
+  //     alimenta totalLiberacoes, vales autorizados, contínuas/avulsas e a
+  //     coluna "Autorizado" da tabela por paciente;
+  //   Consulta B — retiradas com data_hora no período (+ paciente):
+  //     alimenta vales retirados e a coluna "Retirado".
+  // Uma retirada feita no período contra liberação anterior ao período entra
+  // normalmente (por isso a consulta B é separada). Saldo = autorizado −
+  // retirado, derivado em agregarResumo() — nunca armazenado.
+  async obterResumo(filtros: FiltrosRelatorio): Promise<ResultadoResumoRelatorio> {
+    const ids = await this.resolverIdsPacientes(normalizarTermo(filtros.busca));
+
+    if (ids && ids.length === 0) {
+      return {
+        totalPacientes: 0,
+        totalLiberacoes: 0,
+        totalValesAutorizados: 0,
+        totalValesRetirados: 0,
+        saldoTotal: 0,
+        totalLiberacoesContinuas: 0,
+        totalLiberacoesAvulsas: 0,
+        linhas: [],
+      };
+    }
+
+    const de = normalizarTermo(filtros.de);
+    const ate = normalizarDataAte(filtros.ate);
+    const tipoLiberacao = normalizarTermo(filtros.tipoLiberacao);
+
+    let queryLiberacoes = this.client
+      .from("liberacoes")
+      .select("paciente_id, tipo, quantidade, pacientes(id, gestor_sus, nome)");
+    if (de) queryLiberacoes = queryLiberacoes.gte("data_inicio", de);
+    if (ate) queryLiberacoes = queryLiberacoes.lte("data_inicio", ate);
+    if (tipoLiberacao) queryLiberacoes = queryLiberacoes.eq("tipo", tipoLiberacao);
+    if (ids) queryLiberacoes = queryLiberacoes.in("paciente_id", ids);
+
+    let queryRetiradas = this.client
+      .from("retiradas")
+      .select(
+        "paciente_id, quantidade, pacientes(id, gestor_sus, nome), liberacoes!inner(tipo)"
+      );
+    if (de) queryRetiradas = queryRetiradas.gte("data_hora", de);
+    if (ate) queryRetiradas = queryRetiradas.lte("data_hora", ate);
+    // Filtro de tipo propagado pela RELAÇÃO (retiradas.liberacao_id →
+    // liberacoes.tipo) direto no PostgREST — sem filtragem em memória e sem
+    // N+1. O embed usa !inner porque filtro por relação SEM !inner afeta
+    // apenas o conteúdo do embed, NÃO as linhas de topo (semântica PostgREST).
+    // Com !inner, a consulta B passa a INNER JOIN e exclui retiradas cuja
+    // liberação não é do tipo filtrado. Sem filtro, permanecem retiradas de
+    // ambos os tipos — seguro pois retiradas.liberacao_id é NOT NULL (o join
+    // nunca descarta linha quando não há filtro).
+    if (tipoLiberacao) {
+      queryRetiradas = queryRetiradas.eq("liberacoes.tipo", tipoLiberacao);
+    }
+    if (ids) queryRetiradas = queryRetiradas.in("paciente_id", ids);
+
+    // As duas consultas são independentes — executam em paralelo.
+    const [liberacoesResultado, retiradasResultado] = await Promise.all([
+      queryLiberacoes.order("data_inicio", { ascending: false }),
+      queryRetiradas,
+    ]);
+
+    if (liberacoesResultado.error) throw mapSupabaseError(liberacoesResultado.error);
+    if (retiradasResultado.error) throw mapSupabaseError(retiradasResultado.error);
+
+    return agregarResumo(
+      (liberacoesResultado.data ?? []) as unknown as LiberacaoResumoBruta[],
+      (retiradasResultado.data ?? []) as unknown as RetiradaResumoBruta[]
+    );
   }
 }

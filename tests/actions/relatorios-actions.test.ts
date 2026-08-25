@@ -20,6 +20,7 @@ const { mocks, state } = vi.hoisted(() => ({
   mocks: {
     getUsuarioFuncional: vi.fn(),
     consultar: vi.fn(),
+    obterResumo: vi.fn(),
   },
   state: { supabase: null as AuthSupabaseMock | null },
 }));
@@ -34,11 +35,17 @@ vi.mock("@/lib/auth/profile", () => ({
 
 vi.mock("@/lib/services/relatorio-service", () => ({
   RelatorioService: {
-    create: vi.fn(async () => ({ consultar: (...args: unknown[]) => mocks.consultar(...args) })),
+    create: vi.fn(async () => ({
+      consultar: (...args: unknown[]) => mocks.consultar(...args),
+      obterResumo: (...args: unknown[]) => mocks.obterResumo(...args),
+    })),
   },
 }));
 
-import { consultarRelatorioAction } from "@/app/actions/relatorios";
+import {
+  consultarRelatorioAction,
+  relatorioResumoAction,
+} from "@/app/actions/relatorios";
 
 const resultado: ResultadoListaRelatorio = {
   tipo: "liberacoes",
@@ -63,8 +70,19 @@ beforeEach(() => {
   state.supabase = authSupabase({ id: "a1", email: "gestor@caps.local" });
   mocks.getUsuarioFuncional.mockReset();
   mocks.consultar.mockReset();
+  mocks.obterResumo.mockReset();
   mocks.getUsuarioFuncional.mockResolvedValue(usuario());
   mocks.consultar.mockResolvedValue(resultado);
+  mocks.obterResumo.mockResolvedValue({
+    totalPacientes: 0,
+    totalLiberacoes: 0,
+    totalValesAutorizados: 0,
+    totalValesRetirados: 0,
+    saldoTotal: 0,
+    totalLiberacoesContinuas: 0,
+    totalLiberacoesAvulsas: 0,
+    linhas: [],
+  });
 });
 
 describe("consultarRelatorioAction", () => {
@@ -117,6 +135,51 @@ describe("consultarRelatorioAction", () => {
   it("erro inesperado vira mensagem genérica (sem expor stack/SQL)", async () => {
     mocks.consultar.mockRejectedValue(new Error("SQLSTATE 42501: permission denied"));
     const retorno = await consultarRelatorioAction(filtros);
+    expect(retorno.ok).toBe(false);
+    expect(retorno.ok === false && retorno.error).toBe("Ocorreu um erro inesperado.");
+  });
+});
+describe("relatorioResumoAction (Sprint 40)", () => {
+  const filtrosResumo: FiltrosRelatorio = { tipo: "resumo", pagina: 1 };
+
+  it("Gestor ativo obtém o resumo via serviço", async () => {
+    const retorno = await relatorioResumoAction(filtrosResumo);
+    expect(retorno.ok).toBe(true);
+    expect(mocks.obterResumo).toHaveBeenCalledWith(filtrosResumo);
+    expect(mocks.consultar).not.toHaveBeenCalled();
+  });
+
+  it("recepcionista ativa NÃO acessa o resumo", async () => {
+    mocks.getUsuarioFuncional.mockResolvedValue(
+      usuario({ perfil: PERFIS.RECEPCIONISTA })
+    );
+    const retorno = await relatorioResumoAction(filtrosResumo);
+    expect(retorno).toEqual({
+      ok: false,
+      error: "Somente o Gestor pode consultar relatórios.",
+    });
+    expect(mocks.obterResumo).not.toHaveBeenCalled();
+  });
+
+  it("profissional autorizador ativo NÃO acessa o resumo", async () => {
+    mocks.getUsuarioFuncional.mockResolvedValue(
+      usuario({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR })
+    );
+    const retorno = await relatorioResumoAction(filtrosResumo);
+    expect(retorno.ok).toBe(false);
+    expect(mocks.obterResumo).not.toHaveBeenCalled();
+  });
+
+  it("sessão não autenticada recebe acesso negado sem consultar", async () => {
+    state.supabase = authSupabase(null);
+    const retorno = await relatorioResumoAction(filtrosResumo);
+    expect(retorno).toEqual({ ok: false, error: "Sessão não autenticada." });
+    expect(mocks.obterResumo).not.toHaveBeenCalled();
+  });
+
+  it("erro inesperado vira mensagem genérica", async () => {
+    mocks.obterResumo.mockRejectedValue(new Error("SQLSTATE 42501"));
+    const retorno = await relatorioResumoAction(filtrosResumo);
     expect(retorno.ok).toBe(false);
     expect(retorno.ok === false && retorno.error).toBe("Ocorreu um erro inesperado.");
   });

@@ -114,7 +114,8 @@ describe("mapeamento dos relatórios (funções puras)", () => {
 
 describe("rótulos e formatação dos relatórios", () => {
   it("rotula os três tipos de relatório", () => {
-    expect(ROTULO_TIPO_RELATORIO.liberacoes).toBe("Liberações");
+    expect(ROTULO_TIPO_RELATORIO.resumo).toBe("Resumo");
+  expect(ROTULO_TIPO_RELATORIO.liberacoes).toBe("Liberações");
     expect(ROTULO_TIPO_RELATORIO.retiradas).toBe("Retiradas");
     expect(ROTULO_TIPO_RELATORIO.consolidado).toBe("Consolidado");
     expect(rotuloTipoRelatorio("consolidado")).toBe("Consolidado");
