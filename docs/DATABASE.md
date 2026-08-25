@@ -22,7 +22,7 @@
 | `nome` | text | sim | — | |
 | `cpf` | text | não | null | Dado sensível — LGPD. UNIQUE quando preenchido. **Mantido OPCIONAL (Sprint 05)** — obrigatoriedade permanece DECISÃO INSTITUCIONAL PENDENTE; não aplicar NOT NULL. |
 | `status` | enum `status_paciente` (`ativo`, `inativo`) | sim | `ativo` | Status do direito ao benefício (RN01). |
-| `origem` | enum `origem_paciente` (`regular`, `esporadico`) | sim | `regular` | **Sprint 38 (RN29):** `regular` = acompanhamento contínuo (cadastro por gestor/autorizador); `esporadico` = atendimento pontual criado pela recepção, recebe SOMENTE liberação avulsa. Pacientes pré-existentes = `regular`. |
+| `origem` | enum `origem_paciente` (`regular`, `esporadico`) | sim | `regular` | **Sprint 38 (RN29):** `regular` = acompanhamento contínuo (cadastro por gestor/autorizador); `esporadico` = atendimento pontual criado pela recepção, recebe SOMENTE liberação avulsa. Pacientes pré-existentes = `regular`. **Sprint 41 (RN30): IMUTÁVEL após o cadastro — nenhum perfil converte origem (trigger `fn_pacientes_before`, migration `20260825000001`).** |
 | `data_inicio_acompanhamento` | date | não | null | |
 | `data_fim_acompanhamento` | date | não | null | |
 | `unidade_id` | uuid | não | null | Expansão futura (RN17). |
@@ -34,7 +34,7 @@
 **Índices:** `UNIQUE(gestor_sus)`; `UNIQUE(cpf)`; índice em `(status)`.
 **Campos de status:** `status`.
 **Campos de data/hora:** `data_inicio_acompanhamento`, `data_fim_acompanhamento`, `created_at`, `updated_at`.
-**Regras de integridade:** RN01 (apenas ativos recebem vales); RN25 (Gestor SUS principal); RN20 (minimização — evitar dados sensíveis desnecessários); **RN29 (Sprint 38): origem do paciente — esporádico somente liberação avulsa (trigger `fn_liberacoes_before`); INSERT por perfil × origem via RLS (`pacientes_insert_regular` para gestor/autorizador, `pacientes_insert_recepcao_esporadico` para a recepção — migration `20260821000001`).**
+**Regras de integridade:** RN01 (apenas ativos recebem vales); RN25 (Gestor SUS principal); RN20 (minimização — evitar dados sensíveis desnecessários); **RN29 (Sprint 38): origem do paciente — esporádico somente liberação avulsa (trigger `fn_liberacoes_before`); INSERT por perfil × origem via RLS (`pacientes_insert_regular` para gestor/autorizador, `pacientes_insert_recepcao_esporadico` para a recepção — migration `20260821000001`).**; **RN30 (Sprint 41): origem IMUTÁVEL após o cadastro — `fn_pacientes_before` rejeita qualquer UPDATE que altere `origem`, para todos os perfis (migration `20260825000001`). Edição de pacientes (mesma migration + app): gestor altera SOMENTE `status`; autorizador edita dados cadastrais (nunca status/origem/gestor_sus/cpf); recepcionista não edita. A trilha (`pacientes_audit`) inclui `cpf` e `origem` nos snapshots antes/depois.**
 
 ## Entidade 2 — `usuarios`
 

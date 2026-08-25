@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AppError } from "@/lib/domain/app-error";
 import { ORIGENS_PACIENTE, PERFIS } from "@/lib/domain/enums";
-import type { PacienteSemCpf } from "@/lib/domain/pacientes/types";
+import type { AtualizacaoPaciente, PacienteSemCpf } from "@/lib/domain/pacientes/types";
 
 type AuthSupabaseMock = ReturnType<typeof authSupabase>;
 
@@ -248,12 +248,14 @@ describe("criarPacienteAction — origem derivada do perfil da sessão (Sprint 3
   });
 });
 
-describe("atualizarPacienteAction", () => {
+describe("atualizarPacienteAction — gate + whitelist por perfil (Sprint 41)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    comSessao();
   });
 
-  it("repassa id e dados ao serviço", async () => {
+  it("✓ GESTOR altera status (whitelist {status})", async () => {
+    comPerfil({ perfil: PERFIS.GESTOR });
     mocks.instancia.atualizarPaciente.mockResolvedValue(
       pacienteSemCpf({ status: "inativo" })
     );
@@ -266,7 +268,136 @@ describe("atualizarPacienteAction", () => {
     });
   });
 
+  it("✓ GESTOR: campos fora da whitelist são descartados antes do serviço", async () => {
+    comPerfil({ perfil: PERFIS.GESTOR });
+    mocks.instancia.atualizarPaciente.mockResolvedValue(pacienteSemCpf());
+
+    await atualizarPacienteAction("p1", {
+      status: "ativo",
+      nome: "Nome Forjado",
+      cpf: "000",
+      gestor_sus: "999",
+    } as AtualizacaoPaciente);
+
+    expect(mocks.instancia.atualizarPaciente).toHaveBeenCalledWith("p1", {
+      status: "ativo",
+    });
+  });
+
+  it("✗ payload contendo origem é REJEITADO antes da persistência (RN30)", async () => {
+    comPerfil({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
+
+    const resultado = await atualizarPacienteAction("p1", {
+      nome: "Ana",
+      origem: "regular",
+    } as AtualizacaoPaciente);
+
+    expect(resultado.ok).toBe(false);
+    if (!resultado.ok) expect(resultado.error).toMatch(/origem|RN30/i);
+    expect(mocks.instancia.atualizarPaciente).not.toHaveBeenCalled();
+  });
+
+  it("✗ GESTOR tentando converter origem também é rejeitado (RN30)", async () => {
+    comPerfil({ perfil: PERFIS.GESTOR });
+
+    const resultado = await atualizarPacienteAction("p1", {
+      origem: "esporadico",
+    } as AtualizacaoPaciente);
+
+    expect(resultado.ok).toBe(false);
+    if (!resultado.ok) expect(resultado.error).toMatch(/RN30|imutável/i);
+    expect(mocks.instancia.atualizarPaciente).not.toHaveBeenCalled();
+  });
+
+  it("✓ AUTORIZADOR altera campo permitido (nome/datas)", async () => {
+    comPerfil({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
+    mocks.instancia.atualizarPaciente.mockResolvedValue(
+      pacienteSemCpf({ nome: "Ana Editada" })
+    );
+
+    const resultado = await atualizarPacienteAction("p1", {
+      nome: "Ana Editada",
+      data_inicio_acompanhamento: "2026-01-01",
+      data_fim_acompanhamento: null,
+    } as AtualizacaoPaciente);
+
+    expect(resultado.ok).toBe(true);
+    expect(mocks.instancia.atualizarPaciente).toHaveBeenCalledWith("p1", {
+      nome: "Ana Editada",
+      data_inicio_acompanhamento: "2026-01-01",
+      data_fim_acompanhamento: null,
+    });
+  });
+
+  it("✗ AUTORIZADOR tentando alterar status não chega ao serviço", async () => {
+    comPerfil({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
+
+    const resultado = await atualizarPacienteAction("p1", {
+      status: "inativo",
+    } as AtualizacaoPaciente);
+
+    // Status não está na whitelist do autorizador → payload vazio → rejeitado.
+    expect(resultado.ok).toBe(false);
+    if (!resultado.ok) expect(resultado.error).toContain("Nenhum campo permitido");
+    expect(mocks.instancia.atualizarPaciente).not.toHaveBeenCalled();
+  });
+
+  it("✗ RECEPCIONISTA não edita paciente (nenhum campo, service nunca chamado)", async () => {
+    comPerfil({ perfil: PERFIS.RECEPCIONISTA });
+
+    const resultado = await atualizarPacienteAction("p1", {
+      nome: "Tentativa",
+    } as AtualizacaoPaciente);
+
+    expect(resultado.ok).toBe(false);
+    if (!resultado.ok) expect(resultado.error).toContain("Recepcionista");
+    expect(mocks.instancia.atualizarPaciente).not.toHaveBeenCalled();
+  });
+
+  it("✗ nome vazio via autorizador é rejeitado no domínio", async () => {
+    comPerfil({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
+
+    const resultado = await atualizarPacienteAction("p1", { nome: "   " });
+
+    expect(resultado.ok).toBe(false);
+    if (!resultado.ok) expect(resultado.error).toContain("obrigatório");
+    expect(mocks.instancia.atualizarPaciente).not.toHaveBeenCalled();
+  });
+
+  it("✗ datas incoerentes via autorizador são rejeitadas", async () => {
+    comPerfil({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
+
+    const resultado = await atualizarPacienteAction("p1", {
+      data_inicio_acompanhamento: "2026-06-01",
+      data_fim_acompanhamento: "2026-01-01",
+    } as AtualizacaoPaciente);
+
+    expect(resultado.ok).toBe(false);
+    if (!resultado.ok) expect(resultado.error).toContain("anterior");
+    expect(mocks.instancia.atualizarPaciente).not.toHaveBeenCalled();
+  });
+
+  it("usuário inativo é bloqueado antes do serviço", async () => {
+    comPerfil({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR, statusAtivo: false });
+
+    const resultado = await atualizarPacienteAction("p1", { nome: "Ana" });
+
+    expect(resultado.ok).toBe(false);
+    expect(mocks.instancia.atualizarPaciente).not.toHaveBeenCalled();
+  });
+
+  it("sessão ausente é bloqueada", async () => {
+    state.supabase = authSupabase(null);
+
+    const resultado = await atualizarPacienteAction("p1", { nome: "Ana" });
+
+    expect(resultado.ok).toBe(false);
+    if (!resultado.ok) expect(resultado.error).toContain("Sessão");
+    expect(mocks.instancia.atualizarPaciente).not.toHaveBeenCalled();
+  });
+
   it("propaga erro de permissão sem expor detalhe de RLS", async () => {
+    comPerfil({ perfil: PERFIS.GESTOR });
     mocks.instancia.atualizarPaciente.mockRejectedValue(
       new AppError(
         "ACESSO_NEGADO",

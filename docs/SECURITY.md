@@ -88,7 +88,7 @@
 |---|---|---|---|---|---|
 | **pacientes** | Visualizar | ✓ (sem CPF) | ✓ (sem CPF) | ✓ (com CPF) | A e R: apenas identificação + status; G: completo |
 | | Criar | ✓ | PENDENTE | — | |
-| | Alterar | ✓ | PENDENTE | — | |
+| | Alterar | ✓ (dados cadastrais — nunca status/origem/Gestor SUS/CPF; RN30: origem IMUTÁVEL, Sprint 41) | — (RESOLVIDO Sprint 41: recepcionista não edita pacientes) | somente status (ação administrativa) | Whitelist por perfil na action + trigger `fn_pacientes_before`; trilha inclui `cpf`/`origem` |
 | | Cancelar/inativar | — | — | ✓ | Inativação = alteração de status (ação administrativa) |
 | | Administrar | — | — | ✓ | |
 | **liberacoes** | Visualizar | ✓ | ✓ | ✓ | A: histórico; R: ativas do paciente; G: todas |

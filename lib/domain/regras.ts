@@ -8,6 +8,7 @@ import {
   PERFIS,
   PERIODOS_LIBERACAO,
   QUANTIDADES_LIBERACAO,
+  STATUS_PACIENTE,
   TIPOS_LIBERACAO,
   type OrigemPaciente,
   type PerfilUsuario,
@@ -122,6 +123,100 @@ export function origemPermitidaPorPerfil(
 
 // Padrão de e-mail aceito pelo produto (validação de cadastro e formulários).
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// ── Sprint 41 — Edição segura de pacientes ──────────────────────────────────
+//
+// Whitelist de campos por perfil (defesa em profundidade — o payload NUNCA é
+// repassado cru ao repository; a autoridade final continua no trigger
+// fn_pacientes_before e nas policies RLS):
+//   * GESTOR ativo                 → somente `status` (ação administrativa);
+//   * PROFISSIONAL_AUTORIZADOR     → dados cadastrais, NUNCA status/origem/
+//                                    gestor_sus/cpf (RN25: Gestor SUS é o
+//                                    identificador principal; CPF permanece
+//                                    imutável operacionalmente por decisão
+//                                    institucional — sem fluxo definido);
+//   * RECEPCIONISTA                → nenhum campo (não edita pacientes).
+// `origem` NÃO existe em nenhuma whitelist: é IMUTÁVEL após o cadastro (RN30),
+// garantida no PostgreSQL (migration 20260825000001).
+export const CAMPOS_EDICAO_PACIENTE_POR_PERFIL: Record<
+  PerfilUsuario,
+  readonly string[]
+> = {
+  [PERFIS.GESTOR]: ["status"],
+  [PERFIS.PROFISSIONAL_AUTORIZADOR]: [
+    "nome",
+    "data_inicio_acompanhamento",
+    "data_fim_acompanhamento",
+    "unidade_id",
+  ],
+  [PERFIS.RECEPCIONISTA]: [],
+};
+
+// Filtra o payload de atualização deixando SOMENTE os campos permitidos ao
+// perfil. Campos desconhecidos são descartados (a origem nunca chega aqui:
+// a action rejeita explicitamente qualquer tentativa antes de filtrar).
+export function filtrarCamposEdicaoPaciente(
+  perfil: PerfilUsuario,
+  dados: Record<string, unknown>
+): Record<string, unknown> {
+  const permitidos = CAMPOS_EDICAO_PACIENTE_POR_PERFIL[perfil] ?? [];
+  const filtrado: Record<string, unknown> = {};
+  for (const campo of permitidos) {
+    if (dados[campo] !== undefined) filtrado[campo] = dados[campo];
+  }
+  return filtrado;
+}
+
+// Validação de domínio do payload JÁ FILTRADO da atualização de paciente.
+// Rejeita payload vazio (nada a atualizar), status fora do fluxo do gestor,
+// nome vazio e janela de acompanhamento incoerente.
+export function validarAtualizacaoPaciente(
+  perfil: PerfilUsuario,
+  dados: Record<string, unknown>
+): void {
+  if (Object.keys(dados).length === 0) {
+    throw new AppError(
+      "VALIDACAO",
+      "Nenhum campo permitido para edição pelo seu perfil."
+    );
+  }
+
+  if ("status" in dados) {
+    if (perfil !== PERFIS.GESTOR) {
+      throw new AppError(
+        "ACESSO_NEGADO",
+        "Somente o Gestor pode alterar o status do paciente."
+      );
+    }
+    if (
+      dados.status !== STATUS_PACIENTE.ATIVO &&
+      dados.status !== STATUS_PACIENTE.INATIVO
+    ) {
+      throw new AppError("VALIDACAO", "Status do paciente inválido.");
+    }
+  }
+
+  const nome = typeof dados.nome === "string" ? dados.nome.trim() : undefined;
+  if (nome != null && nome.length === 0) {
+    throw new AppError("VALIDACAO", "Nome do paciente é obrigatório.");
+  }
+
+  // Datas coerentes: quando ambas informadas, o fim não precede o início.
+  const inicio = dados.data_inicio_acompanhamento;
+  const fim = dados.data_fim_acompanhamento;
+  if (
+    typeof inicio === "string" &&
+    typeof fim === "string" &&
+    inicio.length > 0 &&
+    fim.length > 0 &&
+    fim < inicio
+  ) {
+    throw new AppError(
+      "VALIDACAO",
+      "Data de fim do acompanhamento não pode ser anterior à data de início."
+    );
+  }
+}
 
 // Sprint 16 — dados de um novo usuário (Auth + vínculo funcional).
 // Revalida no servidor o que a UI também valida: nome, e-mail (obrigatório e

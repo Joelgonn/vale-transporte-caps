@@ -226,6 +226,7 @@ Auditoria (N) ───< (1) Entidade Afetada  // Log referencia qualquer entida
 | RN27 | Profissional autorizador deve ter cadastro ativo; inativo não autoriza; alertas claros para inativos |
 | RN28 | Auditoria distingue quem autorizou, quem registrou, quem retirou e a data/hora de cada ação |
 | RN29 | Origem do paciente (`regular`/`esporadico`): gestor e autorizador cadastram regulares; recepcionista cadastra somente esporádicos; paciente esporádico recebe SOMENTE liberação avulsa (Sprint 38) |
+| RN30 | Origem do paciente é IMUTÁVEL após o cadastro: regular não vira esporádico, esporádico não vira regular — garantida no PostgreSQL (`fn_pacientes_before`, Sprint 41) |
 
 ## Fechamento Sprint 01 — Decisões Consolidadas
 
@@ -374,6 +375,8 @@ Auditoria (N) ───< (1) Entidade Afetada  // Log referencia qualquer entida
 **REGRA DEFINIDA (RN25):** o **identificador principal** do paciente é o número do **Gestor SUS**; o **CPF** também é armazenado.
 
 **REGRA DEFINIDA (RN29 — Sprint 38):** todo paciente possui uma **origem** (`origem_paciente`: `regular` | `esporadico`). Paciente **esporádico** é cadastrado exclusivamente pela recepção para atendimento pontual e **somente pode receber liberação avulsa** (nunca contínua). A regra é garantida no banco (trigger `fn_liberacoes_before`), não apenas na UI. Pacientes regulares são cadastrados por Gestor ou profissional autorizador.
+
+**REGRA DEFINIDA (RN30 — Sprint 41):** a **origem do paciente é IMUTÁVEL após o cadastro** — um paciente regular NÃO pode virar esporádico e um esporádico NÃO pode virar regular. A garantia definitiva está no PostgreSQL: `fn_pacientes_before` rejeita qualquer UPDATE que altere `origem`, para TODOS os perfis (migration `20260825000001`). A aplicação reforça a regra com whitelist por perfil na action de atualização. **Edição de pacientes:** gestor altera SOMENTE o `status`; profissional autorizador edita os dados cadastrais permitidos (nunca status, origem, Gestor SUS ou CPF — RN25 + decisão institucional); recepcionista não edita pacientes. A trilha de auditoria (`pacientes_audit`) inclui `cpf` e `origem` nos snapshots antes/depois.
 
 **PENDENTE (parcial):** campos adicionais além dos mínimos.
 

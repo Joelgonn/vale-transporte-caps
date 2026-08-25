@@ -2,6 +2,60 @@
 
 > Histórico de entregas por sprint. Consulte `docs/ROADMAP.md` para as fases futuras.
 
+## Sprint 41 — Edição segura de pacientes (RN30)
+
+**Escopo:** consolidar o fluxo de edição de pacientes fechando as DUAS lacunas
+apontadas pela auditoria; **liberações permanecem imutáveis** (nada é alterado
+nelas — sem RLS, grants ou triggers novos).
+
+### 1. Banco (migration incremental `20260825000001_pacientes_edicao_segura.sql`)
+
+- **RN30 — origem IMUTÁVEL:** `fn_pacientes_before()` recriada com checagem
+  `new.origem is distinct from old.origem` ANTES do branch por perfil — nenhum
+  perfil converte origem (regular não vira esporádico, nem o contrário). Regras
+  anteriores preservadas: gestor altera SOMENTE status; autorizador tudo menos
+  status; demais perfis sem permissão.
+- **Trilha completa:** `pacientes_audit()` recriada incluindo **`cpf`** e
+  **`origem`** nos snapshots antes/depois (a versão antiga enumerava campos sem
+  essas duas colunas — alterações nelas geravam log cego).
+- Sem policies novas, sem grants, sem tabelas, sem enum novo, sem RLS de outros
+  módulos. O trigger existente (`trg_pacientes_before`) passa a disparar a função
+  nova.
+
+### 2. Aplicação (defesa em profundidade)
+
+- `app/actions/pacientes.ts` — `atualizarPacienteAction` exige sessão ativa,
+  rejeita explicitamente payload com `origem` (RN30) e aplica **whitelist por
+  perfil**: gestor → `{status}`; autorizador → `{nome, datas de acompanhamento,
+  unidade_id}`; recepcionista → nenhuma edição (ACESSO_NEGADO). Campos fora da
+  whitelist são descartados antes do service.
+- `lib/domain/regras.ts` — `CAMPOS_EDICAO_PACIENTE_POR_PERFIL`,
+  `filtrarCamposEdicaoPaciente()` e `validarAtualizacaoPaciente()` (payload
+  vazio rejeitado; status só no fluxo do gestor e valor válido; nome não vazio;
+  janela de acompanhamento coerente).
+- UI: sem mudança estrutural — o form de edição já omite Gestor SUS (desabilitado,
+  RN25), CPF, status e origem; gestor usa fluxo dedicado de status;
+  recepcionista não vê botões de edição.
+
+### 3. Decisão documentada (Fase 6): Gestor SUS e CPF continuam FORA da edição
+
+Sem decisão institucional para liberá-los, permanecem imutáveis operacionalmente:
+fora da whitelist, fora da UI (RN25 — Gestor SUS é identificador principal; CPF é
+dado sensível LGPD lido apenas via `pacientes_com_cpf()` pelo gestor).
+
+### 4. Testes
+
+Domínio (whitelist/filtro/validação), actions (gate por perfil, RN30, campos
+forjados descartados, recepcionista bloqueada), componente (edição sem controle
+de origem/status) e integração real env-guarded + guard da migration
+(`pacientes-edicao.integration.test.ts`: autorizador/gestor × origem bloqueados;
+recepcionista UPDATE bloqueado; gestor alterna status; gestor × nome bloqueado;
+autorizador × status bloqueado; autorizador edita nome; snapshot de auditoria
+contém `cpf` e `origem`).
+
+**Pendência operacional:** aplicar a migration `20260825000001` no Supabase
+remoto (aplicação explícita fora do escopo da sprint).
+
 ## Sprint 40 — Relatório Resumo de Vales
 
 **Escopo:** visão gerencial agregada em `/dashboard/relatorios` (aba **Resumo**, primeira na

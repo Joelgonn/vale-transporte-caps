@@ -72,6 +72,21 @@ describe("PacienteForm — criar", () => {
     expect(screen.getByText(/somente liberações avulsas/)).toBeInTheDocument();
   });
 
+  it("edição NÃO oferece controle de origem nem de status (Sprint 41)", () => {
+    render(
+      <PacienteForm modo="editar" paciente={paciente()} onClose={() => {}} onSalvo={() => {}} />
+    );
+
+    const dialogo = screen.getByRole("dialog", { name: "Editar paciente" });
+    // Nenhum controle com nome/rótulo ligado a origem ou status.
+    expect(screen.queryByLabelText(/origem/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/status/i)).not.toBeInTheDocument();
+    expect(dialogo.querySelector('input[name="origem"]')).toBeNull();
+    expect(dialogo.querySelector('select[name="origem"]')).toBeNull();
+    expect(dialogo.querySelector('input[name="status"]')).toBeNull();
+    expect(dialogo.querySelector('select[name="status"]')).toBeNull();
+  });
+
   it("envia os dados preenchidos à action com a origem regular", async () => {
     mocks.criarPacienteAction.mockResolvedValue({
       ok: true,

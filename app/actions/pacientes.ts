@@ -1,13 +1,17 @@
 "use server";
 
 import { AppError } from "@/lib/domain/app-error";
-import type { OrigemPaciente } from "@/lib/domain/enums";
+import { PERFIS, type OrigemPaciente, type PerfilUsuario } from "@/lib/domain/enums";
 import type {
   AtualizacaoPaciente,
   NovoPaciente,
   PacienteSemCpf,
 } from "@/lib/domain/pacientes/types";
-import { origemPermitidaPorPerfil } from "@/lib/domain/regras";
+import {
+  filtrarCamposEdicaoPaciente,
+  origemPermitidaPorPerfil,
+  validarAtualizacaoPaciente,
+} from "@/lib/domain/regras";
 import { PacienteService } from "@/lib/services/paciente-service";
 import { createClient } from "@/lib/supabase/server";
 import { getUsuarioFuncional } from "@/lib/auth/profile";
@@ -95,13 +99,68 @@ export async function criarPacienteAction(
   }
 }
 
+// Atualização de paciente (Sprint 41 — edição segura). O payload do cliente
+// NUNCA chega cru ao repository:
+//   1. sessão ativa obrigatória (identidade/perfil vêm da SESSÃO);
+//   2. `origem` é rejeitada explicitamente — IMUTÁVEL após o cadastro (RN30,
+//      garantida também no trigger fn_pacientes_before, migration
+//      20260825000001);
+//   3. whitelist por perfil (filtrarCamposEdicaoPaciente): gestor → somente
+//      status; autorizador → dados cadastrais (nunca status/gestor_sus/cpf);
+//      recepcionista → nenhuma edição;
+//   4. validação de domínio do payload filtrado (validarAtualizacaoPaciente).
+// A autoridade final continua no banco (RLS pacientes_update_* + trigger).
 export async function atualizarPacienteAction(
   id: string,
-  dados: AtualizacaoPaciente
+  dados: AtualizacaoPaciente & Record<string, unknown>
 ): Promise<AcaoResultado<PacienteSemCpf>> {
   try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new AppError("ACESSO_NEGADO", "Sessão não autenticada.");
+    }
+
+    const usuario = await getUsuarioFuncional(supabase, user);
+    if (!usuario || usuario.statusAtivo !== true || usuario.perfil == null) {
+      throw new AppError(
+        "ACESSO_NEGADO",
+        "Usuário inativo ou sem perfil funcional. Procure a gestão do CAPS."
+      );
+    }
+
+    const perfil = usuario.perfil as PerfilUsuario;
+
+    // RN30 — tentativa explícita de converter origem é rejeitada antes de
+    // qualquer filtragem (a origem não existe em whitelist alguma).
+    if ("origem" in dados) {
+      throw new AppError(
+        "VALIDACAO",
+        "A origem do paciente é imutável após o cadastro (RN30)."
+      );
+    }
+
+    if (perfil === PERFIS.RECEPCIONISTA) {
+      throw new AppError(
+        "ACESSO_NEGADO",
+        "Recepcionista não pode editar pacientes."
+      );
+    }
+
+    const payload = filtrarCamposEdicaoPaciente(
+      perfil,
+      dados as Record<string, unknown>
+    );
+    validarAtualizacaoPaciente(perfil, payload);
+
     const service = await PacienteService.create();
-    return { ok: true, data: await service.atualizarPaciente(id, dados) };
+    return {
+      ok: true,
+      data: await service.atualizarPaciente(id, payload as AtualizacaoPaciente),
+    };
   } catch (erro) {
     return { ok: false, error: mensagemDaAcao(erro) };
   }

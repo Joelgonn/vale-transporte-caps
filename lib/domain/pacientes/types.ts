@@ -33,6 +33,12 @@ export type NovoPaciente = {
   unidade_id?: string | null;
 };
 
+// Payload de atualização aceito pelo repository. ATENÇÃO (Sprint 41): quem
+// decide o que pode entrar aqui é a WHITELIST por perfil no domínio
+// (CAMPOS_EDICAO_PACIENTE_POR_PERFIL) aplicada pela action — nunca o cliente.
+// `gestor_sus`, `cpf`, `status` (exceto fluxo do Gestor) e `origem` são
+// imutáveis operacionalmente: RN25 + decisão institucional (Gestor SUS/CPF sem
+// fluxo de edição) e RN30 (origem imutável — trigger fn_pacientes_before).
 export type AtualizacaoPaciente = {
   nome?: string;
   cpf?: string | null;
