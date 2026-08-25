@@ -72,7 +72,7 @@
 | `paciente_id` | uuid | sim | — | **FK → `pacientes.id`**. |
 | `tipo` | enum `tipo_liberacao` (`continua`, `avulsa`) | sim | — | RN05. |
 | `periodo_meses` | smallint | não | null | **Somente contínua**: 1, 3 ou 6 (RN13). Nulo para avulsa. |
-| `quantidade` | smallint | sim | — | 1, 2, 4 ou 8 (RN04). |
+| `quantidade` | smallint | sim | — | 1, 2, 4 ou 8 (RN04).  **Sprint 42:** PREVISÃO administrativa (RN04) — NÃO bloqueia retiradas (RN31); retirado pode exceder. CHECK in (1,2,4,8). |
 | `data_inicio` | timestamptz | sim | `now()` | Início da validade. |
 | `data_fim` | timestamptz | sim | calculado | Contínua: `data_inicio + periodo_meses`; avulsa: `data_inicio + 1 dia` (RN13, RN21). |
 | `profissional_autorizador_id` | uuid | sim | — | **FK → `usuarios.id`** (RN03). Deve ser `perfil = profissional_autorizador` e `status_ativo = true`. |
@@ -254,3 +254,12 @@ Cada campo foi avaliado: *é necessário para uma regra, operação, segurança 
 - Não executar SQL.
 - Não criar migrations.
 - Não implementar autenticação, APIs ou telas.
+
+
+## Sprint 42 — Edição de liberações e previsão (migration 20260826000001)
+
+- `fn_retiradas_before`: removidas as checagens de limite por quantidade (previsão não bloqueia — RN31). PRESERVADO: FOR UPDATE, status 'ativa', RN24, janela RN13/RN21, RN01.
+- `fn_liberacoes_before`: nova branch de UPDATE — campos históricos imutáveis (paciente/tipo/período/autorizador/registro/renovação); gestor altera somente status+unidade_id; autorizador altera quantidade(previsão)/datas/justificativa/unidade_id.
+- Novo: grant UPDATE em liberacoes p/ authenticated + policy `liberacoes_update_autorizador_gestor`.
+
+- **Sprint 42.2:** `liberacoes_quantidade_check` redefinida para `quantidade between 1 and 999` (migration `20260826000002_liberacoes_previsao_check.sql` — NÃO aplicada ainda; aplicar com autorização explícita). Retrocompatível: liberações existentes (1..8) satisfazem a nova constraint.

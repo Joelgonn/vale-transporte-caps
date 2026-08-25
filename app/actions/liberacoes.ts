@@ -1,12 +1,17 @@
 "use server";
 
 import { AppError } from "@/lib/domain/app-error";
-import { PERFIS } from "@/lib/domain/enums";
+import { PERFIS, type PerfilUsuario } from "@/lib/domain/enums";
 import type {
+  AtualizacaoLiberacao,
   CriarLiberacaoDados,
   LiberacaoComPaciente,
   NovaLiberacao,
 } from "@/lib/domain/liberacoes/types";
+import {
+  CAMPOS_HISTORICOS_LIBERACAO,
+  filtrarCamposEdicaoLiberacao,
+} from "@/lib/domain/regras";
 import { LiberacaoService } from "@/lib/services/liberacao-service";
 import { PacienteService } from "@/lib/services/paciente-service";
 import { createClient } from "@/lib/supabase/server";
@@ -164,6 +169,63 @@ export async function criarLiberacaoAction(
     return {
       ok: true,
       data: await service.criarLiberacao(dadosFinais, paciente?.origem),
+    };
+  } catch (erro) {
+    return { ok: false, error: mensagemDaAcao(erro) };
+  }
+}
+
+// Atualização de liberação (Sprint 42 — edição segura). O payload do cliente
+// NUNCA chega cru ao repository:
+//   1. sessão ativa obrigatória (perfil vem da SESSÃO);
+//   2. campos HISTÓRICOS são rejeitados explicitamente se enviados
+//      (paciente/tipo/período/autorizador/renovação — imutáveis, RN12/RN23/RN24);
+//   3. whitelist por perfil (filtrarCamposEdicaoLiberacao): gestor → status +
+//      unidade_id; autorizador → quantidade (previsão), datas, justificativa,
+//      unidade_id; recepcionista → nenhuma edição;
+//   4. validação de domínio do payload filtrado no service
+//      (validarAtualizacaoLiberacao).
+// A autoridade final continua no banco (policy liberacoes_update_autorizador_
+// gestor + branch UPDATE do trigger fn_libracoes_before — migration
+// 20260826000001). `quantidade` é PREVISÃO: não existe guarda de saldo.
+export async function atualizarLiberacaoAction(
+  id: string,
+  dados: AtualizacaoLiberacao & Record<string, unknown>
+): Promise<AcaoResultado<LiberacaoComPaciente>> {
+  try {
+    const usuario = await exigirUsuarioAtivo();
+    const perfil = usuario.perfil as PerfilUsuario;
+
+    if (perfil === PERFIS.RECEPCIONISTA) {
+      throw new AppError("ACESSO_NEGADO", "Recepcionista não pode editar liberações.");
+    }
+
+    // Campos históricos: tentativa explícita é REJEITADA antes da filtragem.
+    const proibido = Object.keys(dados).find((campo) =>
+      (CAMPOS_HISTORICOS_LIBERACAO as readonly string[]).includes(campo)
+    );
+    if (proibido) {
+      throw new AppError(
+        "ACESSO_NEGADO",
+        `O campo "${proibido}" é histórico e não pode ser alterado em uma liberação existente.`
+      );
+    }
+
+    const payload = filtrarCamposEdicaoLiberacao(perfil, dados as Record<string, unknown>);
+
+    // Erro amigável e imediato quando o perfil não tem nenhum campo permitido
+    // no payload (evita bater no banco com UPDATE vazio).
+    if (Object.keys(payload).length === 0) {
+      throw new AppError(
+        "VALIDACAO",
+        "Nenhum campo permitido para edição pelo seu perfil."
+      );
+    }
+
+    const service = await LiberacaoService.create();
+    return {
+      ok: true,
+      data: await service.atualizarLiberacao(id, perfil, payload),
     };
   } catch (erro) {
     return { ok: false, error: mensagemDaAcao(erro) };

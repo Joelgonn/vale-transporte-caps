@@ -93,7 +93,7 @@
 | | Administrar | — | — | ✓ | |
 | **liberacoes** | Visualizar | ✓ | ✓ | ✓ | A: histórico; R: ativas do paciente; G: todas |
 | | Criar | ✓ | apenas renovação | — | Autorização (RN18); renovação pela recepção (RN23) |
-| | Alterar | PENDENTE | — | — | |
+| | Alterar | ✓ (Sprint 42: previsão/datas/justificativa/unidade — nunca status/paciente/tipo/renovação) | — | status (cancelamento administrativo) + unidade | Whitelist por perfil + policy `liberacoes_update_autorizador_gestor` + trigger; auditoria antes/depois |
 | | Cancelar | PENDENTE | — | PENDENTE | |
 | | Administrar | — | — | — | |
 | **retiradas** | Visualizar | — | ✓ | ✓ | R: do paciente (registro/histórico); G: todas; A: sem necessidade |

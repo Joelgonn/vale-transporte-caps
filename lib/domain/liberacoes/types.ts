@@ -62,3 +62,19 @@ export type RenovacaoLiberacao = {
 
 // Entrada pública de criarLiberacaoAction: nova liberação OU renovação.
 export type CriarLiberacaoDados = NovaLiberacao | RenovacaoLiberacao;
+
+// Sprint 42 — atualização de liberação. O payload do cliente NUNCA chega cru
+// ao repository: a action aplica CAMPOS_EDICAO_LIBERACAO_POR_PERFIL (whitelist
+// por perfil) e validarAtualizacaoLiberacao; o banco (trigger
+// fn_libracoes_before + policy liberacoes_update_autorizador_gestor) é a
+// autoridade final. Campos históricos (paciente, tipo, período, autorizador,
+// renovação) são imutáveis em TODAS as camadas.
+// `quantidade` é PREVISÃO administrativa (RN04) — não bloqueia retiradas.
+export type AtualizacaoLiberacao = {
+  quantidade?: QuantidadeLiberacao;
+  data_inicio?: string;
+  data_fim?: string;
+  justificativa?: string | null;
+  unidade_id?: string | null;
+  status?: StatusLiberacao;
+};

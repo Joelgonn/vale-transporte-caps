@@ -149,10 +149,13 @@ async function erroDe(promessa: Promise<unknown>): Promise<unknown> {
 describe.skipIf(!habilitado)("Estabilização — atomicidade do saldo (migration 20260817000001)", () => {
   // Gap reproduzido na Sprint 36 (scripts/repro-sprint-36.mjs — Parte A):
   // liberação de 2 com 4 retiradas concorrentes de 1 → 4/4 aceitas e soma=3.
-  // Após o fix (SELECT FOR UPDATE da liberação no trigger), no máximo 2 são
-  // aceitas e a soma nunca excede a quantidade autorizada. A CONCORRÊNCIA dos
-  // INSERTs (Promise.allSettled) é preservada integralmente — não serializamos.
-  it("retiradas concorrentes contra a mesma liberação nunca ultrapassam o saldo", async () => {
+  // Após o fix (SELECT FOR UPDATE no trigger), a CONCORRÊNCIA é serializada.
+  //
+  // Sprint 42 — o resultado esperado depende da migration 20260826000001:
+  //   * ANTES (limite ativo): no máximo 2 aceitas, soma ≤ 2;
+  //   * DEPOIS (quantidade = previsão): TODAS aceitas (soma = 4) — o lock
+  //     permanece para serialização, mas não há mais bloqueio por quantidade.
+  it("retiradas concorrentes contra a mesma liberação — sem erro e coerentes com o modelo", async () => {
     const admin = adminClient();
     const autorizadorId = await usuarioAtualId(autorizador);
     const pacienteId = await pacienteTeste(admin);
@@ -188,12 +191,17 @@ describe.skipIf(!habilitado)("Estabilização — atomicidade do saldo (migratio
         .eq("liberacao_id", liberacao.id);
       const soma = (retiradas ?? []).reduce((acc: number, r: { quantidade: number }) => acc + r.quantidade, 0);
 
-      expect(
-        soma <= 2,
-        `Over-subscription após migration 20260817000001: soma=${soma} > quantidade=2 (${sucessos}/4 aceitas). ` +
-          `A migration (FOR UPDATE no fn_retiradas_before) ainda não foi aplicada?`
-      ).toBe(true);
-      expect(sucessos).toBeLessThanOrEqual(2);
+      if (sucessos === 4) {
+        // Modelo NOVO (Sprint 42): previsão não bloqueia — todas aceitas.
+        expect(soma).toBe(4);
+      } else {
+        // Modelo ANTIGO (migration 42 ainda não aplicada): limite vigente.
+        expect(
+          soma <= 2,
+          `Over-subscription após migration 20260817000001: soma=${soma} > quantidade=2 (${sucessos}/4 aceitas).`
+        ).toBe(true);
+        expect(sucessos).toBeLessThanOrEqual(2);
+      }
     } finally {
       await limparRetiradas(admin, retiradaIds);
       await limparLiberacoes(admin, [liberacao.id]);
@@ -263,17 +271,15 @@ describe.skipIf(!habilitado)("Estabilização — renovação do mesmo paciente 
 });
 
 describe.skipIf(!habilitado)("Estabilização — matriz de transições de status de liberações (#4)", () => {
-  // NENHUM perfil consegue UPDATE em liberacoes: não há policy de UPDATE e a
-  // migration 15 revogou o privilégio de UPDATE de authenticated. A matriz de
-  // transições (ativa→expirada/cancelada, alteração de campos) é, portanto,
-  // INALTERÁVEL via PostgREST — o status expirada é derivado (data_fim) e
-  // cancelada segue sem fluxo (DECISÃO PENDENTE em SECURITY.md). Testes
-  // negativos garantem que tentar transicionar é sempre negado.
+  // ATUALIZADO na Sprint 42: a migration 20260826000001 re-concedeu UPDATE e
+  // criou a policy liberacoes_update_autorizador_gestor. A matriz agora é:
+  //   * gestor ativo              → PODE alterar status (cancelamento admin.);
+  //   * autorizador ativo         → trigger bloqueia mudança de STATUS;
+  //   * recepcionista/inativo/sem vínculo → linha invisível (0 linhas, sem erro).
+  // O id usado abaixo NÃO existe — nenhum cenário altera dados reais.
+  const alvoInexistente = "00000000-0000-0000-0000-000000000000";
   const alvoUpdate = { status: "cancelada", justificativa: "tentativa de transição" };
 
-  // A matriz é avaliada NO CORPO do teste (não em load time): os clients são
-  // atribuídos no beforeAll e o lookup aqui é lazzy para evitar capturar
-  // undefined.
   function clienteDoRotulo(rotulo: string): SupabaseClient {
     const porRotulo: Record<string, SupabaseClient> = {
       "gestor ativo": gestor,
@@ -285,22 +291,37 @@ describe.skipIf(!habilitado)("Estabilização — matriz de transições de stat
     return porRotulo[rotulo];
   }
 
-  it.each([
-    "gestor ativo",
-    "autorizador ativo",
-    "recepcionista ativa",
-    "usuário inativo",
-    "authenticated sem vínculo",
-  ])("%s não altera status de liberação (UPDATE negado)", async (rotulo) => {
-    const cliente = clienteDoRotulo(rotulo);
-    const { data, error } = await cliente
+  it("gestor ativo PODE alterar status de liberação (UPDATE permitido pela Sprint 42)", async () => {
+    // UPDATE contra id inexistente: RLS/permitem, PostgREST retorna sem erro e
+    // 0 linhas — prova de que o privilégio/policy NÃO negam mais o gestor.
+    const { error } = await gestor
       .from("liberacoes")
       .update(alvoUpdate)
-      .eq("id", "00000000-0000-0000-0000-000000000000");
-
-    expect(error ?? null).not.toBeNull();
-    expect(data).toBeNull();
+      .eq("id", alvoInexistente);
+    expect(error ?? null).toBeNull();
   });
+
+  it("recepcionista ativa não altera status (linha invisível — 0 linhas)", async () => {
+    const { data, error } = await recepcionista
+      .from("liberacoes")
+      .update(alvoUpdate)
+      .eq("id", alvoInexistente);
+    expect(error ?? null).toBeNull(); // invisível: sem policy → 0 linhas
+    expect(data ?? null).toBeNull();
+  });
+
+  it.each(["usuário inativo", "authenticated sem vínculo"])(
+    "%s não altera status de liberação (linha invisível)",
+    async (rotulo) => {
+      const cliente = clienteDoRotulo(rotulo);
+      const { data, error } = await cliente
+        .from("liberacoes")
+        .update(alvoUpdate)
+        .eq("id", alvoInexistente);
+      expect(error ?? null).toBeNull();
+      expect(data ?? null).toBeNull();
+    }
+  );
 });
 
 describe.skipIf(!habilitado)("Estabilização — renovação via PostgREST direto (#2)", () => {

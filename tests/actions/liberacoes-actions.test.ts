@@ -51,6 +51,7 @@ vi.mock("@/lib/services/paciente-service", () => ({
 }));
 
 import {
+  atualizarLiberacaoAction,
   buscarLiberacaoAction,
   criarLiberacaoAction,
   listarLiberacoesAction,
@@ -86,6 +87,7 @@ function serviceFake() {
       void dados;
       return liberacao();
     }),
+    atualizarLiberacao: vi.fn(async () => liberacao()),
   };
 }
 
@@ -392,5 +394,114 @@ describe("criarLiberacaoAction — identidade da sessão", () => {
 
     expect(resultado.ok).toBe(false);
     if (!resultado.ok) expect(resultado.error).toContain("permissão");
+  });
+});
+// ── Sprint 42 — edição segura de liberações (whitelist por perfil) ──────────
+describe("atualizarLiberacaoAction (Sprint 42)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    comSessao();
+  });
+
+  it("AUTORIZADOR edita previsão/vigência — repassa payload filtrado ao serviço", async () => {
+    comPerfil({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
+    const fake = serviceFake();
+    mocks.createService.mockResolvedValue(fake);
+
+    const resultado = await atualizarLiberacaoAction("l1", {
+      quantidade: 8,
+      data_inicio: "2026-01-01",
+    } as Parameters<typeof atualizarLiberacaoAction>[1]);
+
+    expect(resultado.ok).toBe(true);
+    expect(fake.atualizarLiberacao).toHaveBeenCalledWith("l1", "profissional_autorizador", {
+      quantidade: 8,
+      data_inicio: "2026-01-01",
+    });
+  });
+
+  it("status enviado pelo AUTORIZADOR é descartado pela whitelist (nunca chega ao serviço)", async () => {
+    comPerfil({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
+    const fake = serviceFake();
+    mocks.createService.mockResolvedValue(fake);
+
+    const resultado = await atualizarLiberacaoAction("l1", {
+      quantidade: 4,
+      status: "cancelada",
+    } as Parameters<typeof atualizarLiberacaoAction>[1]);
+
+    // status não está na whitelist do autorizador → descartado silenciosamente;
+    // apenas o campo permitido segue para o serviço.
+    expect(resultado.ok).toBe(true);
+    expect(fake.atualizarLiberacao).toHaveBeenCalledWith("l1", "profissional_autorizador", {
+      quantidade: 4,
+    });
+  });
+
+  it("campo HISTÓRICO enviado explicitamente é rejeitado antes do serviço", async () => {
+    comPerfil({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
+    const fake = serviceFake();
+    mocks.createService.mockResolvedValue(fake);
+
+    const resultado = await atualizarLiberacaoAction("l1", {
+      pacienteId: "p2",
+      quantidade: 4,
+    } as Parameters<typeof atualizarLiberacaoAction>[1]);
+
+    expect(resultado.ok).toBe(false);
+    if (!resultado.ok) expect(resultado.error).toContain("histórico");
+    expect(fake.atualizarLiberacao).not.toHaveBeenCalled();
+  });
+
+  it("RECEPCIONISTA não edita liberação", async () => {
+    comPerfil({ perfil: PERFIS.RECEPCIONISTA });
+    const fake = serviceFake();
+    mocks.createService.mockResolvedValue(fake);
+
+    const resultado = await atualizarLiberacaoAction("l1", {
+      quantidade: 4,
+    } as Parameters<typeof atualizarLiberacaoAction>[1]);
+
+    expect(resultado.ok).toBe(false);
+    if (!resultado.ok) expect(resultado.error).toContain("Recepcionista");
+    expect(fake.atualizarLiberacao).not.toHaveBeenCalled();
+  });
+
+  it("GESTOR altera apenas status/unidade — campos clínicos são descartados e payload vazio é rejeitado", async () => {
+    comPerfil({ perfil: PERFIS.GESTOR });
+    const fake = serviceFake();
+    mocks.createService.mockResolvedValue(fake);
+
+    // gestor tentando editar quantidade → filtro deixa vazio → rejeitado
+    const resultado = await atualizarLiberacaoAction("l1", {
+      quantidade: 8,
+    } as Parameters<typeof atualizarLiberacaoAction>[1]);
+
+    expect(resultado.ok).toBe(false);
+    if (!resultado.ok) expect(resultado.error).toContain("Nenhum campo permitido");
+    expect(fake.atualizarLiberacao).not.toHaveBeenCalled();
+
+    // gestor alterando status passa
+    const ok = await atualizarLiberacaoAction("l1", {
+      status: "cancelada",
+      unidade_id: null,
+    } as Parameters<typeof atualizarLiberacaoAction>[1]);
+    expect(ok.ok).toBe(true);
+    expect(fake.atualizarLiberacao).toHaveBeenCalledWith("l1", "gestor", {
+      status: "cancelada",
+      unidade_id: null,
+    });
+  });
+
+  it("sessão ausente é bloqueada", async () => {
+    state.supabase = authSupabase(null);
+    const fake = serviceFake();
+    mocks.createService.mockResolvedValue(fake);
+
+    const resultado = await atualizarLiberacaoAction("l1", { quantidade: 4 });
+
+    expect(resultado.ok).toBe(false);
+    if (!resultado.ok) expect(resultado.error).toContain("Sessão");
+    expect(fake.atualizarLiberacao).not.toHaveBeenCalled();
   });
 });

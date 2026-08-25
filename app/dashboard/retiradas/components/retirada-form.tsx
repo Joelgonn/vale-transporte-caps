@@ -36,7 +36,7 @@ type CampoRetirada = keyof NonNullable<FormState["erroCampos"]>;
 type ErroCampo = { campo: CampoRetirada; mensagem: string };
 
 // Fluxo em etapas do registro de retirada (Sprint 20): o usuário avança de
-// Paciente → Liberação (com saldo disponível calculado) → Quantidade → Revisão.
+// Paciente —  Liberação (com saldo disponível calculado) —  Quantidade —  Revisão.
 const PASSOS: { id: number; rotulo: string }[] = [
   { id: 1, rotulo: "Paciente" },
   { id: 2, rotulo: "Liberação" },
@@ -45,13 +45,13 @@ const PASSOS: { id: number; rotulo: string }[] = [
 ];
 
 function formatarData(iso: string | null | undefined): string {
-  if (!iso) return "—";
+  if (!iso) return "";
   const [ano, mes, dia] = iso.slice(0, 10).split("-");
   return ano && mes && dia ? `${dia}/${mes}/${ano}` : iso;
 }
 
 function periodoTexto(lib: LiberacaoComPaciente): string {
-  return `${formatarData(lib.data_inicio)} – ${formatarData(lib.data_fim)}`;
+  return `${formatarData(lib.data_inicio)}  ${formatarData(lib.data_fim)}`;
 }
 
 export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
@@ -59,7 +59,7 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
   const [passo, setPasso] = useState(1);
   const [errosPasso, setErrosPasso] = useState<ErroCampo[]>([]);
 
-  // Liberações do paciente (ativas para a recepção via RLS) + saldo disponível
+  // Liberações do paciente (ativas para a recepção via RLS) + previsto/retirado
   // calculado no cliente com dados reais: quantidade - soma das retiradas.
   // A autoridade final do saldo permanece no banco (trigger fn_retiradas_before).
   const [liberacoes, setLiberacoes] = useState<LiberacaoComPaciente[]>([]);
@@ -73,7 +73,7 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
   const [liberacoesCarregando, setLiberacoesCarregando] = useState(false);
   const [erroLiberacoes, setErroLiberacoes] = useState<string | null>(null);
 
-  // Seletor de paciente — pesquisa por nome/Gestor SUS via server action
+  // Seletor de paciente  pesquisa por nome/Gestor SUS via server action
   // (v_pacientes, sem CPF). Nunca carrega a lista completa.
   const [buscaPaciente, setBuscaPaciente] = useState("");
   const [resultados, setResultados] = useState<PacienteSemCpf[] | null>(null);
@@ -81,7 +81,7 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
   const [erroBusca, setErroBusca] = useState<string | null>(null);
   const [seletorAberto, setSeletorAberto] = useState(false);
 
-  // Validação local de cada etapa (mesmas regras do servidor) — impede avançar
+  // Validação local de cada etapa (mesmas regras do servidor)  impede avançar
   // com o passo incompleto e evita submissões claramente inválidas.
   function errosDoPasso(p: number): ErroCampo[] {
     if (p === 1) {
@@ -94,10 +94,9 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
       if (!liberacaoSelecionada) {
         return [{ campo: "liberacao", mensagem: "Selecione a liberação." }];
       }
-      const disp = disponiveis[liberacaoSelecionada.id] ?? 0;
-      return disp > 0
-        ? []
-        : [{ campo: "liberacao", mensagem: "Liberação sem saldo disponível." }];
+      // Sprint 42: a previsão não limita a retirada — qualquer liberação
+      // ativa e vigente é selecionável.
+      return [];
     }
     if (p === 3) {
       return quantidade != null && quantidade > 0
@@ -140,8 +139,8 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
   }
 
   // Carrega as liberações do paciente (server-side, busca por Gestor SUS) e as
-  // retiradas (para somar o que já foi retirado). O saldo disponível é exibido
-  // como orientação — a autoridade final é o trigger no banco.
+  // retiradas (para somar o que já foi retirado). O acumulado é exibido
+  // como orientação  a autoridade final é o trigger no banco.
   async function carregarLiberacoes(p: PacienteResumo) {
     setLiberacoesCarregando(true);
     setErroLiberacoes(null);
@@ -202,15 +201,9 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
         campo: "quantidade",
         mensagem: "Quantidade da retirada deve ser positiva (RN14).",
       });
-    } else if (liberacaoSelecionada) {
-      const disp = disponiveis[liberacaoSelecionada.id] ?? 0;
-      if (qtd > disp) {
-        erros.push({
-          campo: "quantidade",
-          mensagem: `Quantidade excede o saldo disponível (${disp}).`,
-        });
-      }
     }
+    // Sprint 42: a quantidade da liberação é PREVISÃO  não há teto client-side.
+    // O banco valida janela de vigência, status e RN24 no momento do registro.
 
     if (erros.length > 0) {
       const erroCampos: FormState["erroCampos"] = {};
@@ -237,9 +230,6 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
   );
 
   const bloq = pending || state.sucesso;
-  const dispSelecionada = liberacaoSelecionada
-    ? disponiveis[liberacaoSelecionada.id] ?? 0
-    : 0;
   const ref = useModalA11y(onClose, !bloq);
 
   function buscarPacientes() {
@@ -270,10 +260,6 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
     limparErro("paciente");
   }
 
-  const opcoesQuantidade =
-    liberacaoSelecionada && dispSelecionada > 0
-      ? Array.from({ length: dispSelecionada }, (_, i) => i + 1)
-      : [];
 
   return (
     <div
@@ -323,7 +309,7 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
                               : "bg-zinc-200 text-zinc-600"
                         }`}
                       >
-                    {concluido ? "✓" : p.id}
+                    {concluido ? "S" : p.id}
                   </span>
                   <span
                     className={atual ? "font-medium text-brand-900" : "text-zinc-500"}
@@ -336,7 +322,7 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
           </ol>
         </div>
 
-        {/* Passo 1 — Paciente */}
+        {/* Passo 1  Paciente */}
         <div className={passo === 1 ? "flex flex-col gap-2" : "hidden"}>
           <span className={ROTULO}>Paciente</span>
           {paciente ? (
@@ -450,7 +436,7 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
           )}
         </div>
 
-        {/* Passo 2 — Liberação */}
+        {/* Passo 2  Liberação */}
         <div className={passo === 2 ? "flex flex-col gap-2" : "hidden"}>
           <span className={ROTULO}>Liberação para retirada</span>
 
@@ -469,18 +455,16 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
               <legend className="sr-only">Liberação para retirada</legend>
               <ul className="flex flex-col gap-2">
                 {liberacoes.map((lib) => {
-                  const disp = disponiveis[lib.id] ?? 0;
-                  const esgotada = disp <= 0;
+                  const previsto = lib.quantidade;
+                  const retirado = lib.quantidade - (disponiveis[lib.id] ?? 0);
                   const selecionada = liberacaoSelecionada?.id === lib.id;
                   return (
                     <li key={lib.id}>
                       <label
                         className={`flex cursor-pointer flex-col gap-1 rounded-md border p-3 text-sm transition-colors ${
-                          esgotada
-                            ? "border-zinc-200 bg-zinc-50 opacity-60"
-                            : selecionada
-                              ? "border-brand-600 bg-brand-600 text-white"
-                              : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                          selecionada
+                            ? "border-brand-600 bg-brand-600 text-white"
+                            : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"
                         }`}
                       >
                         <input
@@ -488,33 +472,19 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
                           name="liberacao"
                           value={lib.id}
                           checked={selecionada}
-                          disabled={esgotada || bloq}
-                          onChange={() => selecionarLiberacao(lib, disp)}
+                          disabled={bloq}
+                          onChange={() => selecionarLiberacao(lib, previsto - retirado)}
                           className="sr-only"
                         />
                         <span className="font-medium">
-                          {ROTULO_TIPO_LIBERACAO[lib.tipo]} · {lib.quantidade}{" "}
-                          {lib.quantidade === 1 ? "vale" : "vales"} · {periodoTexto(lib)}
+                          {ROTULO_TIPO_LIBERACAO[lib.tipo]} · {periodoTexto(lib)}
                         </span>
                         <span
                           className={
-                            selecionada && !esgotada
-                              ? "text-zinc-300"
-                              : "text-xs text-zinc-500"
+                            selecionada ? "text-zinc-300" : "text-xs text-zinc-500"
                           }
                         >
-                          Disponível: {disp}{" "}
-                          {esgotada && (
-                            <span
-                              className={
-                                selecionada
-                                  ? "text-zinc-300"
-                                  : "font-medium text-red-600"
-                              }
-                            >
-                              — saldo esgotado
-                            </span>
-                          )}
+                          Previsto: {previsto} · Retirado: {retirado}
                         </span>
                       </label>
                     </li>
@@ -529,12 +499,13 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
             </p>
           )}
           <p className="text-xs text-zinc-500">
-            O saldo considera as retiradas já registradas. O valor final é
-            confirmado no banco no momento do registro.
+            Previsto é a estimativa administrativa da liberação  não limita a
+            retirada. A validade e o status são confirmados no banco no momento
+            do registro.
           </p>
         </div>
 
-        {/* Passo 3 — Quantidade */}
+        {/* Passo 3  Quantidade */}
         <div className={passo === 3 ? "flex flex-col gap-2" : "hidden"}>
           {liberacaoSelecionada ? (
             <>
@@ -543,22 +514,27 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
                   <dt className="text-zinc-500">Liberação</dt>
                   <dd className="font-medium text-brand-900">
                     {ROTULO_TIPO_LIBERACAO[liberacaoSelecionada.tipo]} ·{" "}
-                    {liberacaoSelecionada.quantidade} ·{" "}
                     {periodoTexto(liberacaoSelecionada)}
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <dt className="text-zinc-500">Saldo disponível</dt>
-                  <dd className="font-medium text-brand-900">{dispSelecionada}</dd>
+                  <dt className="text-zinc-500">Previsto / Retirado</dt>
+                  <dd className="font-medium text-brand-900">
+                    {liberacaoSelecionada.quantidade} /{" "}
+                    {liberacaoSelecionada.quantidade - (disponiveis[liberacaoSelecionada.id] ?? 0)}
+                  </dd>
                 </div>
               </dl>
 
               <label htmlFor="quantidade" className={ROTULO}>
                 Quantidade a retirar
               </label>
-              <select
+              <input
                 id="quantidade"
                 name="quantidade"
+                type="number"
+                min={1}
+                step={1}
                 value={quantidade != null ? String(quantidade) : ""}
                 disabled={bloq}
                 onChange={(e) => {
@@ -569,15 +545,10 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
                 aria-invalid={Boolean(erroDe("quantidade"))}
                 aria-describedby={erroDe("quantidade") ? "erro-quantidade" : "ajuda-quantidade"}
                 className={INPUT}
-              >
-                {opcoesQuantidade.map((q) => (
-                  <option key={q} value={String(q)}>
-                    {q}
-                  </option>
-                ))}
-              </select>
+              />
               <p id="ajuda-quantidade" className="text-xs text-zinc-500">
-                Máximo disponível: {dispSelecionada} {dispSelecionada === 1 ? "vale" : "vales"}.
+                A quantidade da liberação é apenas previsão  a retirada é
+                limitada pela vigência da autorização.
               </p>
               {erroDe("quantidade") && (
                 <p id="erro-quantidade" className="text-sm text-red-600">
@@ -592,32 +563,36 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
           )}
         </div>
 
-        {/* Passo 4 — Revisão */}
+        {/* Passo 4  Revisão */}
         <div className={passo === 4 ? "flex flex-col gap-2" : "hidden"}>
           <dl className="flex flex-col gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm">
             <div className="flex items-center justify-between gap-3">
               <dt className="text-zinc-500">Paciente</dt>
-              <dd className="font-medium text-brand-900">{paciente?.nome ?? "—"}</dd>
+              <dd className="font-medium text-brand-900">{paciente?.nome ?? ""}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
               <dt className="text-zinc-500">Gestor SUS</dt>
-              <dd className="font-medium text-brand-900">{paciente?.gestor_sus ?? "—"}</dd>
+              <dd className="font-medium text-brand-900">{paciente?.gestor_sus ?? ""}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
               <dt className="text-zinc-500">Liberação</dt>
               <dd className="font-medium text-brand-900">
                 {liberacaoSelecionada
                   ? `${ROTULO_TIPO_LIBERACAO[liberacaoSelecionada.tipo]} · ${periodoTexto(liberacaoSelecionada)}`
-                  : "—"}
+                  : ""}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <dt className="text-zinc-500">Saldo disponível</dt>
-              <dd className="font-medium text-brand-900">{dispSelecionada}</dd>
+              <dt className="text-zinc-500">Previsto / Retirado</dt>
+              <dd className="font-medium text-brand-900">
+                {liberacaoSelecionada
+                  ? `${liberacaoSelecionada.quantidade} / ${liberacaoSelecionada.quantidade - (disponiveis[liberacaoSelecionada.id] ?? 0)}`
+                  : ""}
+              </dd>
             </div>
             <div className="flex items-center justify-between gap-3">
               <dt className="text-zinc-500">Quantidade a retirar</dt>
-              <dd className="font-medium text-brand-900">{quantidade ?? "—"}</dd>
+              <dd className="font-medium text-brand-900">{quantidade ?? ""}</dd>
             </div>
           </dl>
           <p className="text-xs text-zinc-500">

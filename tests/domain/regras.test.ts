@@ -47,8 +47,13 @@ describe("validarLiberacao — quantidades", () => {
     }
   });
 
-  it("rejeita quantidade fora de 1/2/4/8 (RN04)", () => {
-    for (const quantidade of [0, 3, 5, 10, -1]) {
+  it("Sprint 42.1 — aceita previsão livre (ex.: 96) e rejeita inválidas (RN04)", () => {
+    for (const quantidade of [1, 2, 4, 8, 12, 32, 96, 192, 999]) {
+      expect(() =>
+        validarLiberacao({ tipo: TIPOS_LIBERACAO.AVULSA, quantidade })
+      ).not.toThrow();
+    }
+    for (const quantidade of [0, -1, 2.5, 1000]) {
       expectValidacao(() =>
         validarLiberacao({ tipo: TIPOS_LIBERACAO.AVULSA, quantidade })
       );
@@ -149,8 +154,11 @@ describe("isQuantidadeValida / isPeriodoValido", () => {
     expect(isPeriodoValido(6)).toBe(true);
   });
 
-  it("rejeita valores inválidos", () => {
-    expect(isQuantidadeValida(7)).toBe(false);
+  it("rejeita valores inválidos (Sprint 42.1: 7 agora é previsão válida)", () => {
+    expect(isQuantidadeValida(0)).toBe(false);
+    expect(isQuantidadeValida(-1)).toBe(false);
+    expect(isQuantidadeValida(2.5)).toBe(false);
+    expect(isQuantidadeValida(1000)).toBe(false);
     expect(isPeriodoValido(0)).toBe(false);
   });
 });

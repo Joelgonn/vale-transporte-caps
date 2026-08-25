@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { mapSupabaseError } from "@/lib/domain/app-error";
 import type {
+  AtualizacaoLiberacao,
   Liberacao,
   LiberacaoComPaciente,
   NovaLiberacao,
@@ -13,6 +14,7 @@ export interface LiberacaoRepository {
   listar(busca?: string): Promise<LiberacaoComPaciente[]>;
   buscarPorId(id: string): Promise<LiberacaoComPaciente | null>;
   criar(dados: NovaLiberacao): Promise<LiberacaoComPaciente>;
+  atualizar(id: string, dados: AtualizacaoLiberacao): Promise<LiberacaoComPaciente>;
 }
 
 // Colunas do paciente embutidas na listagem (nunca CPF).
@@ -105,6 +107,25 @@ export class LiberacaoRepositoryPostgres implements LiberacaoRepository {
         profissional_autorizador_id: dados.profissionalAutorizadorId,
         renovacao_de_id: dados.renovacaoDeId ?? null,
       })
+      .select(`*, pacientes(${COLUNAS_PACIENTE})`)
+      .single();
+
+    if (error) throw mapSupabaseError(error);
+    return mapearLinha(data as Record<string, unknown>);
+  }
+
+  // Sprint 42 — atualização de liberação. O payload JÁ chega filtrado pela
+  // whitelist do perfil (action) — aqui é repasse puro ao PostgREST, que aplica
+  // policy liberacoes_update_autorizador_gestor + branch UPDATE do trigger
+  // fn_liberacoes_before (campos históricos imutáveis; split fino por perfil).
+  async atualizar(
+    id: string,
+    dados: AtualizacaoLiberacao
+  ): Promise<LiberacaoComPaciente> {
+    const { data, error } = await this.client
+      .from("liberacoes")
+      .update(dados)
+      .eq("id", id)
       .select(`*, pacientes(${COLUNAS_PACIENTE})`)
       .single();
 

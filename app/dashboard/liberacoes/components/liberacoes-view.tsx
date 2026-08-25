@@ -20,10 +20,12 @@ import { EstadoVazio } from "@/components/ui/estado-vazio";
 import { FeedbackErro, FeedbackSucesso } from "@/components/ui/feedback";
 import { LiberacaoStatus } from "./liberacao-status";
 import LiberacaoForm from "./liberacao-form";
+import LiberacaoEditForm from "./liberacao-edit-form";
 
 type FormAberto =
   | { modo: "criar" }
   | { modo: "renovar"; origem: LiberacaoComPaciente }
+  | { modo: "editar"; liberacao: LiberacaoComPaciente }
   | null;
 
 type LiberacoesViewProps = {
@@ -148,7 +150,7 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
                   <tr>
                     <th className="px-4 py-3 font-medium">Paciente</th>
                     <th className="px-4 py-3 font-medium">Tipo</th>
-                    <th className="px-4 py-3 font-medium">Quantidade</th>
+                    <th className="px-4 py-3 font-medium">Previsto</th>
                     <th className="px-4 py-3 font-medium">Período</th>
                     <th className="px-4 py-3 font-medium">Status</th>
                     <th className="px-4 py-3">
@@ -182,6 +184,15 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
+                          {(permissoes.podeEditar || permissoes.podeAlterarStatus) && (
+                            <button
+                              type="button"
+                              onClick={() => setFormAberto({ modo: "editar", liberacao: lib })}
+                              className="h-9 rounded-md border border-zinc-300 px-3 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 motion-reduce:transition-none"
+                            >
+                              Editar
+                            </button>
+                          )}
                           {podeRenovar && lib.status === "ativa" && (
                             <button
                               type="button"
@@ -226,7 +237,7 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-zinc-500">Quantidade</dt>
+                      <dt className="text-xs text-zinc-500">Previsto</dt>
                       <dd className="font-medium text-brand-900">{lib.quantidade}</dd>
                     </div>
                     <div className="w-full sm:w-auto">
@@ -234,6 +245,18 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
                       <dd className="font-medium text-brand-900">{periodoTexto(lib)}</dd>
                     </div>
                   </dl>
+
+                  {(permissoes.podeEditar || permissoes.podeAlterarStatus) && (
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setFormAberto({ modo: "editar", liberacao: lib })}
+                        className={BOTAO_SECUNDARIO}
+                      >
+                        Editar
+                      </button>
+                    </div>
+                  )}
 
                   {podeRenovar && lib.status === "ativa" && (
                     <div className="mt-3 flex justify-end">
@@ -252,7 +275,7 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
           </>
         )}
 
-        {formAberto && (
+        {formAberto && formAberto.modo !== "editar" && (
           <LiberacaoForm
             {...(formAberto.modo === "criar"
               ? { modo: "criar" as const }
@@ -264,6 +287,19 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
                   ? "Liberação renovada com sucesso."
                   : "Liberação criada com sucesso."
               );
+              setFormAberto(null);
+              router.refresh();
+            }}
+          />
+        )}
+
+        {formAberto?.modo === "editar" && (
+          <LiberacaoEditForm
+            liberacao={formAberto.liberacao}
+            perfil={props.perfil}
+            onClose={() => setFormAberto(null)}
+            onSalvo={() => {
+              setFeedback("Liberação atualizada com sucesso.");
               setFormAberto(null);
               router.refresh();
             }}

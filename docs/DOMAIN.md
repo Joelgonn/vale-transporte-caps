@@ -200,7 +200,8 @@ Auditoria (N) ───< (1) Entidade Afetada  // Log referencia qualquer entida
 | RN01 | Apenas pacientes com direito ativo podem receber vales |
 | RN02 | Liberação só pode ser feita por: Assistente Social, Psicólogo, Terapeuta Ocupacional |
 | RN03 | Profissional autorizador deve ser identificado na liberação |
-| RN04 | Quantidade de vales por liberação: apenas 1, 2, 4 ou 8 |
+| RN04 | Quantidade PREVISTA de vales por liberação: inteiro entre **1 e 999** (escala livre desde a Sprint 42.1, que adicionou o calculador vales/dia × dias/semana × semanas; o banco é alinhado pela migration `20260826000002`) |
+| RN31 | A quantidade prevista NÃO bloqueia retiradas: a autorização vigente é o par (validade RN13/RN21, status ativa); retirado > previsto é estado válido e auditável (Sprint 42) |
 | RN05 | Dois tipos de liberação: contínua ou avulsa (mutuamente exclusivos) |
 | RN06 | Retirada ocorre na recepção e deve ser registrada |
 | RN07 | Todo usuário deve estar autenticado |
@@ -337,7 +338,7 @@ Auditoria (N) ───< (1) Entidade Afetada  // Log referencia qualquer entida
 
 ### 7. Quantidades permitidas na retirada
 
-- **Situação atual conhecida:** liberação restrita a 1, 2, 4, 8 (RN04); a retirada é inteira positiva, limitada ao saldo (RN16), sem restrição aos mesmos valores.
+- **Situação atual conhecida (ATUALIZADA Sprint 42):** liberação com QUANTIDADE PREVISTA restrita a 1, 2, 4, 8 (RN04); a retirada é inteira positiva (RN16) e NÃO é mais bloqueada pela previsão atingida (RN31) — os controles da retirada são: vigência (RN13/RN21), status 'ativa', mesmo paciente (RN24) e paciente ativo (RN01).
 - **Decisão necessária:** a quantidade de uma retirada deve ser restrita a 1, 2, 4, 8 ou pode ser qualquer valor até o saldo?
 - **Impacto no sistema:** validação de entrada; formulário de retirada; parcelas possíveis.
 - **Opções possíveis:**
@@ -375,6 +376,10 @@ Auditoria (N) ───< (1) Entidade Afetada  // Log referencia qualquer entida
 **REGRA DEFINIDA (RN25):** o **identificador principal** do paciente é o número do **Gestor SUS**; o **CPF** também é armazenado.
 
 **REGRA DEFINIDA (RN29 — Sprint 38):** todo paciente possui uma **origem** (`origem_paciente`: `regular` | `esporadico`). Paciente **esporádico** é cadastrado exclusivamente pela recepção para atendimento pontual e **somente pode receber liberação avulsa** (nunca contínua). A regra é garantida no banco (trigger `fn_liberacoes_before`), não apenas na UI. Pacientes regulares são cadastrados por Gestor ou profissional autorizador.
+
+
+
+**REGRA DEFINIDA (RN31 — Sprint 42):** `liberacoes.quantidade` é uma **PREVISÃO administrativa** (escala RN04: 1/2/4/8) — **NÃO bloqueia retiradas**. A autorização real é o PAR **vigência** (RN13/RN21) + **status 'ativa'**: enquanto a liberação estiver vigente e ativa, novas retiradas são aceitas, mesmo que o consumo acumulado ultrapasse a previsão ("Diferença" negativa). O histórico completo permanece auditado (`liberacoes_audit` registra antes/depois de qualquer edição). **Edição de liberações (Sprint 42):** campos históricos imutáveis para todos (paciente, tipo, período, autorizador, registro, renovação); **profissional_autorizador** edita previsão/datas/justificativa/unidade; **gestor** altera status (cancelamento administrativo) e unidade; **recepcionista** não edita. Garantido no banco (policy `liberacoes_update_autorizador_gestor` + branch UPDATE de `fn_liberacoes_before`, migration `20260826000001`) e na aplicação (whitelist `CAMPOS_EDICAO_LIBERACAO_POR_PERFIL`).
 
 **REGRA DEFINIDA (RN30 — Sprint 41):** a **origem do paciente é IMUTÁVEL após o cadastro** — um paciente regular NÃO pode virar esporádico e um esporádico NÃO pode virar regular. A garantia definitiva está no PostgreSQL: `fn_pacientes_before` rejeita qualquer UPDATE que altere `origem`, para TODOS os perfis (migration `20260825000001`). A aplicação reforça a regra com whitelist por perfil na action de atualização. **Edição de pacientes:** gestor altera SOMENTE o `status`; profissional autorizador edita os dados cadastrais permitidos (nunca status, origem, Gestor SUS ou CPF — RN25 + decisão institucional); recepcionista não edita pacientes. A trilha de auditoria (`pacientes_audit`) inclui `cpf` e `origem` nos snapshots antes/depois.
 

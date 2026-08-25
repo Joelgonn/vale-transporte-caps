@@ -70,8 +70,11 @@ export const STATUS_LIBERACAO = {
 
 export type StatusLiberacao = (typeof STATUS_LIBERACAO)[keyof typeof STATUS_LIBERACAO];
 
+// Sprint 42.1 — a previsão deixou de ser um seletor fechado {1,2,4,8}: com
+// RN31 (previsão não bloqueia), o usuário pode estimar livremente (ex.: 96).
+// Mantido apenas como referência histórica da escala original do MVP.
 export const QUANTIDADES_LIBERACAO = [1, 2, 4, 8] as const;
-export type QuantidadeLiberacao = (typeof QUANTIDADES_LIBERACAO)[number];
+export type QuantidadeLiberacao = number;
 
 export const PERIODOS_LIBERACAO = [1, 3, 6] as const;
 export type PeriodoLiberacao = (typeof PERIODOS_LIBERACAO)[number];

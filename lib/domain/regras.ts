@@ -7,21 +7,25 @@ import {
   ORIGENS_PACIENTE,
   PERFIS,
   PERIODOS_LIBERACAO,
-  QUANTIDADES_LIBERACAO,
+  STATUS_LIBERACAO,
   STATUS_PACIENTE,
   TIPOS_LIBERACAO,
   type OrigemPaciente,
   type PerfilUsuario,
   type Profissao,
   type QuantidadeLiberacao,
+  type StatusLiberacao,
   type TipoLiberacao,
   type PeriodoLiberacao,
 } from "@/lib/domain/enums";
 
+// Sprint 42.1 — previsão livre: inteiro entre 1 e 999 (RN04 atualizada).
 export function isQuantidadeValida(
   quantidade: number
 ): quantidade is QuantidadeLiberacao {
-  return (QUANTIDADES_LIBERACAO as readonly number[]).includes(quantidade);
+  return (
+    Number.isInteger(quantidade) && quantidade >= 1 && quantidade <= 999
+  );
 }
 
 export function isPeriodoValido(periodo: number): periodo is PeriodoLiberacao {
@@ -37,7 +41,7 @@ export function validarLiberacao(params: {
   origemPaciente?: OrigemPaciente | null;
 }): void {
   if (!isQuantidadeValida(params.quantidade)) {
-    throw new AppError("VALIDACAO", "Quantidade deve ser 1, 2, 4 ou 8 (RN04).");
+    throw new AppError("VALIDACAO", "Quantidade prevista deve ser um inteiro entre 1 e 999 (RN04).");
   }
 
   if (
@@ -376,7 +380,10 @@ export function permissoesUsuarios(
 //    (liberacoes_insert_autorizador);
 //  - INSERT "renovação": somente recepcionista ativa com renovacao_de_id
 //    informado (liberacoes_insert_recepcao_renovacao);
-//  - sem update/delete de liberações (revogados para authenticated — migration 15).
+//  - UPDATE "editar" (Sprint 42): autorizador edita previsão/janela/justificativa;
+//    gestor altera status + campos administrativos; recepcionista não edita
+//    (policy liberacoes_update_autorizador_gestor + split fino no trigger);
+//  - sem delete de liberações (revogado — migration 15).
 export function permissoesLiberacoes(
   perfil: PerfilUsuario | null,
   statusAtivo: boolean | null
@@ -384,6 +391,8 @@ export function permissoesLiberacoes(
   podeAcessar: boolean;
   podeCriar: boolean;
   podeRenovar: boolean;
+  podeEditar: boolean;
+  podeAlterarStatus: boolean;
   visualizaSomenteAtivas: boolean;
 } {
   const ativo = perfil != null && statusAtivo === true;
@@ -391,8 +400,120 @@ export function permissoesLiberacoes(
     podeAcessar: ativo,
     podeCriar: ativo && perfil === PERFIS.PROFISSIONAL_AUTORIZADOR,
     podeRenovar: ativo && perfil === PERFIS.RECEPCIONISTA,
+    podeEditar: ativo && perfil === PERFIS.PROFISSIONAL_AUTORIZADOR,
+    podeAlterarStatus: ativo && perfil === PERFIS.GESTOR,
     visualizaSomenteAtivas: perfil === PERFIS.RECEPCIONISTA,
   };
+}
+
+// ── Sprint 42 — Edição segura de liberações ──────────────────────────────────
+//
+// `quantidade` é PREVISÃO administrativa (RN04): NÃO bloqueia retiradas.
+// A autorização real é o par (vigência RN13/RN21, status 'ativa').
+//
+// Whitelist de campos por perfil (a action filtra ANTES do repository; o banco
+// é a autoridade final via policy liberacoes_update_autorizador_gestor +
+// branch UPDATE do fn_libracoes_before):
+//   * GESTOR ativo              → status (cancelamento) + unidade_id;
+//   * PROFISSIONAL_AUTORIZADOR  → quantidade (previsão), datas da vigência,
+//                                 justificativa, unidade_id — NUNCA status,
+//                                 paciente, tipo, período ou autorizador;
+//   * RECEPCIONISTA             → nenhum campo (não edita autorização).
+// Campos HISTÓRICOS (paciente_id, tipo, periodo_meses,
+// profissional_autorizador_id, registrado_por_id, renovacao_de_id) não existem
+// em whitelist alguma — imutáveis em todas as camadas.
+export const CAMPOS_EDICAO_LIBERACAO_POR_PERFIL: Record<
+  PerfilUsuario,
+  readonly string[]
+> = {
+  [PERFIS.GESTOR]: ["status", "unidade_id"],
+  [PERFIS.PROFISSIONAL_AUTORIZADOR]: [
+    "quantidade",
+    "data_inicio",
+    "data_fim",
+    "justificativa",
+    "unidade_id",
+  ],
+  [PERFIS.RECEPCIONISTA]: [],
+};
+
+// Campos históricos que a action REJEITA explicitamente (antes mesmo de
+// filtrar) — qualquer tentativa de alterá-los é negada, nunca silenciada.
+export const CAMPOS_HISTORICOS_LIBERACAO = [
+  "pacienteId",
+  "paciente_id",
+  "tipo",
+  "periodoMeses",
+  "periodo_meses",
+  "profissionalAutorizadorId",
+  "profissional_autorizador_id",
+  "registradoPorId",
+  "registrado_por_id",
+  "renovacaoDeId",
+  "renovacao_de_id",
+] as const;
+
+export function filtrarCamposEdicaoLiberacao(
+  perfil: PerfilUsuario,
+  dados: Record<string, unknown>
+): Record<string, unknown> {
+  const permitidos = CAMPOS_EDICAO_LIBERACAO_POR_PERFIL[perfil] ?? [];
+  const filtrado: Record<string, unknown> = {};
+  for (const campo of permitidos) {
+    if (dados[campo] !== undefined) filtrado[campo] = dados[campo];
+  }
+  return filtrado;
+}
+
+export function validarAtualizacaoLiberacao(
+  perfil: PerfilUsuario,
+  dados: Record<string, unknown>
+): void {
+  if (Object.keys(dados).length === 0) {
+    throw new AppError(
+      "VALIDACAO",
+      "Nenhum campo permitido para edição pelo seu perfil."
+    );
+  }
+
+  if ("status" in dados) {
+    if (perfil !== PERFIS.GESTOR) {
+      throw new AppError(
+        "ACESSO_NEGADO",
+        "Somente o Gestor pode alterar o status da liberação."
+      );
+    }
+    if (
+      !Object.values(STATUS_LIBERACAO).includes(
+        dados.status as StatusLiberacao
+      )
+    ) {
+      throw new AppError("VALIDACAO", "Status da liberação inválido.");
+    }
+  }
+
+  if ("quantidade" in dados && !isQuantidadeValida(dados.quantidade as number)) {
+    throw new AppError(
+      "VALIDACAO",
+      "Quantidade prevista deve ser um inteiro entre 1 e 999 (RN04)."
+    );
+  }
+
+  // Vigência coerente: quando ambas informadas, o fim sucede o início.
+  const inicio = dados.data_inicio;
+  const fim = dados.data_fim;
+  if (
+    typeof inicio === "string" &&
+    typeof fim === "string" &&
+    inicio.length > 0 &&
+    fim.length > 0 &&
+    fim <= inicio
+  ) {
+    throw new AppError(
+      "VALIDACAO",
+      "Data fim deve ser posterior à data início da liberação (RN13/RN21)."
+    );
+  }
 }
 
 // Permissões de UI para a página de retiradas (Sprint 20), derivadas de perfil

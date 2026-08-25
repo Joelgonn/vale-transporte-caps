@@ -82,7 +82,7 @@ async function selecionarPaciente() {
   fireEvent.click(await screen.findByText("Maria da Silva"));
 }
 
-// Configura liberações do paciente com saldo disponível = 2 (4 autorizados − 2
+// Configura liberações do paciente com retirado = 2 (previsto 4 − retirado 2
 // já retirados) e avança pelo passo 1, selecionando a liberação no passo 2.
 async function irParaQuantidade() {
   await selecionarPaciente();
@@ -143,7 +143,7 @@ describe("RetiradaForm — fluxo em etapas", () => {
     expect(await screen.findByText("Selecione a liberação.")).toBeInTheDocument();
   });
 
-  it("exibe o saldo disponível calculado (quantidade − retiradas)", async () => {
+  it("exibe Previsto e Retirado da liberação (a previsão não limita — Sprint 42)", async () => {
     renderizar();
 
     await selecionarPaciente();
@@ -151,18 +151,17 @@ describe("RetiradaForm — fluxo em etapas", () => {
     mocks.listarRetiradasAction.mockResolvedValue({ ok: true, data: [retirada("r1", 2)] });
     avancar();
 
-    expect(await screen.findByText(/Disponível: 2/)).toBeInTheDocument();
+    expect(await screen.findByText(/Previsto: 4 · Retirado: 2/)).toBeInTheDocument();
   });
 
-  it("libera apenas opções de quantidade até o saldo disponível", async () => {
+  it("permite quantidade acima da previsão (previsão não bloqueia — Sprint 42)", async () => {
     renderizar();
 
     await irParaQuantidade();
 
-    const select = screen.getByLabelText("Quantidade a retirar");
-    const opcoes = Array.from(select.querySelectorAll("option")).map((o) => o.value);
-    expect(opcoes).toEqual(["1", "2"]);
-    expect(select).toHaveValue("1");
+    const input = screen.getByLabelText("Quantidade a retirar");
+    fireEvent.change(input, { target: { value: "6" } });
+    expect(input).toHaveValue(6);
   });
 
   it("envia ao servidor apenas os dados do negócio e registra com sucesso", async () => {
@@ -178,8 +177,8 @@ describe("RetiradaForm — fluxo em etapas", () => {
     // Revisão.
     expect(screen.getByRole("button", { name: "Registrar retirada" })).toBeInTheDocument();
     expect(screen.getAllByText("Maria da Silva").length).toBeGreaterThan(0);
-    expect(screen.getByText(/Contínua · 01\/01\/2026 – 01\/04\/2026/)).toBeInTheDocument();
-    expect(screen.getAllByText("Saldo disponível").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Contínua ·/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Previsto: .*Retirado:/).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Registrar retirada" }));
 
@@ -226,7 +225,7 @@ describe("RetiradaForm — fluxo em etapas", () => {
     expect(screen.getByRole("button", { name: "Continuar" })).toBeInTheDocument();
   });
 
-  it("liberação com saldo esgotado não é selecionável", async () => {
+  it("liberação com retirado acima do previsto CONTINUA selecionável (Sprint 42)", async () => {
     renderizar();
 
     await selecionarPaciente();
@@ -238,8 +237,9 @@ describe("RetiradaForm — fluxo em etapas", () => {
     avancar();
 
     const radio = await screen.findByRole("radio", { name: /Contínua/ });
-    expect(radio).toBeDisabled();
-    expect(screen.getByText(/saldo esgotado/)).toBeInTheDocument();
+    expect(radio).not.toBeDisabled();
+    expect(screen.getAllByText(/Previsto:/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/saldo esgotado/i)).not.toBeInTheDocument();
   });
 
   it("indica a etapa atual do stepper (Etapa X de 4)", async () => {

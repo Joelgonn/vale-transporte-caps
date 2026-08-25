@@ -2,6 +2,62 @@
 
 > Histórico de entregas por sprint. Consulte `docs/ROADMAP.md` para as fases futuras.
 
+## Sprint 42 — Gestão flexível de vales + edição segura de liberações
+
+**Decisão de domínio (RN31):** `quantidade` da liberação é **PREVISÃO administrativa**
+(RN04 mantém a escala 1/2/4/8). A autorização real é vigência (RN13/RN21) + status
+'ativa'. Retiradas NÃO são mais bloqueadas quando a previsão é atingida — retirado >
+previsto ("Diferença" negativa) é estado válido, visível e auditado.
+
+### Banco (migration incremental `20260826000001_liberacoes_edicao_previsao.sql`)
+- `fn_retiradas_before`: SEM checagens de quantidade. PRESERVADO: lock FOR UPDATE,
+  defaults de INSERT, status 'ativa', RN24, janela RN13/RN21, RN01.
+- `fn_liberacoes_before`: INSERT idêntico + branch UPDATE — campos históricos
+  imutáveis para todos; gestor altera somente status+unidade_id; autorizador edita
+  quantidade(previsão)/datas/justificativa/unidade_id.
+- Grant UPDATE em liberacoes + policy `liberacoes_update_autorizador_gestor`.
+
+### Aplicação
+- Domínio: `CAMPOS_EDICAO_LIBERACAO_POR_PERFIL`, `filtrarCamposEdicaoLiberacao`,
+  `validarAtualizacaoLiberacao`; `permissoesLiberacoes.podeEditar/podeAlterarStatus`.
+- Action `atualizarLiberacaoAction` (gate de sessão, rejeição explícita de campos
+  históricos, whitelist por perfil); service/repository com `atualizar`.
+- UI: novo `LiberacaoEditForm`; botão Editar (autorizador/gestor); terminologia
+  coerente em todo o sistema: **Previsto / Retirado / Diferença** (resumo,
+  consolidado, histórico, liberações e fluxo de retirada — sem "saldo disponível").
+- Testes: domínio, actions, service, componentes e integração model-aware
+  (`retiradas`/`estabilidade` adaptados; novo `liberacoes-edicao.integration.test.ts`
+  com guard da migration).
+
+### Sprint 42.1 — Calculadora de previsão de vales (somente interface)
+
+- **RN04 atualizada (previsão livre):** com RN31, a previsão deixou de ser um
+  seletor fechado {1,2,4,8} e passou a aceitar qualquer inteiro entre **1 e 999**
+  (`isQuantidadeValida` + mensagens de domínio/UI). Motivação: preencher o campo
+  com previsões realistas calculadas (ex.: 96 vales).
+- **Função pura** `lib/domain/liberacoes/previsao.ts`: `calcularPrevisaoVales`
+  (`valesPorDia × diasPorSemana × semanas`; 1 mês = 4 semanas) — testável em
+  isolamento (32/96/192 cobertos).
+- **UI:** área "Calculadora de previsão" nos formulários de criação e edição
+  (contínuas): Vales por dia · Dias por semana · Por semana · Semanas ·
+  Previsão total — recalcula em tempo real e preenche automaticamente a
+  quantidade prevista; edição manual continua livre. Avulsas não exibem a
+  calculadora (validade de 1 dia).
+- `valesPorDia`/`diasPorSemana` NUNCA são persistidos — payload continua contendo
+  apenas `liberacoes.quantidade`.
+- Testes novos: função pura (32/96/192, recálculo, bordas), componentes
+  (auto-preenchimento, override manual, pureza do payload, avulsa oculta,
+  gestor sem calculadora) e ajustes dos testes que fixavam a escala antiga.
+
+**Pendência operacional:** aplicar a migration `20260826000001` no Supabase remoto.
+- **Pendência adicional (migration complementar, NÃO criada nesta sprint):** o
+  CHECK `liberacoes_quantidade_check in (1,2,4,8)` ainda restringe o valor no
+  banco. Enquanto não for ampliado, criações/edições com previsão > 8 serão
+  recusadas pelo PostgreSQL. SQL sugerido (1 linha):
+  `alter table public.liberacoes drop constraint liberacoes_quantidade_check;`
+  seguido de `... add constraint liberacoes_quantidade_check check (quantidade between 1 and 999);`
+
+
 ## Sprint 41 — Edição segura de pacientes (RN30)
 
 **Escopo:** consolidar o fluxo de edição de pacientes fechando as DUAS lacunas

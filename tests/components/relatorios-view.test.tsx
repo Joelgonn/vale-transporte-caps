@@ -296,9 +296,9 @@ describe("RelatoriosView — aba Resumo (Sprint 40)", () => {
     renderizarResumo();
     expect(valorDoCard("Pacientes")).toBe("2");
     expect(valorDoCard("Liberações")).toBe("3");
-    expect(valorDoCard("Vales autorizados")).toBe("9");
+    expect(valorDoCard("Vales previstos")).toBe("9");
     expect(valorDoCard("Vales retirados")).toBe("4");
-    expect(valorDoCard("Saldo")).toBe("5");
+    expect(valorDoCard("Diferença")).toBe("5");
   });
 
   it("exibe a distribuição por tipo de liberação", () => {
@@ -313,7 +313,7 @@ describe("RelatoriosView — aba Resumo (Sprint 40)", () => {
     expect(screen.getAllByText("Maria da Silva").length).toBeGreaterThan(0);
     const linha = linhaTabela("Maria da Silva");
     const celulas = Array.from(linha.querySelectorAll("td")).map((td) => td.textContent);
-    // Paciente, SUS, Liberações, Autorizado, Retirado, Saldo.
+    // Paciente, SUS, Liberações, Previsto, Retirado, Diferença.
     expect(celulas).toEqual(["Maria da Silva", "SUS 123456", "2", "8", "4", "4"]);
   });
 
@@ -327,7 +327,7 @@ describe("RelatoriosView — aba Resumo (Sprint 40)", () => {
   it("período sem dados mostra estado vazio sem cards enganosos", () => {
     renderizarResumo({ resumo: { ...resumoCheio, totalPacientes: 0, linhas: [] } });
     expect(screen.getByText("Nenhum dado encontrado para os filtros selecionados.")).toBeInTheDocument();
-    expect(screen.queryByText("Vales autorizados")).not.toBeInTheDocument();
+    expect(screen.queryByText("Vales previstos")).not.toBeInTheDocument();
   });
 
   it("erro inicial é exibido sem cards nem estado vazio", () => {
@@ -348,10 +348,10 @@ describe("RelatoriosView — aba Resumo (Sprint 40)", () => {
     renderizarResumo({
       resumo: { ...resumoCheio, saldoTotal: -2 },
     });
-    const saldoCard = screen
-      .getAllByText("Saldo")
+    const diferencaCard = screen
+      .getAllByText("Diferença")
       .find((el) => el.tagName === "DT")!
       .closest("div")!;
-    expect(saldoCard.querySelector("dd")).toHaveClass("text-red-700");
+    expect(diferencaCard.querySelector("dd")).toHaveClass("text-red-700");
   });
 });

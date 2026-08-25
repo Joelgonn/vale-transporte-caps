@@ -215,7 +215,8 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
           {/* Semântica do período — explícita para não misturar interpretações. */}
           {resumo && resumo.totalPacientes > 0 && !erroInicial && (
             <p className="text-xs text-zinc-500" aria-live="polite">
-              Vales autorizados: liberações iniciadas no período. Vales
+              Vales previstos: previsão administrativa das liberações iniciadas no
+              período — não limita a retirada. Vales
               retirados: retiradas realizadas no período.
             </p>
           )}
@@ -231,9 +232,9 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                 {[
                   { rotulo: "Pacientes", valor: resumo.totalPacientes },
                   { rotulo: "Liberações", valor: resumo.totalLiberacoes },
-                  { rotulo: "Vales autorizados", valor: resumo.totalValesAutorizados },
+                  { rotulo: "Vales previstos", valor: resumo.totalValesAutorizados },
                   { rotulo: "Vales retirados", valor: resumo.totalValesRetirados },
-                  { rotulo: "Saldo", valor: resumo.saldoTotal },
+                  { rotulo: "Diferença", valor: resumo.saldoTotal },
                 ].map((card) => (
                   <div key={card.rotulo} className={`${CARTAO} p-4`}>
                     <dt className="text-xs uppercase tracking-wide text-zinc-500">
@@ -241,7 +242,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                     </dt>
                     <dd
                       className={`mt-1 text-2xl font-semibold ${
-                        card.rotulo === "Saldo" && card.valor < 0
+                        card.rotulo === "Diferença" && card.valor < 0
                           ? "text-red-700"
                           : "text-brand-900"
                       }`}
@@ -530,7 +531,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                         <th className="px-4 py-3 font-medium">Autorizado</th>
                         <th className="px-4 py-3 font-medium">Retirado</th>
                         <th className="px-4 py-3 font-medium">Última retirada</th>
-                        <th className="px-4 py-3 font-medium">Saldo</th>
+                        <th className="px-4 py-3 font-medium">Diferença</th>
                         <th className="px-4 py-3 font-medium">Autorizador</th>
                       </tr>
                     </thead>
@@ -643,7 +644,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                             </dd>
                           </div>
                           <div className="flex items-center justify-between gap-3">
-                            <dt className="text-xs text-zinc-500">Saldo</dt>
+                            <dt className="text-xs text-zinc-500">Diferença</dt>
                             <dd className={item.saldo < 0 ? "font-semibold text-red-700" : "font-semibold text-brand-900"}>
                               {item.saldo}
                             </dd>
@@ -964,7 +965,7 @@ function PainelResumoPacientes({
       <div className={`${CARTAO} hidden overflow-x-auto md:block`}>
         <table className="w-full text-left text-sm">
           <CabecalhoTabela
-            colunas={["Paciente", "Gestor SUS", "Liberações", "Autorizado", "Retirado", "Saldo"]}
+            colunas={["Paciente", "Gestor SUS", "Liberações", "Previsto", "Retirado", "Diferença"]}
           />
           <tbody className="divide-y divide-zinc-100">
             {linhas.map((linha) => (
@@ -1008,7 +1009,7 @@ function PainelResumoPacientes({
                   linha.saldo < 0 ? "text-red-700" : "text-brand-900"
                 }`}
               >
-                Saldo {linha.saldo}
+                Diferença {linha.saldo}
               </p>
             </div>
             <dl className="mt-3 flex flex-col gap-2 text-sm">
@@ -1017,7 +1018,7 @@ function PainelResumoPacientes({
                 <dd className="font-medium text-brand-900">{linha.quantidadeLiberacoes}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-xs text-zinc-500">Autorizado</dt>
+                <dt className="text-xs text-zinc-500">Previsto</dt>
                 <dd className="font-medium text-brand-900">{linha.quantidadeAutorizada}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
@@ -1081,7 +1082,7 @@ function TabelaLiberacoes({
       <div className={`${CARTAO} hidden overflow-x-auto md:block`}>
         <table className="w-full text-left text-sm">
           <CabecalhoTabela
-            colunas={["Paciente", "Tipo", "Quantidade", "Período", "Status", "Autorizador", "Retirado"]}
+            colunas={["Paciente", "Tipo", "Previsto", "Período", "Status", "Autorizador", "Retirado"]}
           />
           <tbody className="divide-y divide-zinc-100">
             {linhas.map((linha) => (
@@ -1217,7 +1218,7 @@ function TabelaConsolidado({
       <div className={`${CARTAO} hidden overflow-x-auto md:block`}>
         <table className="w-full text-left text-sm">
           <CabecalhoTabela
-            colunas={["Paciente", "Tipo", "Autorizado", "Retirado", "Saldo"]}
+            colunas={["Paciente", "Tipo", "Previsto", "Retirado", "Diferença"]}
           />
           <tbody className="divide-y divide-zinc-100">
             {linhas.map((linha) => (
@@ -1261,12 +1262,12 @@ function TabelaConsolidado({
                   linha.saldo < 0 ? "text-red-700" : "text-brand-900"
                 }`}
               >
-                Saldo {linha.saldo}
+                Diferença {linha.saldo}
               </p>
             </div>
             <dl className="mt-3 flex flex-col gap-2 text-sm">
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-xs text-zinc-500">Autorizado</dt>
+                <dt className="text-xs text-zinc-500">Previsto</dt>
                 <dd className="font-medium text-brand-900">{linha.quantidadeAutorizada}</dd>
               </div>
               <div className="flex items-center justify-between gap-3">

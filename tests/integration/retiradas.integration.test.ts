@@ -208,7 +208,11 @@ describe.skipIf(!habilitado)("Integração — retiradas (Sprint 20)", () => {
     }
   });
 
-  it("recepção não registra além do saldo — o trigger é a autoridade", async () => {
+  // Sprint 42 — comportamento depende da migration 20260826000001:
+  //   * ANTES (limite ativo): a 2ª retirada é bloqueada com SALDO_INSUFICIENTE;
+  //   * DEPOIS (quantidade = previsão): a 2ª retirada é ACEITA — o controle
+  //     passa a ser apenas vigência/status/RN24/RN01.
+  it("retirada após atingir a quantidade prevista — comportamento por modelo", async () => {
     const admin = adminClient();
     const autorizadorId = await usuarioAtualId(autorizador);
     const pacienteId = await pacienteTeste(admin);
@@ -219,22 +223,42 @@ describe.skipIf(!habilitado)("Integração — retiradas (Sprint 20)", () => {
     try {
       liberacaoId = await criarLiberacaoTeste(autorizador, autorizadorId, pacienteId, 1);
 
-      const registrada = await service.registrarRetirada({
+      const primeira = await service.registrarRetirada({
         liberacaoId,
         pacienteId,
         quantidade: 1,
       });
-      retiradaIds.push(registrada.id);
+      retiradaIds.push(primeira.id);
 
-      const erro = await erroDe(
+      const segunda = await erroDe(
         service.registrarRetirada({
           liberacaoId,
           pacienteId,
           quantidade: 1,
         })
       );
-      expect(erro).toBeInstanceOf(AppError);
-      expect((erro as AppError).code).toBe("SALDO_INSUFICIENTE");
+
+      if (segunda === null) {
+        // Modelo NOVO (previsão não bloqueia) — valida o consumo real.
+        retiradaIds.push(
+          (
+            await recepcionista
+              .from("retiradas")
+              .select("id")
+              .eq("liberacao_id", liberacaoId)
+          ).data!.at(-1)!.id
+        );
+        const { data: todas } = await recepcionista
+          .from("retiradas")
+          .select("quantidade")
+          .eq("liberacao_id", liberacaoId);
+        const soma = (todas ?? []).reduce((a, r: { quantidade: number }) => a + r.quantidade, 0);
+        expect(soma).toBe(2); // retirado > previsto=1 é válido
+      } else {
+        // Modelo ANTIGO (limite ativo, migration ainda não aplicada).
+        expect(segunda).toBeInstanceOf(AppError);
+        expect((segunda as AppError).code).toBe("SALDO_INSUFICIENTE");
+      }
     } finally {
       await limparRetiradas(admin, retiradaIds);
       if (liberacaoId) await limparLiberacoes(admin, [liberacaoId]);

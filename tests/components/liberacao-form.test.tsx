@@ -90,7 +90,7 @@ describe("LiberacaoForm — criar (fluxo em etapas)", () => {
       screen.getByRole("button", { name: "Buscar paciente por nome ou Gestor SUS" })
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Contínua")).toBeInTheDocument();
-    expect(screen.getByLabelText("Quantidade")).toBeInTheDocument();
+    expect(screen.getByLabelText("Quantidade prevista")).toBeInTheDocument();
     expect(screen.getByLabelText("Período da liberação")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continuar" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Criar liberação" })).not.toBeInTheDocument();
@@ -185,7 +185,7 @@ describe("LiberacaoForm — criar (fluxo em etapas)", () => {
 
     expect(screen.getByRole("button", { name: "Continuar" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Voltar" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Quantidade")).toBeInTheDocument();
+    expect(screen.getByLabelText("Quantidade prevista")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Criar liberação" })).not.toBeInTheDocument();
   });
 
@@ -238,5 +238,84 @@ describe("LiberacaoForm — renovar", () => {
     expect(
       await screen.findByText("Liberação renovada com sucesso.")
     ).toBeInTheDocument();
+  });
+});
+
+
+// ── Sprint 42.1 — Calculadora de previsão (somente interface) ────────────────
+describe("LiberacaoForm — calculadora de previsão (Sprint 42.1)", () => {
+  async function irParaCalculadora() {
+    render(<LiberacaoForm modo="criar" onClose={() => {}} onSalvo={() => {}} />);
+    mocks.criarLiberacaoAction.mockResolvedValue({ ok: true, data: origem() });
+    await selecionarPaciente();
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    await screen.findByLabelText("Calculadora de previsão");
+  }
+
+  it("preenche a quantidade automaticamente (4×2 com período padrão 3 meses = 96)", async () => {
+    await irParaCalculadora();
+
+    fireEvent.change(screen.getByLabelText("Vales por dia"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("Dias por semana"), { target: { value: "2" } });
+
+    const campo = await screen.findByLabelText("Quantidade prevista");
+    expect(campo).toHaveValue(96);
+    expect(screen.getByText(/Previsão total/)).toBeInTheDocument();
+  });
+
+  it("alteração de qualquer parâmetro recalcula em tempo real", async () => {
+    await irParaCalculadora();
+    fireEvent.change(screen.getByLabelText("Vales por dia"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("Dias por semana"), { target: { value: "2" } });
+    expect(await screen.findByLabelText("Quantidade prevista")).toHaveValue(96);
+
+    // mudar o período recalcula (3→1 mês: 12 semanas → 4 semanas)
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    fireEvent.change(screen.getByLabelText("Período da liberação"), { target: { value: "1" } });
+
+    const campo = screen.getByLabelText("Quantidade prevista");
+    expect(campo).toHaveValue(32);
+  });
+
+  it("edição manual da quantidade permanece possível e NÃO persiste parâmetros da calculadora", async () => {
+    await irParaCalculadora();
+    fireEvent.change(screen.getByLabelText("Vales por dia"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("Dias por semana"), { target: { value: "2" } });
+    expect(await screen.findByLabelText("Quantidade prevista")).toHaveValue(96);
+
+    // usuário ajusta manualmente para 50
+    fireEvent.change(screen.getByLabelText("Quantidade prevista"), { target: { value: "50" } });
+    expect(screen.getByLabelText("Quantidade prevista")).toHaveValue(50);
+
+    // submete até a revisão e cria
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Criar liberação" }));
+
+    await waitFor(() => {
+      expect(mocks.criarLiberacaoAction).toHaveBeenCalledWith({
+        pacienteId: "p1",
+        tipo: TIPOS_LIBERACAO.CONTINUA,
+        quantidade: 50,
+        periodoMeses: 3,
+      });
+    });
+
+    // pureza do payload: nenhum parâmetro auxiliar é persistido
+    const chamada = mocks.criarLiberacaoAction.mock.calls.at(-1)![0] as Record<string, unknown>;
+    expect(chamada).not.toHaveProperty("valesPorDia");
+    expect(chamada).not.toHaveProperty("diasPorSemana");
+    expect(Object.keys(chamada).sort()).toEqual(
+      ["pacienteId", "periodoMeses", "quantidade", "tipo"].sort()
+    );
+  });
+
+  it("liberação avulsa não exibe a calculadora (sem período mensal)", async () => {
+    render(<LiberacaoForm modo="criar" onClose={() => {}} onSalvo={() => {}} />);
+    await selecionarPaciente();
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    fireEvent.click(screen.getByLabelText("Avulsa"));
+
+    expect(screen.queryByLabelText("Calculadora de previsão")).not.toBeInTheDocument();
   });
 });

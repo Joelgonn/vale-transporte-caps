@@ -60,8 +60,10 @@ describe("LiberacaoService", () => {
     await expect(service.criarLiberacao(dados)).resolves.toBeTruthy();
   });
 
-  it("criarLiberacao rejeita quantidade inválida", async () => {
-    const repo = { criar: vi.fn() } as unknown as LiberacaoRepository;
+  it("criarLiberacao rejeita quantidade inválida (Sprint 42.1: previsão válida até 999)", async () => {
+    const repo = {
+      criar: vi.fn(async () => liberacao()),
+    } as unknown as LiberacaoRepository;
     const service = makeService(repo);
 
     await expect(
@@ -69,10 +71,20 @@ describe("LiberacaoService", () => {
         pacienteId: "p1",
         profissionalAutorizadorId: "u1",
         tipo: TIPOS_LIBERACAO.AVULSA,
-        quantidade: 7,
+        quantidade: 1000,
       } as unknown as NovaLiberacao)
     ).rejects.toMatchObject({ code: "VALIDACAO" });
-    expect(repo.criar).not.toHaveBeenCalled();
+
+    // 7 agora é uma previsão válida (RN04 atualizada na Sprint 42.1)
+    await expect(
+      service.criarLiberacao({
+        pacienteId: "p1",
+        profissionalAutorizadorId: "u1",
+        tipo: TIPOS_LIBERACAO.AVULSA,
+        quantidade: 7,
+      })
+    ).resolves.toBeTruthy();
+    expect(repo.criar).toHaveBeenCalledTimes(1);
   });
 
   it("criarLiberacao rejeita contínua sem período", async () => {
@@ -162,12 +174,24 @@ describe("LiberacaoService", () => {
     expect(chamada).not.toHaveProperty("dataFim");
   });
 
-  it("o serviço não expõe update/delete de liberações", async () => {
-    const repo = {} as unknown as LiberacaoRepository;
+  it("Sprint 42: expõe atualizarLiberacao (com validação) e NUNCA delete", async () => {
+    const repo = {
+      atualizar: vi.fn(async () => liberacao()),
+    } as unknown as LiberacaoRepository;
     const service = makeService(repo);
-    expect(service).not.toHaveProperty("atualizarLiberacao");
+
+    // update existe e valida o payload filtrado antes do repasse
+    await expect(
+      service.atualizarLiberacao("l1", PERFIS.GESTOR, { status: "cancelada" })
+    ).resolves.toHaveProperty("id", "l1");
+    expect(repo.atualizar).toHaveBeenCalledWith("l1", { status: "cancelada" });
+
+    await expect(
+      service.atualizarLiberacao("l1", PERFIS.PROFISSIONAL_AUTORIZADOR, {})
+    ).rejects.toMatchObject({ code: "VALIDACAO" });
+
+    // delete continua inexistente
     expect(service).not.toHaveProperty("excluirLiberacao");
-    expect(PERFIS.GESTOR).toBeDefined();
   });
 
   it("buscarLiberacao e listarLiberacoes delegam ao repositório", async () => {

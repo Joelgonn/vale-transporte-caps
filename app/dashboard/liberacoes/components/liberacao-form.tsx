@@ -6,7 +6,6 @@ import { listarPacientesAction } from "@/app/actions/pacientes";
 import {
   ORIGENS_PACIENTE,
   PERIODOS_LIBERACAO,
-  QUANTIDADES_LIBERACAO,
   ROTULO_TIPO_LIBERACAO,
   TIPOS_LIBERACAO,
   type PeriodoLiberacao,
@@ -14,6 +13,7 @@ import {
   type TipoLiberacao,
 } from "@/lib/domain/enums";
 import { isPeriodoValido, isQuantidadeValida } from "@/lib/domain/regras";
+import { calcularPrevisaoVales } from "@/lib/domain/liberacoes/previsao";
 import type { LiberacaoComPaciente } from "@/lib/domain/liberacoes/types";
 import type { PacienteSemCpf } from "@/lib/domain/pacientes/types";
 import {
@@ -85,12 +85,22 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
   const [tipo, setTipo] = useState<TipoLiberacao>(
     (origem?.tipo as TipoLiberacao | undefined) ?? TIPOS_LIBERACAO.CONTINUA
   );
-  const [quantidade, setQuantidade] = useState<QuantidadeLiberacao>(
-    origem?.quantidade ?? 1
-  );
+  const [quantidadeManual, setQuantidadeManual] = useState<number | null>(null);
   const [periodoMeses, setPeriodoMeses] = useState<PeriodoLiberacao>(
     origem?.periodo_meses ?? 3
   );
+  // Sprint 42.1 — Calculadora de previsão (somente interface): parâmetros
+  // auxiliares NUNCA são persistidos; apenas derivam a quantidade prevista.
+  const [calcParams, setCalcParams] = useState({ valesPorDia: 0, diasPorSemana: 0 });
+  const calculadoraVisivel = tipo === TIPOS_LIBERACAO.CONTINUA;
+  const previsao = calculadoraVisivel
+    ? calcularPrevisaoVales(calcParams.valesPorDia, calcParams.diasPorSemana, periodoMeses)
+    : null;
+  const quantidade =
+    quantidadeManual ??
+    (previsao && previsao.previsaoTotal > 0
+      ? previsao.previsaoTotal
+      : (origem?.quantidade ?? 1));
 
   const [passo, setPasso] = useState(1);
   const [errosPasso, setErrosPasso] = useState<ErroCampo[]>([]);
@@ -131,7 +141,7 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
       if (!isQuantidadeValida(quantidade)) {
         erros.push({
           campo: "quantidade",
-          mensagem: "Quantidade deve ser 1, 2, 4 ou 8.",
+          mensagem: "Quantidade prevista deve ser um inteiro entre 1 e 999.",
         });
       }
       return erros;
@@ -213,7 +223,7 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
     if (!qtdSel) {
       erros.push({
         campo: "quantidade",
-        mensagem: "Quantidade deve ser 1, 2, 4 ou 8.",
+        mensagem: "Quantidade prevista deve ser um inteiro entre 1 e 999.",
       });
     }
 
@@ -551,38 +561,118 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
 
               <div className="flex flex-col gap-2">
                 <label htmlFor="quantidade" className={ROTULO}>
-                  Quantidade
+                  Quantidade prevista
                 </label>
-                <select
+                <input
                   id="quantidade"
                   name="quantidade"
+                  type="number"
+                  min={1}
+                  max={999}
+                  step={1}
                   value={String(quantidade)}
                   disabled={bloq}
                   onChange={(e) => {
-                    const q = selecionarQuantidade(e.target.value);
-                    if (q) {
-                      setQuantidade(q);
+                    const q = Number(e.target.value);
+                    if (Number.isInteger(q) && q > 0) {
+                      setQuantidadeManual(q);
                       limparErro("quantidade");
                     }
                   }}
                   aria-invalid={Boolean(erroDe("quantidade"))}
                   aria-describedby={
-                    erroDe("quantidade") ? "erro-quantidade" : undefined
+                    erroDe("quantidade") ? "erro-quantidade" : "ajuda-quantidade"
                   }
                   className={INPUT}
-                >
-                  {QUANTIDADES_LIBERACAO.map((q) => (
-                    <option key={q} value={String(q)}>
-                      {q}
-                    </option>
-                  ))}
-                </select>
+                />
+                <p id="ajuda-quantidade" className="text-xs text-zinc-500">
+                  É uma PREVISÃO (RN31) — não limita retiradas durante a vigência.
+                </p>
                 {erroDe("quantidade") && (
                   <p id="erro-quantidade" className="text-sm text-red-600">
                     {erroDe("quantidade")}
                   </p>
                 )}
               </div>
+
+              {/* Sprint 42.1 — Calculadora de previsão (auxiliar de interface). */}
+              {calculadoraVisivel && previsao && (
+                <fieldset
+                  aria-label="Calculadora de previsão"
+                  className="flex flex-col gap-3 rounded-md border border-zinc-200 bg-zinc-50 p-3"
+                >
+                  <legend className="px-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                    Calculadora de previsão
+                  </legend>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label htmlFor="calc-vales-dia" className={ROTULO}>
+                        Vales por dia
+                      </label>
+                      <input
+                        id="calc-vales-dia"
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={calcParams.valesPorDia ? String(calcParams.valesPorDia) : ""}
+                        disabled={bloq}
+                        onChange={(e) => {
+                    setCalcParams((prev) => ({
+                      ...prev,
+                      valesPorDia: Number(e.target.value),
+                    }));
+                    setQuantidadeManual(null);
+                  }}
+                        className={INPUT}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label htmlFor="calc-dias-semana" className={ROTULO}>
+                        Dias por semana
+                      </label>
+                      <input
+                        id="calc-dias-semana"
+                        type="number"
+                        min={0}
+                        max={7}
+                        step={1}
+                        value={calcParams.diasPorSemana ? String(calcParams.diasPorSemana) : ""}
+                        disabled={bloq}
+                        onChange={(e) => {
+                          setCalcParams((prev) => ({
+                            ...prev,
+                            diasPorSemana: Math.min(7, Number(e.target.value)),
+                          }));
+                          setQuantidadeManual(null);
+                        }}
+                        className={INPUT}
+                      />
+                    </div>
+                  </div>
+                  <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                    <div>
+                      <dt className="text-xs text-zinc-500">Por semana</dt>
+                      <dd className="font-medium text-brand-900">{previsao.valesPorSemana}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-zinc-500">Semanas</dt>
+                      <dd className="font-medium text-brand-900">{previsao.semanas}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-zinc-500">Período</dt>
+                      <dd className="font-medium text-brand-900">{periodoMeses} mês(es)</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-zinc-500">Previsão total</dt>
+                      <dd className="font-semibold text-brand-900">{previsao.previsaoTotal}</dd>
+                    </div>
+                  </dl>
+                  <p className="text-xs text-zinc-500">
+                    Preenche automaticamente a quantidade prevista (editável).
+                    Não persistimos vales/dia nem dias/semana.
+                  </p>
+                </fieldset>
+              )}
             </div>
 
             {/* Passo 3 — Período */}
