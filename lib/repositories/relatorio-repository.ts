@@ -240,16 +240,17 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
     }
 
     // Busca o paciente no v_pacientes (sem CPF, RLS-safe) para o cabeçalho.
+    // Sprint 46 — inclui origem para badge Regular/Esporádico no header premium.
     const { data: paciente, error: erroPaciente } = await this.client
       .from("v_pacientes")
-      .select("id, gestor_sus, nome")
+      .select("id, gestor_sus, nome, origem")
       .eq("id", pacienteId)
       .maybeSingle();
 
     if (erroPaciente) throw mapSupabaseError(erroPaciente);
 
     const pacienteResolvido = paciente as
-      | { id: string; gestor_sus: string; nome: string }
+      | { id: string; gestor_sus: string; nome: string; origem: string | null }
       | null;
 
     if (!pacienteResolvido) {

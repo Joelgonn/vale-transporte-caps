@@ -69,4 +69,10 @@ export const ICONES_MODULO: Record<IconeId, ReactNode> = {
       <rect x="15" y="12" width="2.5" height="4" rx="0.75" />
     </Svg>
   ),
+  historico: (
+    <Svg>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v5l3 2" />
+    </Svg>
+  ),
 };

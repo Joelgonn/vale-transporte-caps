@@ -701,6 +701,7 @@ export function estadoUsuario(
 // fato existem (Pacientes, Usuários, Liberações e Retiradas). Espelham as
 // permissões de UI já sancionadas (permissoesPacientes/permissoesUsuarios/
 // permissoesLiberacoes/permissoesRetiradas) e as policies RLS.
+// Sprint 46 — inclui Historico como modulo premium (usa mesma permissão de Relatórios — gestor).
 export function capacidadeDashboard(
   perfil: PerfilUsuario | null,
   statusAtivo: boolean | null
@@ -712,6 +713,7 @@ export function capacidadeDashboard(
   retiradas: boolean;
   auditoria: boolean;
   relatorios: boolean;
+  historico: boolean;
 } {
   const ativo = perfil != null && statusAtivo === true;
   return {
@@ -730,5 +732,6 @@ export function capacidadeDashboard(
     // Relatórios são exclusivos do Gestor ativo (REPORTS.md — decisão
     // institucional pendente para o autorizador, não implementada).
     relatorios: perfil === PERFIS.GESTOR && statusAtivo === true,
+    historico: perfil === PERFIS.GESTOR && statusAtivo === true,
   };
 }

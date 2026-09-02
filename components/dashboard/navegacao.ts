@@ -19,6 +19,7 @@ export type CapacidadeDashboard = {
   usuarios: boolean;
   auditoria: boolean;
   relatorios: boolean;
+  historico: boolean;
 };
 
 export type IconeId =
@@ -27,7 +28,8 @@ export type IconeId =
   | "retiradas"
   | "usuarios"
   | "auditoria"
-  | "relatorios";
+  | "relatorios"
+  | "historico";
 
 export type Modulo = {
   slug: IconeId;
@@ -84,6 +86,14 @@ export function modulosPorCapacidade(cap: CapacidadeDashboard): Modulo[] {
       rotulo: "Relatórios",
       descricao: "Consultas de liberações, retiradas e consolidado — exclusivas do Gestor ativo.",
       href: "/dashboard/relatorios",
+    });
+  }
+  if (cap.historico) {
+    modulos.push({
+      slug: "historico",
+      rotulo: "Histórico",
+      descricao: "Histórico operacional por paciente — autorizações, entregas e diferenças.",
+      href: "/dashboard/historico",
     });
   }
   return modulos;

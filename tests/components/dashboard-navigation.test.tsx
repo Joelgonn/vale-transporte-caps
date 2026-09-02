@@ -404,13 +404,13 @@ describe("regressão Sprint 41: recomposição da grade (sem col-span, sem órf�
     }
   });
 
-  it("Gestor: 6 módulos em grid 3×2 de larguras iguais (sem col-span)", () => {
+  it("Gestor: 7 módulos em grid 3×2 de larguras iguais (sem col-span) — Sprint46 historico", () => {
     renderizarHome();
     const grade = secao("dashboard-modulos").querySelector("div.grid")!;
     expect(grade.className).toContain("sm:grid-cols-2");
     expect(grade.className).toContain("lg:grid-cols-3");
     const cards = Array.from(grade.querySelectorAll("a"));
-    expect(cards).toHaveLength(6);
+    expect(cards).toHaveLength(7);
     for (const card of cards) {
       expect(card.className).not.toMatch(/col-span/);
     }

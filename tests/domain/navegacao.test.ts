@@ -19,6 +19,7 @@ function capacidade(sobre: Partial<CapacidadeDashboard> = {}): CapacidadeDashboa
     usuarios: false,
     auditoria: false,
     relatorios: false,
+    historico: false,
     ...sobre,
   };
 }
@@ -26,7 +27,7 @@ function capacidade(sobre: Partial<CapacidadeDashboard> = {}): CapacidadeDashboa
 describe("modulosPorCapacidade", () => {
   it("expõe todos os módulos na ordem canônica para o Gestor ativo", () => {
     const modulos = modulosPorCapacidade(
-      capacidade({ liberacoes: true, retiradas: true, usuarios: true, auditoria: true, relatorios: true })
+      capacidade({ liberacoes: true, retiradas: true, usuarios: true, auditoria: true, relatorios: true, historico: true })
     );
     expect(modulos.map((m) => m.rotulo)).toEqual([
       "Pacientes",
@@ -35,9 +36,10 @@ describe("modulosPorCapacidade", () => {
       "Usuários",
       "Auditoria",
       "Relatórios",
+      "Histórico",
     ]);
     expect(modulos[0].href).toBe("/dashboard/pacientes");
-    expect(modulos[5].href).toBe("/dashboard/relatorios");
+    expect(modulos[6].href).toBe("/dashboard/historico");
   });
 
   it("não expõe módulos sem capacidade (recepcionista: sem Usuários/Auditoria)", () => {
@@ -57,7 +59,7 @@ describe("modulosPorCapacidade", () => {
 });
 
 describe("moduloAtual", () => {
-  const cap = capacidade({ liberacoes: true, retiradas: true, usuarios: true, auditoria: true, relatorios: true });
+  const cap = capacidade({ liberacoes: true, retiradas: true, usuarios: true, auditoria: true, relatorios: true, historico: true });
 
   it("reconhece a rota exata do módulo", () => {
     expect(moduloAtual("/dashboard/pacientes", cap)?.rotulo).toBe("Pacientes");
@@ -148,6 +150,9 @@ describe("capacidadeDashboard (integração com regras.ts)", () => {
             break;
           case "relatorios":
             expect(cap.relatorios).toBe(true);
+            break;
+          case "historico":
+            expect(cap.historico).toBe(true);
             break;
         }
       }

@@ -40,6 +40,21 @@ function ultimaRetiradaDe(retiradas: unknown): string | null {
   return ultima;
 }
 
+function mapearRetiradas(retiradas: unknown): { dataHora: string; quantidade: number }[] {
+  if (!Array.isArray(retiradas)) return [];
+  const lista: { dataHora: string; quantidade: number }[] = [];
+  for (const r of retiradas) {
+    const dataHora = (r as { data_hora?: unknown })?.data_hora;
+    const quantidade = (r as { quantidade?: unknown })?.quantidade;
+    if (typeof dataHora === "string" && typeof quantidade === "number") {
+      lista.push({ dataHora, quantidade });
+    }
+  }
+  // ordena cronologicamente
+  lista.sort((a, b) => (a.dataHora < b.dataHora ? -1 : a.dataHora > b.dataHora ? 1 : 0));
+  return lista;
+}
+
 export function mapearItemHistorico(linha: LinhaHistoricoBruta): ItemHistorico {
   const autorizador = mapearEmbutido<{ id: string; nome: string }>(linha.autorizador);
   const registrador = mapearEmbutido<{ id: string; nome: string }>(linha.registrador);
@@ -66,6 +81,7 @@ export function mapearItemHistorico(linha: LinhaHistoricoBruta): ItemHistorico {
     numeroRetiradas,
     ultimaRetirada: ultimaRetiradaDe(linha.retiradas),
     saldo: linha.quantidade - quantidadeRetirada,
+    retiradas: mapearRetiradas(linha.retiradas),
   };
 }
 
