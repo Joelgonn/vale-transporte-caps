@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { TIPOS_LIBERACAO, STATUS_LIBERACAO, ROTULO_ORIGEM_PACIENTE } from "@/lib/domain/enums";
+import { PatientSearch } from "@/components/ui/patient-search";
 import type { FiltrosRelatorio, ItemHistorico, ResultadoListaRelatorio } from "@/lib/domain/relatorios/types";
 import {
   descreverPeriodo,
@@ -75,6 +77,7 @@ function badgeStatus(status: string) {
 }
 
 export default function HistoricoView({ filtros, resultado, erroInicial, candidatos }: Props) {
+  const router = useRouter();
   const linhas = (resultado as Extract<ResultadoListaRelatorio, { tipo: "historico" }> | null)?.linhas ?? [];
   const paciente = (resultado as Extract<ResultadoListaRelatorio, { tipo: "historico" }> | null)?.paciente ?? null;
   const total = resultado?.total ?? 0;
@@ -132,23 +135,19 @@ export default function HistoricoView({ filtros, resultado, erroInicial, candida
             )}
 
             {(!candidatos || candidatos.length === 0) && (
-              <form method="get" action="/dashboard/historico" className={`${CARTAO} flex flex-col gap-3 p-4 sm:flex-row sm:items-end`}>
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <label htmlFor="historico-busca" className="text-xs font-medium text-zinc-600">
-                    Paciente — nome ou Gestor SUS
-                  </label>
-                  <input id="historico-busca" name="busca" type="search" placeholder="Ex.: Maria Silva ou 123456" defaultValue={filtros.busca ?? ""} className={INPUT} />
-                  <p className="text-[11px] text-zinc-500">Use nome para localizar; a identidade é o Gestor SUS.</p>
-                </div>
-                <div className="flex gap-2">
-                  <button type="submit" className={BOTAO_PRIMARIO}>
-                    Buscar
-                  </button>
+              <div className={`${CARTAO} p-4`}>
+                <PatientSearch
+                  id="historico-busca"
+                  label="Buscar paciente"
+                  placeholder="🔎 Nome ou Gestor SUS..."
+                  onSelect={(p) => router.push(construirUrl(filtros, { paciente: p.id, busca: undefined, pagina: 1 }))}
+                />
+                <div className="mt-3 flex gap-2">
                   <Link href="/dashboard/historico" className={BOTAO_SECUNDARIO}>
                     Limpar
                   </Link>
                 </div>
-              </form>
+              </div>
             )}
 
             {!candidatos?.length && !erroInicial && (
