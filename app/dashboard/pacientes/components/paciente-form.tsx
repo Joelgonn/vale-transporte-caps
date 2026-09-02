@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import {
   atualizarPacienteAction,
   criarPacienteAction,
 } from "@/app/actions/pacientes";
+import { CpfInput } from "@/components/ui/cpf-input";
 import { useModalA11y } from "@/components/ui/use-modal-a11y";
 import { FeedbackErro, FeedbackSucesso } from "@/components/ui/feedback";
 import { mensagemUsuario } from "@/components/ui/mensagens";
@@ -43,6 +44,7 @@ export default function PacienteForm(props: PacienteFormProps) {
   // gestor/autorizador, esporadico para recepcionista.
   const origem = isEdicao ? null : props.origem;
   const esporadico = origem === ORIGENS_PACIENTE.ESPORADICO;
+  const [cpfValue, setCpfValue] = useState("");
 
   const executar = async (
     _prev: FormState,
@@ -161,23 +163,16 @@ export default function PacienteForm(props: PacienteFormProps) {
         </div>
 
         {!isEdicao && (
-          <div className="flex flex-col gap-2">
-            <label htmlFor="cpf" className={ROTULO}>
-              CPF{" "}
-              <span className="font-normal text-zinc-500">
-                (opcional, dado protegido)
-              </span>
-            </label>
-            <input
-              id="cpf"
-              name="cpf"
-              inputMode="numeric"
-              disabled={pending || state.sucesso}
-              className={INPUT}
-              placeholder="Somente números"
-            />
-          </div>
+          <CpfInput
+            id="cpf"
+            label="CPF (opcional, dado protegido)"
+            value={cpfValue}
+            onValueChange={(canonico) => setCpfValue(canonico)}
+            disabled={pending || state.sucesso}
+          />
         )}
+        {/* Hidden input para FormData carregar o CPF canônico */}
+        {!isEdicao && <input type="hidden" name="cpf" value={cpfValue} />}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-2">

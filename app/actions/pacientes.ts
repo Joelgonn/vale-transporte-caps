@@ -98,14 +98,14 @@ export async function criarPacienteAction(
       );
     }
 
+    const { normalizeCpf } = await import("@/lib/domain/identificacao/cpf");
     const service = await PacienteService.create();
-    // Sprint 49 — normalização para CAIXA ALTA de campos de identificação
+    // Sprint 52 — normalização canônica: Nome/Gestor SUS → CAIXA ALTA, CPF → 11 dígitos
     const dadosNormalizados = {
       ...dados,
       nome: dados.nome.trim().toUpperCase(),
       gestor_sus: dados.gestor_sus.trim().toUpperCase(),
-      // CPF e outros identificadores também em caixa alta quando presentes
-      ...(dados.cpf ? { cpf: (dados.cpf as string).trim().toUpperCase() } : {}),
+      ...(dados.cpf ? { cpf: normalizeCpf(dados.cpf as string) } : {}),
       origem: origemSolicitada as OrigemPaciente,
     };
     return {

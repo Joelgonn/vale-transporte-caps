@@ -238,8 +238,8 @@ export default function AtendimentoView(props: Props) {
                   <h4 className="text-sm font-semibold text-amber-900">Paciente não encontrado? Cadastrar como esporádico</h4>
                   <p className="text-xs text-amber-700">Origem: <strong>Esporádico</strong> — somente liberação avulsa. Paciente será reutilizado nos próximos atendimentos.</p>
                   <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div><label className={ROTULO}>Gestor SUS</label><input value={novoSUS} onChange={(e) => setNovoSUS(e.target.value)} placeholder="Ex.: 123456" className={INPUT} /></div>
-                    <div><label className={ROTULO}>Nome</label><input value={novoNome} onChange={(e) => setNovoNome(e.target.value)} placeholder="Nome completo" className={INPUT} /></div>
+                    <div><label className={ROTULO}>Gestor SUS</label><input value={novoSUS} onChange={(e) => setNovoSUS(e.target.value.toUpperCase())} placeholder="Ex.: 123456" className={`${INPUT} uppercase`} /></div>
+                    <div><label className={ROTULO}>Nome</label><input value={novoNome} onChange={(e) => setNovoNome(e.target.value.toUpperCase())} placeholder="Nome completo" className={`${INPUT} uppercase`} /></div>
                   </div>
                   {erroCriarPaciente && <FeedbackErro>{erroCriarPaciente}</FeedbackErro>}
                   <button type="button" disabled={criandoPaciente} onClick={criarPacienteEsporadico} className={`${BOTAO_PRIMARIO} mt-3`}>{criandoPaciente ? "Salvando..." : "Cadastrar paciente esporádico"}</button>

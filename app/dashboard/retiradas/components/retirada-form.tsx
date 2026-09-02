@@ -481,8 +481,8 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
                         <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
                           <p className="text-xs font-semibold text-amber-900">Cadastrar paciente esporádico</p>
                           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                            <input value={novoSUS} onChange={(e) => setNovoSUS(e.target.value)} placeholder="Gestor SUS" className={INPUT} />
-                            <input value={novoNome} onChange={(e) => setNovoNome(e.target.value)} placeholder="Nome completo" className={INPUT} />
+                            <input value={novoSUS} onChange={(e) => setNovoSUS(e.target.value.toUpperCase())} placeholder="Gestor SUS" className={`${INPUT} uppercase`} />
+                            <input value={novoNome} onChange={(e) => setNovoNome(e.target.value.toUpperCase())} placeholder="Nome completo" className={`${INPUT} uppercase`} />
                           </div>
                           {erroCriarPaciente && <p className="mt-2 text-xs text-red-600">{erroCriarPaciente}</p>}
                           <button type="button" disabled={criandoPaciente} onClick={criarPacienteEsporadicoRetirada} className={`${BOTAO_PRIMARIO} mt-2 w-full`}>
@@ -520,8 +520,8 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                   <p className="text-sm font-medium text-amber-900">Nenhum paciente encontrado</p>
                   <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <input value={novoSUS} onChange={(e) => setNovoSUS(e.target.value)} placeholder="Gestor SUS" className={INPUT} />
-                    <input value={novoNome} onChange={(e) => setNovoNome(e.target.value)} placeholder="Nome completo" className={INPUT} />
+                    <input value={novoSUS} onChange={(e) => setNovoSUS(e.target.value.toUpperCase())} placeholder="Gestor SUS" className={`${INPUT} uppercase`} />
+                    <input value={novoNome} onChange={(e) => setNovoNome(e.target.value.toUpperCase())} placeholder="Nome completo" className={`${INPUT} uppercase`} />
                   </div>
                   {erroCriarPaciente && <p className="mt-2 text-xs text-red-600">{erroCriarPaciente}</p>}
                   <button type="button" disabled={criandoPaciente} onClick={criarPacienteEsporadicoRetirada} className={`${BOTAO_PRIMARIO} mt-2 w-full`}>
