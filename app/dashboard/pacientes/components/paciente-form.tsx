@@ -123,7 +123,14 @@ export default function PacienteForm(props: PacienteFormProps) {
             defaultValue={paciente?.gestor_sus ?? ""}
             required={!isEdicao}
             disabled={isEdicao || pending || state.sucesso}
-            className={`${INPUT} disabled:bg-zinc-100 disabled:opacity-60`}
+            className={`${INPUT} uppercase disabled:bg-zinc-100 disabled:opacity-60`}
+            onInput={(e) => {
+              const target = e.target as HTMLInputElement;
+              const s = target.selectionStart;
+              const en = target.selectionEnd;
+              target.value = target.value.toUpperCase();
+              requestAnimationFrame(() => target.setSelectionRange(s, en));
+            }}
           />
           {isEdicao && (
             <p className="text-xs text-zinc-500">
@@ -142,7 +149,14 @@ export default function PacienteForm(props: PacienteFormProps) {
             defaultValue={paciente?.nome ?? ""}
             required
             disabled={pending || state.sucesso}
-            className={INPUT}
+            className={`${INPUT} uppercase`}
+            onInput={(e) => {
+              const target = e.target as HTMLInputElement;
+              const s = target.selectionStart;
+              const en = target.selectionEnd;
+              target.value = target.value.toUpperCase();
+              requestAnimationFrame(() => target.setSelectionRange(s, en));
+            }}
           />
         </div>
 

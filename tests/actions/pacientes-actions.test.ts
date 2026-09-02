@@ -130,9 +130,9 @@ describe("criarPacienteAction — origem derivada do perfil da sessão (Sprint 3
     comPerfil();
   });
 
-  it("✓ gestor cria regular (origem imposta pelo servidor)", async () => {
+  it("✓ gestor cria regular (origem imposta pelo servidor) — Sprint49 caixa alta", async () => {
     comPerfil({ perfil: PERFIS.GESTOR });
-    const criado = pacienteSemCpf({ nome: "Ana" });
+    const criado = pacienteSemCpf({ nome: "ANA" });
     mocks.instancia.criarPaciente.mockResolvedValue(criado);
 
     const resultado = await criarPacienteAction({ gestor_sus: "789", nome: "Ana" });
@@ -140,14 +140,14 @@ describe("criarPacienteAction — origem derivada do perfil da sessão (Sprint 3
     expect(resultado.ok).toBe(true);
     expect(mocks.instancia.criarPaciente).toHaveBeenCalledWith({
       gestor_sus: "789",
-      nome: "Ana",
+      nome: "ANA",
       origem: ORIGENS_PACIENTE.REGULAR,
     });
   });
 
-  it("✓ profissional_autorizador cria regular", async () => {
+  it("✓ profissional_autorizador cria regular — Sprint49 caixa alta", async () => {
     comPerfil({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
-    const criado = pacienteSemCpf({ nome: "Ana" });
+    const criado = pacienteSemCpf({ nome: "ANA" });
     mocks.instancia.criarPaciente.mockResolvedValue(criado);
 
     const resultado = await criarPacienteAction({ gestor_sus: "789", nome: "Ana" });
@@ -155,14 +155,14 @@ describe("criarPacienteAction — origem derivada do perfil da sessão (Sprint 3
     expect(resultado.ok).toBe(true);
     expect(mocks.instancia.criarPaciente).toHaveBeenCalledWith({
       gestor_sus: "789",
-      nome: "Ana",
+      nome: "ANA",
       origem: ORIGENS_PACIENTE.REGULAR,
     });
   });
 
-  it("✓ recepcionista cria esporadico", async () => {
+  it("✓ recepcionista cria esporadico — Sprint49 caixa alta", async () => {
     comPerfil({ perfil: PERFIS.RECEPCIONISTA });
-    const criado = pacienteSemCpf({ nome: "Ana", origem: ORIGENS_PACIENTE.ESPORADICO });
+    const criado = pacienteSemCpf({ nome: "ANA", origem: ORIGENS_PACIENTE.ESPORADICO });
     mocks.instancia.criarPaciente.mockResolvedValue(criado);
 
     const resultado = await criarPacienteAction({ gestor_sus: "789", nome: "Ana" });
@@ -170,7 +170,7 @@ describe("criarPacienteAction — origem derivada do perfil da sessão (Sprint 3
     expect(resultado.ok).toBe(true);
     expect(mocks.instancia.criarPaciente).toHaveBeenCalledWith({
       gestor_sus: "789",
-      nome: "Ana",
+      nome: "ANA",
       origem: ORIGENS_PACIENTE.ESPORADICO,
     });
   });

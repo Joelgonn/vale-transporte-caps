@@ -99,12 +99,18 @@ export async function criarPacienteAction(
     }
 
     const service = await PacienteService.create();
+    // Sprint 49 — normalização para CAIXA ALTA de campos de identificação
+    const dadosNormalizados = {
+      ...dados,
+      nome: dados.nome.trim().toUpperCase(),
+      gestor_sus: dados.gestor_sus.trim().toUpperCase(),
+      // CPF e outros identificadores também em caixa alta quando presentes
+      ...(dados.cpf ? { cpf: (dados.cpf as string).trim().toUpperCase() } : {}),
+      origem: origemSolicitada as OrigemPaciente,
+    };
     return {
       ok: true,
-      data: await service.criarPaciente({
-        ...dados,
-        origem: origemSolicitada as OrigemPaciente,
-      }),
+      data: await service.criarPaciente(dadosNormalizados as NovoPaciente),
     };
   } catch (erro) {
     return { ok: false, error: mensagemDaAcao(erro) };
