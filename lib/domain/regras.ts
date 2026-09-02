@@ -722,7 +722,6 @@ export function capacidadeDashboard(
   retiradas: boolean;
   auditoria: boolean;
   relatorios: boolean;
-  historico: boolean;
   atendimento: boolean;
 } {
   const ativo = perfil != null && statusAtivo === true;
@@ -741,8 +740,8 @@ export function capacidadeDashboard(
     auditoria: perfil === PERFIS.GESTOR && statusAtivo === true,
     // Relatórios são exclusivos do Gestor ativo (REPORTS.md — decisão
     // institucional pendente para o autorizador, não implementada).
+    // Histórico é visão interna de Relatórios (/dashboard/relatorios?tipo=historico) — não módulo independente.
     relatorios: perfil === PERFIS.GESTOR && statusAtivo === true,
-    historico: perfil === PERFIS.GESTOR && statusAtivo === true,
     atendimento: ativo,
   };
 }

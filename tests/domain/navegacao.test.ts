@@ -19,16 +19,15 @@ function capacidade(sobre: Partial<CapacidadeDashboard> = {}): CapacidadeDashboa
     usuarios: false,
     auditoria: false,
     relatorios: false,
-    historico: false,
     atendimento: false,
     ...sobre,
   };
 }
 
 describe("modulosPorCapacidade", () => {
-  it("expõe todos os módulos na ordem canônica para o Gestor ativo", () => {
+  it("expõe todos os módulos na ordem canônica para o Gestor ativo (Histórico consolidado em Relatórios)", () => {
     const modulos = modulosPorCapacidade(
-      capacidade({ liberacoes: true, retiradas: true, usuarios: true, auditoria: true, relatorios: true, historico: true })
+      capacidade({ liberacoes: true, retiradas: true, usuarios: true, auditoria: true, relatorios: true, atendimento: true })
     );
     expect(modulos.map((m) => m.rotulo)).toEqual([
       "Pacientes",
@@ -37,10 +36,11 @@ describe("modulosPorCapacidade", () => {
       "Usuários",
       "Auditoria",
       "Relatórios",
-      "Histórico",
+      "Atendimento",
     ]);
     expect(modulos[0].href).toBe("/dashboard/pacientes");
-    expect(modulos[6].href).toBe("/dashboard/historico");
+    expect(modulos[5].href).toBe("/dashboard/relatorios");
+    expect(modulos.map((m) => m.href)).not.toContain("/dashboard/historico");
   });
 
   it("não expõe módulos sem capacidade (recepcionista: sem Usuários/Auditoria)", () => {
@@ -60,7 +60,7 @@ describe("modulosPorCapacidade", () => {
 });
 
 describe("moduloAtual", () => {
-  const cap = capacidade({ liberacoes: true, retiradas: true, usuarios: true, auditoria: true, relatorios: true, historico: true });
+  const cap = capacidade({ liberacoes: true, retiradas: true, usuarios: true, auditoria: true, relatorios: true });
 
   it("reconhece a rota exata do módulo", () => {
     expect(moduloAtual("/dashboard/pacientes", cap)?.rotulo).toBe("Pacientes");
@@ -152,14 +152,19 @@ describe("capacidadeDashboard (integração com regras.ts)", () => {
           case "relatorios":
             expect(cap.relatorios).toBe(true);
             break;
-          case "historico":
-            expect(cap.historico).toBe(true);
-            break;
           case "atendimento":
             expect(cap.atendimento).toBe(true);
             break;
         }
       }
     }
+  });
+
+  it("Histórico consolidado em Relatórios: /dashboard/historico não é módulo independente", () => {
+    const cap = capacidadeDashboard(PERFIS.GESTOR, true);
+    expect((cap as unknown as { historico?: boolean }).historico).toBeUndefined();
+    const modulos = modulosPorCapacidade(cap);
+    expect(modulos.map((m) => m.href)).not.toContain("/dashboard/historico");
+    expect(modulos.map((m) => m.rotulo)).not.toContain("Histórico");
   });
 });
