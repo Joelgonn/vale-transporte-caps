@@ -452,3 +452,19 @@ Auditoria (N) ───< (1) Entidade Afetada  // Log referencia qualquer entida
 3. **Renovação × profissional inativo** — papéis distintos documentados (autorizou / autoriza nova / registrou); histórico preserva autorizador original (RN12); inativo não autoriza novas liberações (RN27).
 4. **Retiradas** — total por soma; quantidade restante por liberação; sem saldo acumulado (RN22); bloqueio quando esgotada.
 5. **Múltiplas liberações** — sem constraint de unicidade (a definir em serviço se aprovada).
+
+## Sprint 51 — Unificação da busca inteligente de pacientes
+
+**Inventário auditado (2026-09-02):**
+
+| Local | Antes | Depois | Motivo |
+|---|---|---|---|
+| `retirada-form` | Botão "Buscar paciente" + input + Buscar | `PatientSearch` autocomplete 350ms, `SUS · Regular/Esporádico`, `Alterar paciente`, `Cadastrar esporádico` inline | Busca de entidade — unificado |
+| `atendimento` | Input + Buscar (sem debounce) | Mantido com `PatientSearch` pattern (debounce, race, `Cadastrar esporádico`) | Busca de entidade — unificado |
+| `liberacao-form` | Botão + input + Buscar | Mantido com `PatientSearch` pattern (RN29) | Busca de entidade — unificado (próximo passo: extrair para `PatientSearch` literal) |
+| `historico`/`relatorios` | GET `?busca` + lista textual | `PatientSearch` (`🔎 Nome ou Gestor SUS...` → `SUS · Regular/Esporádico` → `?paciente=id`) | Busca de entidade — unificado |
+| `pacientes`/`liberacoes` barra | GET `?q` filtro textual | Mantido como **filtro textual** (tipo B), não entidade — não convertido | Classificação correta |
+
+**Componente único:** `components/ui/patient-search.tsx` (350ms, mínimo 2, `lastIdRef` race, `combobox/listbox`, `Arrow/Enter/Esc`, `autoFocus`, `SUS+origem`).
+
+**Caixa alta:** `UppercaseInput` + `criarPacienteAction` normaliza `nome`/`gestor_sus`/`cpf` para `UPPER`, texto livre preservado, sem migração em massa.
