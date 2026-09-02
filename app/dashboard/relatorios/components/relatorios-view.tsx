@@ -13,6 +13,7 @@ import {
 import {
   ROTULO_TIPO_RELATORIO,
   descreverPeriodo,
+  formatarData,
   formatarDataHora,
   rotuloStatusLiberacao,
   rotuloTipoLiberacao,
@@ -509,149 +510,8 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
               </form>
             )}
 
-            {/* Linha do tempo — tabela desktop + cards mobile */}
-            {ehHistorico && resultado && resultado.linhas.length > 0 && (
-              <>
-                <div className={`${CARTAO} hidden overflow-x-auto md:block`}>
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-zinc-200 text-xs uppercase tracking-wide text-zinc-500">
-                        <th className="px-4 py-3 font-medium">Liberação</th>
-                        <th className="px-4 py-3 font-medium">Período</th>
-                        <th className="px-4 py-3 font-medium">Autorizado</th>
-                        <th className="px-4 py-3 font-medium">Retirado</th>
-                        <th className="px-4 py-3 font-medium">Última retirada</th>
-                        <th className="px-4 py-3 font-medium">Diferença</th>
-                        <th className="px-4 py-3 font-medium">Autorizador</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100">
-{resultado.linhas.map((item: ItemHistorico) => (
-                        <tr
-                          key={item.id}
-                          className="transition-colors duration-150 hover:bg-brand-50/40 motion-reduce:transition-none"
-                        >
-                          <td className="px-4 py-3">
-                            <p className="font-medium text-brand-900">
-                              {rotuloTipoLiberacao(item.tipo)}
-                            </p>
-                            <p className="text-xs text-zinc-500">
-                              {rotuloOrigemLiberacao({
-                                renovacaoDeId: item.renovacaoDeId,
-                                origem: item.origem,
-                              })}
-                            </p>
-                          </td>
-                          <td className="px-4 py-3 text-zinc-600">
-                            {descreverPeriodo({
-                              tipo: item.tipo,
-                              dataInicio: item.dataInicio,
-                              dataFim: item.dataFim,
-                            })}
-                          </td>
-                          <td className="px-4 py-3 text-zinc-700">{item.quantidade}</td>
-                          <td className="px-4 py-3 text-zinc-700">
-                            {item.quantidadeRetirada}
-                            {item.numeroRetiradas > 0 && (
-                              <span className="text-xs text-zinc-500">
-                                ({item.numeroRetiradas} retirada(s))
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-zinc-600">
-                            {item.ultimaRetirada
-                              ? formatarDataHora(item.ultimaRetirada)
-                              : "—"}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span
-                              className={
-                                item.saldo < 0
-                                  ? "font-semibold text-red-700"
-                                  : "font-semibold text-brand-900"
-                              }
-                            >
-                              {item.saldo}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-zinc-700">
-                            {item.autorizador?.nome ?? "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <ul className="flex flex-col gap-3 md:hidden">
-                  {resultado.linhas.map((item: ItemHistorico) => (
-                    <li key={item.id} className={`${CARTAO} p-4`}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-base font-semibold text-brand-900">
-                            {rotuloTipoLiberacao(item.tipo)} {rotuloOrigemLiberacao({
-                              renovacaoDeId: item.renovacaoDeId,
-                              origem: item.origem,
-                            })}
-                          </p>
-                          <p className="text-xs text-zinc-500">
-                            {descreverPeriodo({
-                              tipo: item.tipo,
-                              dataInicio: item.dataInicio,
-                              dataFim: item.dataFim,
-                            })}
-                          </p>
-                        </div>
-                        <p className="shrink-0 text-sm font-medium text-zinc-700">
-                          {item.quantidade} vale(s)
-                        </p>
-                        <dl className="mt-3 flex flex-col gap-2 text-sm">
-                          <div className="flex items-center justify-between gap-3">
-                            <dt className="text-xs text-zinc-500">Período</dt>
-                            <dd className="font-medium text-brand-900">
-                              {descreverPeriodo({
-                                tipo: item.tipo,
-                                dataInicio: item.dataInicio,
-                                dataFim: item.dataFim,
-                              })}
-                            </dd>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <dt className="text-xs text-zinc-500">Retirado</dt>
-                            <dd className="font-medium text-brand-900">
-                              {item.quantidadeRetirada}
-                              {item.numeroRetiradas > 0 && (
-                                <span>{item.numeroRetiradas} retirada(s)</span>
-                              )}
-                            </dd>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <dt className="text-xs text-zinc-500">Última retirada</dt>
-                            <dd className="font-medium text-brand-900">
-                              {item.ultimaRetirada
-                                ? formatarDataHora(item.ultimaRetirada)
-                                : "—"}
-                            </dd>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <dt className="text-xs text-zinc-500">Diferença</dt>
-                            <dd className={item.saldo < 0 ? "font-semibold text-red-700" : "font-semibold text-brand-900"}>
-                              {item.saldo}
-                            </dd>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <dt className="text-xs text-zinc-500">Autorizador</dt>
-                            <dd className="font-medium text-brand-900">
-                              {item.autorizador?.nome ?? "—"}
-                            </dd>
-                          </div>
-                        </dl>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
+            {/* Linha do tempo funcional — eventos reais ordenados cronologicamente (mais recente primeiro) */}
+            <HistoricoTimeline linhas={resultado.linhas} />
 
             {/* Paginação preservando paciente e filtros */}
             {total > 0 && (
@@ -724,13 +584,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                 Trocar paciente
               </Link>
             </div>
-            <EstadoVazio
-              mensagem={
-                temFiltrosAdicionais
-                  ? "O paciente não possui liberações para os filtros."
-                  : "O paciente não possui liberações registradas."
-              }
-            />
+            <EstadoVazio mensagem="Este paciente ainda não possui eventos registrados." />
           </div>
         </div>
       );
@@ -745,9 +599,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
               titulo="Relatórios"
               descricao="Consultas de liberações, retiradas e consolidado — exclusivas do Gestor."
             />
-            <EstadoVazio
-              mensagem="O paciente não possui liberações registradas."
-            />
+            <EstadoVazio mensagem="Este paciente ainda não possui eventos registrados." />
           </div>
         </div>
       );
@@ -1200,6 +1052,74 @@ function TabelaRetiradas({
         ))}
       </ul>
     </>
+  );
+}
+
+function HistoricoTimeline({ linhas }: { linhas: ItemHistorico[] }) {
+  type Evento =
+    | { id: string; dataHora: string; tipo: "liberacao"; liberacao: ItemHistorico }
+    | { id: string; dataHora: string; tipo: "retirada"; retirada: { dataHora: string; quantidade: number }; liberacao: ItemHistorico };
+
+  const eventos: Evento[] = [];
+  for (const lib of linhas) {
+    // Liberação criada — data/hora real é dataInicio (timestamptz). Se não houver hora, mostrar só data.
+    eventos.push({ id: `lib-${lib.id}`, dataHora: lib.dataInicio, tipo: "liberacao", liberacao: lib });
+    for (const r of lib.retiradas ?? []) {
+      eventos.push({ id: `ret-${lib.id}-${r.dataHora}-${r.quantidade}`, dataHora: r.dataHora, tipo: "retirada", retirada: r, liberacao: lib });
+    }
+  }
+  // Mais recente primeiro (spec 6)
+  eventos.sort((a, b) => (a.dataHora < b.dataHora ? 1 : a.dataHora > b.dataHora ? -1 : 0));
+
+  if (eventos.length === 0) {
+    return <EstadoVazio mensagem="Este paciente ainda não possui eventos registrados." />;
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h3 className="text-sm font-semibold text-brand-900">Histórico do paciente — eventos reais em ordem cronológica</h3>
+      <ol className="relative border-l border-zinc-200 pl-6">
+        {eventos.map((ev) => {
+          const isLiberacao = ev.tipo === "liberacao";
+          const lib = ev.liberacao;
+          const dotClass = isLiberacao ? "bg-brand-600" : "bg-emerald-500";
+          const badgeClass = isLiberacao ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-emerald-50 text-emerald-700 border-emerald-200";
+          const titulo = isLiberacao ? (lib.renovacaoDeId ? "LIBERAÇÃO RENOVADA" : "LIBERAÇÃO CRIADA") : "RETIRADA";
+          const dataFmt = isLiberacao ? formatarData(ev.dataHora) : formatarDataHora(ev.dataHora);
+          return (
+            <li key={ev.id} className="relative pb-6 last:pb-0">
+              <span className={`absolute -left-[7px] top-1 h-3 w-3 rounded-full border-2 border-white ${dotClass}`} />
+              <div className={`${CARTAO} p-4`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${badgeClass}`}>{titulo}</span>
+                  <span className="text-xs text-zinc-500">{dataFmt}</span>
+                </div>
+                {isLiberacao ? (
+                  <div className="mt-2">
+                    <p className="text-sm font-medium text-brand-900">
+                      {rotuloTipoLiberacao(lib.tipo)} · {lib.quantidade} vales previstos · Período: {descreverPeriodo(lib)}
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      {rotuloOrigemLiberacao(lib)} · Status: {rotuloStatusLiberacao(lib.status)}
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Autorizada por: {lib.autorizador?.nome ?? "—"} {lib.registrador?.nome && lib.registrador.nome !== lib.autorizador?.nome ? `· Registrada por: ${lib.registrador.nome}` : ""}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-2">
+                    <p className="text-sm font-medium text-brand-900">{ev.retirada.quantidade} vales retirados</p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Liberação: {rotuloTipoLiberacao(lib.tipo)} · {descreverPeriodo(lib)} · {lib.quantidade} previstos
+                    </p>
+                  </div>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 
