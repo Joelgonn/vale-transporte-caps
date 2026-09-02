@@ -58,15 +58,13 @@ function origem(): LiberacaoComPaciente {
 }
 
 async function selecionarPaciente(sobre?: { origem?: string; nome?: string }) {
-  fireEvent.click(screen.getByRole("button", { name: "Buscar paciente por nome ou Gestor SUS" }));
-  fireEvent.change(screen.getByLabelText("Buscar paciente"), {
-    target: { value: "maria" },
-  });
   mocks.listarPacientesAction.mockResolvedValue({
     ok: true,
     data: [paciente(sobre)],
   });
-  fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
+  fireEvent.change(screen.getByRole("combobox", { name: "Paciente" }), {
+    target: { value: "maria" },
+  });
   fireEvent.click(await screen.findByText(sobre?.nome ?? "Maria da Silva"));
 }
 
@@ -87,7 +85,7 @@ describe("LiberacaoForm — criar (fluxo em etapas)", () => {
 
     expect(screen.getByRole("dialog", { name: "Nova liberação" })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Buscar paciente por nome ou Gestor SUS" })
+      screen.getByRole("combobox", { name: "Paciente" })
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Contínua")).toBeInTheDocument();
     expect(screen.getByLabelText("Quantidade prevista")).toBeInTheDocument();

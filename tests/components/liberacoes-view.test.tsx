@@ -209,19 +209,15 @@ describe("LiberacoesView — interações", () => {
     fireEvent.click(screen.getByRole("button", { name: "Nova liberação" }));
 
     const dialog = screen.getByRole("dialog", { name: "Nova liberação" });
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: "Buscar paciente por nome ou Gestor SUS" })
-    );
-    fireEvent.change(within(dialog).getByLabelText("Buscar paciente"), {
-      target: { value: "maria" },
-    });
     mocks.listarPacientesAction.mockResolvedValue({
       ok: true,
       data: [
         { id: "p1", gestor_sus: "123456", nome: "Maria da Silva", status: "ativo" },
       ],
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Buscar" }));
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Paciente" }), {
+      target: { value: "maria" },
+    });
     fireEvent.click(await within(dialog).findByText("Maria da Silva"));
 
     for (let i = 0; i < 3; i++) {

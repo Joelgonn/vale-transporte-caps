@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { criarLiberacaoAction } from "@/app/actions/liberacoes";
-import { listarPacientesAction } from "@/app/actions/pacientes";
+import { PatientSearch } from "@/components/ui/patient-search";
 import {
   ORIGENS_PACIENTE,
   PERIODOS_LIBERACAO,
@@ -104,14 +104,6 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
 
   const [passo, setPasso] = useState(1);
   const [errosPasso, setErrosPasso] = useState<ErroCampo[]>([]);
-
-  // Seletor de paciente (somente no modo criar) — pesquisa por nome/Gestor SUS
-  // via server action (v_pacientes, sem CPF). Nunca carrega a lista completa.
-  const [buscaPaciente, setBuscaPaciente] = useState("");
-  const [resultados, setResultados] = useState<PacienteSemCpf[] | null>(null);
-  const [buscando, setBuscando] = useState(false);
-  const [erroBusca, setErroBusca] = useState<string | null>(null);
-  const [seletorAberto, setSeletorAberto] = useState(false);
 
   // Validação local de cada etapa (mesmas regras do servidor) — impede avançar
   // com o passo incompleto e evita submissões claramente inválidas.
@@ -263,21 +255,6 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
   const origemPaciente = origem?.paciente?.nome ?? "";
   const ref = useModalA11y(props.onClose, !bloq);
 
-  function buscarPacientes() {
-    const termo = buscaPaciente.trim();
-    setErroBusca(null);
-    setBuscando(true);
-    listarPacientesAction(termo).then((resultado) => {
-      setBuscando(false);
-      if (!resultado.ok) {
-        setErroBusca(resultado.error);
-        setResultados(null);
-        return;
-      }
-      setResultados(resultado.data);
-    });
-  }
-
   return (
     <div
       ref={ref}
@@ -402,8 +379,6 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
                     disabled={bloq}
                     onClick={() => {
                       setPaciente(null);
-                      setResultados(null);
-                      setSeletorAberto(true);
                       limparErro("paciente");
                     }}
                     className="h-9 shrink-0 rounded-md border border-zinc-300 px-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-50"
@@ -412,98 +387,24 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
                   </button>
                 </div>
               ) : (
-                <div className="flex flex-col gap-2">
-                  <button
-                    type="button"
-                    disabled={bloq}
-                    onClick={() => setSeletorAberto((v) => !v)}
-                    aria-expanded={seletorAberto}
-                    aria-controls="seletor-paciente"
-                    className={BOTAO_SECUNDARIO}
-                  >
-                    Buscar paciente por nome ou Gestor SUS
-                  </button>
-
-                  {seletorAberto && (
-                    <div
-                      id="seletor-paciente"
-                      className="flex flex-col gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-3"
-                    >
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <label htmlFor="busca-paciente" className="sr-only">
-                          Buscar paciente
-                        </label>
-                        <input
-                          id="busca-paciente"
-                          type="search"
-                          value={buscaPaciente}
-                          onChange={(e) => setBuscaPaciente(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              buscarPacientes();
-                            }
-                          }}
-                          placeholder="Nome ou Gestor SUS"
-                          className={`${INPUT} sm:w-auto sm:flex-1`}
-                        />
-                        <button
-                          type="button"
-                          disabled={buscando}
-                          onClick={buscarPacientes}
-                          className={BOTAO_SECUNDARIO}
-                        >
-                          {buscando ? "Buscando..." : "Buscar"}
-                        </button>
-                      </div>
-
-                      {erroBusca && <FeedbackErro>{erroBusca}</FeedbackErro>}
-
-                      {resultados !== null && resultados.length === 0 && (
-                        <p className="text-sm text-zinc-500">
-                          Nenhum paciente encontrado para esta busca.
-                        </p>
-                      )}
-
-                      {resultados !== null && resultados.length > 0 && (
-                        <ul className="flex max-h-56 flex-col divide-y divide-zinc-200 overflow-y-auto rounded-md border border-zinc-200 bg-white">
-                          {resultados.map((p) => (
-                            <li key={p.id}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setPaciente(p);
-                                  setResultados(null);
-                                  setSeletorAberto(false);
-                                  limparErro("paciente");
-                                  // RN29 — paciente esporádico só pode avulsa:
-                                  // força o tipo e limpa erro de período.
-                                  if (
-                                    p.origem === ORIGENS_PACIENTE.ESPORADICO &&
-                                    tipo !== TIPOS_LIBERACAO.AVULSA
-                                  ) {
-                                    setTipo(TIPOS_LIBERACAO.AVULSA);
-                                    limparErro("periodo");
-                                  }
-                                }}
-                                className="flex w-full flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
-                              >
-                                <span className="text-sm font-medium text-brand-900">
-                                  {p.nome}
-                                </span>
-                                <span className="text-xs text-zinc-500">
-                                  Gestor SUS {p.gestor_sus}
-                                  {p.origem === ORIGENS_PACIENTE.ESPORADICO &&
-                                    " · Esporádico (somente avulsa)"}
-                                </span>
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <PatientSearch
+                  id="liberacao-paciente"
+                  label="Paciente"
+                  placeholder="🔎 Nome ou Gestor SUS..."
+                  onSelect={(p) => {
+                    setPaciente(p);
+                    limparErro("paciente");
+                    // RN29 — paciente esporádico só recebe liberação avulsa:
+                    // força o tipo e limpa erro de período.
+                    if (
+                      p.origem === ORIGENS_PACIENTE.ESPORADICO &&
+                      tipo !== TIPOS_LIBERACAO.AVULSA
+                    ) {
+                      setTipo(TIPOS_LIBERACAO.AVULSA);
+                      limparErro("periodo");
+                    }
+                  }}
+                />
               )}
               {erroDe("paciente") && (
                 <p id="erro-paciente" className="text-sm text-red-600">

@@ -5,8 +5,8 @@ import Link from "next/link";
 import { criarPacienteAction } from "@/app/actions/pacientes";
 import { criarLiberacaoAction } from "@/app/actions/liberacoes";
 import { listarLiberacoesAction } from "@/app/actions/liberacoes";
-import { listarPacientesAction } from "@/app/actions/pacientes";
 import { registrarRetiradaAction } from "@/app/actions/retiradas";
+import { PatientSearch } from "@/components/ui/patient-search";
 import { ORIGENS_PACIENTE, TIPOS_LIBERACAO, type PerfilUsuario } from "@/lib/domain/enums";
 import type { PacienteSemCpf } from "@/lib/domain/pacientes/types";
 import type { LiberacaoComPaciente } from "@/lib/domain/liberacoes/types";
@@ -36,10 +36,6 @@ export default function AtendimentoView(props: Props) {
 
   // Paciente
   const [paciente, setPaciente] = useState<PacienteSemCpf | null>(null);
-  const [busca, setBusca] = useState("");
-  const [resultados, setResultados] = useState<PacienteSemCpf[] | null>(null);
-  const [buscando, setBuscando] = useState(false);
-  const [erroBusca, setErroBusca] = useState<string | null>(null);
   // Criar esporádico
   const [novoSUS, setNovoSUS] = useState("");
   const [novoNome, setNovoNome] = useState("");
@@ -63,25 +59,8 @@ export default function AtendimentoView(props: Props) {
   const [retiradaOk, setRetiradaOk] = useState(false);
   const [retiradaDetalhe, setRetiradaDetalhe] = useState<{ paciente: string; quantidade: number; tipo: string } | null>(null);
 
-  function buscarPacientes() {
-    const termo = busca.trim();
-    setErroBusca(null);
-    setBuscando(true);
-    listarPacientesAction(termo).then((r) => {
-      setBuscando(false);
-      if (!r.ok) {
-        setErroBusca(r.error);
-        setResultados(null);
-        return;
-      }
-      setResultados(r.data);
-    });
-  }
-
   function selecionarPaciente(p: PacienteSemCpf) {
     setPaciente(p);
-    setResultados(null);
-    setErroBusca(null);
     // Carregar liberações para decidir modo
     carregarLiberacoes(p);
   }
@@ -215,24 +194,13 @@ export default function AtendimentoView(props: Props) {
               </div>
             ) : (
               <>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <input value={busca} onChange={(e) => setBusca(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), buscarPacientes())} placeholder="Buscar por nome ou Gestor SUS" className={`${INPUT} flex-1`} />
-                  <button type="button" disabled={buscando} onClick={buscarPacientes} className={BOTAO_SECUNDARIO}>{buscando ? "Buscando..." : "Buscar"}</button>
-                </div>
-                {erroBusca && <FeedbackErro>{erroBusca}</FeedbackErro>}
-                {resultados && resultados.length > 0 && (
-                  <ul className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white">
-                    {resultados.map((p) => (
-                      <li key={p.id}>
-                        <button type="button" onClick={() => selecionarPaciente(p)} className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-zinc-50">
-                          <span><span className="font-medium text-brand-900">{p.nome}</span><span className="ml-2 text-xs text-zinc-500">SUS {p.gestor_sus} · {p.origem === ORIGENS_PACIENTE.ESPORADICO ? "Esporádico" : "Regular"}</span></span>
-                          <span className="text-xs font-medium text-brand-700">Selecionar</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {resultados && resultados.length === 0 && <p className="text-sm text-zinc-500">Nenhum paciente encontrado. Cadastre como esporádico abaixo.</p>}
+                <PatientSearch
+                  showCreate={true}
+                  id="atendimento-paciente"
+                  label="Paciente"
+                  placeholder="🔎 Nome ou Gestor SUS..."
+                  onSelect={selecionarPaciente}
+                />
 
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <h4 className="text-sm font-semibold text-amber-900">Paciente não encontrado? Cadastrar como esporádico</h4>
