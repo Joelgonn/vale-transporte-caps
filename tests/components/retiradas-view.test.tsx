@@ -167,18 +167,13 @@ describe("RetiradasView — interações", () => {
     fireEvent.click(screen.getByRole("button", { name: "Registrar retirada" }));
     const dialog = screen.getByRole("dialog", { name: "Registrar retirada" });
 
-    // Passo 1 — seleciona o paciente.
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: "Buscar paciente por nome ou Gestor SUS" })
-    );
-    fireEvent.change(within(dialog).getByLabelText("Buscar paciente"), {
-      target: { value: "maria" },
-    });
+    // Passo 1 — seleciona o paciente (Sprint48 autocomplete).
+    const input = within(dialog).getByRole("combobox", { name: "Buscar paciente" });
     mocks.listarPacientesAction.mockResolvedValue({
       ok: true,
       data: [{ id: "p1", gestor_sus: "123456", nome: "Maria da Silva", status: "ativo" }],
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Buscar" }));
+    fireEvent.change(input, { target: { value: "maria" } });
     fireEvent.click(await within(dialog).findByText("Maria da Silva"));
 
     // Passo 2 — carrega liberações + retiradas e seleciona a liberação.

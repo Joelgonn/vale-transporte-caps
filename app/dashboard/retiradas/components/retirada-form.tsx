@@ -1,16 +1,18 @@
 "use client";
 
-import { useActionState, useState } from "react";
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useActionState, useEffect, useRef, useState } from "react";
 import { listarLiberacoesAction } from "@/app/actions/liberacoes";
 import { listarPacientesAction } from "@/app/actions/pacientes";
 import {
   listarRetiradasAction,
   registrarRetiradaAction,
 } from "@/app/actions/retiradas";
-import { ROTULO_TIPO_LIBERACAO } from "@/lib/domain/enums";
+import { ORIGENS_PACIENTE, ROTULO_TIPO_LIBERACAO } from "@/lib/domain/enums";
 import type { PacienteResumo } from "@/lib/domain/retiradas/types";
 import type { LiberacaoComPaciente } from "@/lib/domain/liberacoes/types";
 import type { PacienteSemCpf } from "@/lib/domain/pacientes/types";
+import { criarPacienteAction } from "@/app/actions/pacientes";
 import {
   BOTAO_PRIMARIO,
   BOTAO_SECUNDARIO,
@@ -56,6 +58,7 @@ function periodoTexto(lib: LiberacaoComPaciente): string {
 
 export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
   const [paciente, setPaciente] = useState<PacienteResumo | null>(null);
+  const [pacienteOrigem, setPacienteOrigem] = useState<string | null>(null);
   const [passo, setPasso] = useState(1);
   const [errosPasso, setErrosPasso] = useState<ErroCampo[]>([]);
 
@@ -73,13 +76,60 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
   const [liberacoesCarregando, setLiberacoesCarregando] = useState(false);
   const [erroLiberacoes, setErroLiberacoes] = useState<string | null>(null);
 
-  // Seletor de paciente  pesquisa por nome/Gestor SUS via server action
-  // (v_pacientes, sem CPF). Nunca carrega a lista completa.
+  // Sprint 48 — busca inteligente com autocomplete, debounce e foco automático.
   const [buscaPaciente, setBuscaPaciente] = useState("");
   const [resultados, setResultados] = useState<PacienteSemCpf[] | null>(null);
   const [buscando, setBuscando] = useState(false);
   const [erroBusca, setErroBusca] = useState<string | null>(null);
-  const [seletorAberto, setSeletorAberto] = useState(false);
+  const [mostrarResultados, setMostrarResultados] = useState(false);
+  const [indiceAtivo, setIndiceAtivo] = useState(-1);
+  const [novoSUS, setNovoSUS] = useState("");
+  const [novoNome, setNovoNome] = useState("");
+  const [criandoPaciente, setCriandoPaciente] = useState(false);
+  const [erroCriarPaciente, setErroCriarPaciente] = useState<string | null>(null);
+
+  const inputRef = useRef<HTMLInputElement>(null);
+  const lastBuscaIdRef = useRef(0);
+
+  // Foco automático ao abrir (passo 1, sem paciente)
+  useEffect(() => {
+    if (passo === 1 && !paciente) {
+      // timeout para garantir que o modal já está no DOM (useModalA11y)
+      const t = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [passo, paciente]);
+
+  // Debounce 350ms + race handling + mínimo 2 caracteres
+  useEffect(() => {
+    const termo = buscaPaciente.trim();
+    if (termo.length < 2) {
+      setResultados(null);
+      setMostrarResultados(false);
+      setBuscando(false);
+      setErroBusca(null);
+      return;
+    }
+    const myId = ++lastBuscaIdRef.current;
+    setBuscando(true);
+    setErroBusca(null);
+    const timer = setTimeout(() => {
+      listarPacientesAction(termo).then((res) => {
+        if (myId !== lastBuscaIdRef.current) return; // stale
+        setBuscando(false);
+        if (!res.ok) {
+          setErroBusca((res as { error: string }).error);
+          setResultados(null);
+          setMostrarResultados(true);
+          return;
+        }
+        setResultados((res as { data: PacienteSemCpf[] }).data);
+        setMostrarResultados(true);
+        setIndiceAtivo(-1);
+      });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [buscaPaciente]);
 
   // Validação local de cada etapa (mesmas regras do servidor)  impede avançar
   // com o passo incompleto e evita submissões claramente inválidas.
@@ -152,12 +202,12 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
 
     setLiberacoesCarregando(false);
 
-    if (!resultadoLib.ok) {
-      setErroLiberacoes(resultadoLib.error);
+    if (!resultadoLib || !resultadoLib.ok) {
+      setErroLiberacoes(resultadoLib?.error ?? "Erro ao carregar liberações.");
       return;
     }
-    if (!resultadoRet.ok) {
-      setErroLiberacoes(resultadoRet.error);
+    if (!resultadoRet || !resultadoRet.ok) {
+      setErroLiberacoes(resultadoRet?.error ?? "Erro ao carregar retiradas.");
       return;
     }
 
@@ -232,25 +282,24 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
   const bloq = pending || state.sucesso;
   const ref = useModalA11y(onClose, !bloq);
 
-  function buscarPacientes() {
-    const termo = buscaPaciente.trim();
-    setErroBusca(null);
-    setBuscando(true);
-    listarPacientesAction(termo).then((resultado) => {
-      setBuscando(false);
-      if (!resultado.ok) {
-        setErroBusca(resultado.error);
-        setResultados(null);
-        return;
-      }
-      setResultados(resultado.data);
-    });
+  function selecionarPacienteCompleto(p: PacienteSemCpf) {
+    setPaciente({ id: p.id, gestor_sus: p.gestor_sus, nome: p.nome });
+    setPacienteOrigem((p as unknown as { origem?: string })?.origem ?? null);
+    setResultados(null);
+    setMostrarResultados(false);
+    setBuscaPaciente("");
+    limparErro("paciente");
+    setErrosPasso([]);
+    // Não avança automaticamente — usuário clica Continuar (preserva testes e acessibilidade)
+    // O carregamento de liberações ocorrerá no avancar() do passo 1
   }
 
   function trocarPaciente() {
     setPaciente(null);
+    setPacienteOrigem(null);
     setResultados(null);
-    setSeletorAberto(true);
+    setMostrarResultados(false);
+    setBuscaPaciente("");
     setLiberacoes([]);
     setDisponiveis({});
     setLiberacaoSelecionada(null);
@@ -258,6 +307,26 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
     setConsultadoPacienteId(null);
     setErroLiberacoes(null);
     limparErro("paciente");
+    setPasso(1);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }
+
+  async function criarPacienteEsporadicoRetirada() {
+    if (!novoSUS.trim() || !novoNome.trim()) {
+      setErroCriarPaciente("Informe Gestor SUS e nome.");
+      return;
+    }
+    setCriandoPaciente(true);
+    setErroCriarPaciente(null);
+    const r = await criarPacienteAction({ gestor_sus: novoSUS.trim(), nome: novoNome.trim(), origem: ORIGENS_PACIENTE.ESPORADICO });
+    setCriandoPaciente(false);
+    if (!r.ok) {
+      setErroCriarPaciente(r.error);
+      return;
+    }
+    selecionarPacienteCompleto(r.data as unknown as PacienteSemCpf);
+    setNovoSUS("");
+    setNovoNome("");
   }
 
 
@@ -331,7 +400,9 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
                 <p className="truncate text-sm font-medium text-brand-900">
                   {paciente.nome}
                 </p>
-                <p className="text-xs text-zinc-500">Gestor SUS {paciente.gestor_sus}</p>
+                <p className="text-xs text-zinc-500">
+                  Gestor SUS {paciente.gestor_sus} · {pacienteOrigem === ORIGENS_PACIENTE.ESPORADICO ? "Esporádico" : "Regular"}
+                </p>
               </div>
               <button
                 type="button"
@@ -339,92 +410,123 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
                 onClick={trocarPaciente}
                 className="h-9 shrink-0 rounded-md border border-zinc-300 px-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-50"
               >
-                Trocar
+                Alterar paciente
               </button>
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                disabled={bloq}
-                onClick={() => setSeletorAberto((v) => !v)}
-                aria-expanded={seletorAberto}
-                aria-controls="seletor-paciente-retirada"
-                className={BOTAO_SECUNDARIO}
-              >
-                Buscar paciente por nome ou Gestor SUS
-              </button>
-
-              {seletorAberto && (
-                <div
-                  id="seletor-paciente-retirada"
-                  className="flex flex-col gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-3"
-                >
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <label htmlFor="busca-paciente-retirada" className="sr-only">
-                      Buscar paciente
-                    </label>
-                    <input
-                      id="busca-paciente-retirada"
-                      type="search"
-                      value={buscaPaciente}
-                      onChange={(e) => setBuscaPaciente(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          buscarPacientes();
-                        }
-                      }}
-                      placeholder="Nome ou Gestor SUS"
-                      className={`${INPUT} sm:w-auto sm:flex-1`}
-                    />
-                    <button
-                      type="button"
-                      disabled={buscando}
-                      onClick={buscarPacientes}
-                      className={BOTAO_SECUNDARIO}
-                    >
-                      {buscando ? "Buscando..." : "Buscar"}
-                    </button>
-                  </div>
-
-                  {erroBusca && <FeedbackErro>{erroBusca}</FeedbackErro>}
-
-                  {resultados !== null && resultados.length === 0 && (
-                    <p className="text-sm text-zinc-500">
-                      Nenhum paciente encontrado para esta busca.
-                    </p>
-                  )}
-
-                  {resultados !== null && resultados.length > 0 && (
-                    <ul className="flex max-h-56 flex-col divide-y divide-zinc-200 overflow-y-auto rounded-md border border-zinc-200 bg-white">
-                      {resultados.map((p) => (
-                        <li key={p.id}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setPaciente({
-                                id: p.id,
-                                gestor_sus: p.gestor_sus,
-                                nome: p.nome,
-                              });
-                              setResultados(null);
-                              setSeletorAberto(false);
-                              limparErro("paciente");
-                            }}
-                            className="flex w-full flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
-                          >
-                            <span className="text-sm font-medium text-brand-900">
-                              {p.nome}
-                            </span>
-                            <span className="text-xs text-zinc-500">
-                              Gestor SUS {p.gestor_sus}
-                            </span>
+              <label htmlFor="busca-paciente-retirada" className={ROTULO}>
+                Buscar paciente
+              </label>
+              <div className="relative">
+                <input
+                  ref={inputRef}
+                  id="busca-paciente-retirada"
+                  type="search"
+                  role="combobox"
+                  aria-label="Buscar paciente"
+                  aria-expanded={mostrarResultados}
+                  aria-controls="lista-pacientes"
+                  aria-activedescendant={indiceAtivo >= 0 && resultados?.[indiceAtivo] ? `paciente-${resultados![indiceAtivo].id}` : undefined}
+                  aria-autocomplete="list"
+                  value={buscaPaciente}
+                  onChange={(e) => setBuscaPaciente(e.target.value)}
+                  onFocus={() => {
+                    if (buscaPaciente.trim().length >= 2 && resultados && resultados.length > 0) setMostrarResultados(true);
+                  }}
+                  onBlur={() => setTimeout(() => setMostrarResultados(false), 150)}
+                  onKeyDown={(e) => {
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setIndiceAtivo((i) => Math.min((resultados?.length ?? 1) - 1, i + 1));
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setIndiceAtivo((i) => Math.max(-1, i - 1));
+                    } else if (e.key === "Enter") {
+                      if (indiceAtivo >= 0 && resultados?.[indiceAtivo]) {
+                        e.preventDefault();
+                        selecionarPacienteCompleto(resultados[indiceAtivo]);
+                      }
+                    } else if (e.key === "Escape") {
+                      setMostrarResultados(false);
+                      setIndiceAtivo(-1);
+                    }
+                  }}
+                  placeholder="🔎 Nome ou Gestor SUS..."
+                  className={INPUT}
+                  autoComplete="off"
+                  autoFocus
+                  disabled={bloq}
+                />
+                {buscando && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500">Buscando...</span>}
+                {mostrarResultados && (
+                  <ul
+                    id="lista-pacientes"
+                    role="listbox"
+                    className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-zinc-200 bg-white shadow-lg"
+                  >
+                    {buscando ? (
+                      <li className="px-4 py-3 text-sm text-zinc-500">Buscando...</li>
+                    ) : erroBusca ? (
+                      <li className="px-4 py-3">
+                        <FeedbackErro>{erroBusca}</FeedbackErro>
+                        <button type="button" onClick={() => setBuscaPaciente((v) => v + " ")} className={`${BOTAO_SECUNDARIO} mt-2`}>
+                          Tentar novamente
+                        </button>
+                      </li>
+                    ) : resultados && resultados.length === 0 ? (
+                      <li className="px-4 py-3">
+                        <p className="text-sm font-medium text-zinc-700">Nenhum paciente encontrado</p>
+                        <p className="text-xs text-zinc-500">Verifique o nome ou Gestor SUS, ou cadastre como esporádico.</p>
+                        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                          <p className="text-xs font-semibold text-amber-900">Cadastrar paciente esporádico</p>
+                          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            <input value={novoSUS} onChange={(e) => setNovoSUS(e.target.value)} placeholder="Gestor SUS" className={INPUT} />
+                            <input value={novoNome} onChange={(e) => setNovoNome(e.target.value)} placeholder="Nome completo" className={INPUT} />
+                          </div>
+                          {erroCriarPaciente && <p className="mt-2 text-xs text-red-600">{erroCriarPaciente}</p>}
+                          <button type="button" disabled={criandoPaciente} onClick={criarPacienteEsporadicoRetirada} className={`${BOTAO_PRIMARIO} mt-2 w-full`}>
+                            {criandoPaciente ? "Salvando..." : "Cadastrar paciente esporádico"}
                           </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                        </div>
+                      </li>
+                    ) : resultados && resultados.length > 0 ? (
+                      resultados.map((p, idx) => {
+                        const ativo = idx === indiceAtivo;
+                        return (
+                          <li key={p.id} id={`paciente-${p.id}`} role="option" aria-selected={ativo}>
+                            <button
+                              type="button"
+                              onClick={() => selecionarPacienteCompleto(p)}
+                              onMouseEnter={() => setIndiceAtivo(idx)}
+                              className={`flex w-full flex-col gap-0.5 px-4 py-2.5 text-left ${ativo ? "bg-brand-50" : "hover:bg-zinc-50"}`}
+                            >
+                              <span className="text-sm font-medium text-brand-900">{p.nome}</span>
+                              <span className="text-xs text-zinc-500">
+                                SUS: {p.gestor_sus} · {(p as unknown as { origem?: string }).origem === ORIGENS_PACIENTE.ESPORADICO ? "Esporádico" : "Regular"}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })
+                    ) : (
+                      <li className="px-4 py-3 text-sm text-zinc-500">Digite pelo menos 2 caracteres para buscar.</li>
+                    )}
+                  </ul>
+                )}
+              </div>
+              <p className="text-xs text-zinc-500">Digite para localizar. Use nome ou Gestor SUS.</p>
+              {resultados && resultados.length === 0 && !mostrarResultados && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-sm font-medium text-amber-900">Nenhum paciente encontrado</p>
+                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <input value={novoSUS} onChange={(e) => setNovoSUS(e.target.value)} placeholder="Gestor SUS" className={INPUT} />
+                    <input value={novoNome} onChange={(e) => setNovoNome(e.target.value)} placeholder="Nome completo" className={INPUT} />
+                  </div>
+                  {erroCriarPaciente && <p className="mt-2 text-xs text-red-600">{erroCriarPaciente}</p>}
+                  <button type="button" disabled={criandoPaciente} onClick={criarPacienteEsporadicoRetirada} className={`${BOTAO_PRIMARIO} mt-2 w-full`}>
+                    {criandoPaciente ? "Salvando..." : "Cadastrar paciente esporádico"}
+                  </button>
                 </div>
               )}
             </div>

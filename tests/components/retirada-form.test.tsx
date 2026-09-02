@@ -71,14 +71,11 @@ function renderizar() {
 }
 
 async function selecionarPaciente() {
-  fireEvent.click(
-    screen.getByRole("button", { name: "Buscar paciente por nome ou Gestor SUS" })
-  );
-  fireEvent.change(screen.getByLabelText("Buscar paciente"), {
-    target: { value: "maria" },
-  });
+  const input = screen.getByRole("combobox", { name: "Buscar paciente" });
+  // Mock antes de digitar para que o debounce encontre o resultado
   mocks.listarPacientesAction.mockResolvedValue({ ok: true, data: [paciente()] });
-  fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
+  fireEvent.change(input, { target: { value: "maria" } });
+  // Aguarda debounce 350ms + render
   fireEvent.click(await screen.findByText("Maria da Silva"));
 }
 
@@ -105,13 +102,14 @@ beforeEach(() => {
 });
 
 describe("RetiradaForm — fluxo em etapas", () => {
-  it("exibe o fluxo com as etapas e o seletor de paciente", () => {
+  it("exibe o fluxo com as etapas e o seletor de paciente — Sprint48 autocomplete", () => {
     renderizar();
 
     expect(screen.getByRole("dialog", { name: "Registrar retirada" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Buscar paciente por nome ou Gestor SUS" })
-    ).toBeInTheDocument();
+    // Sprint 48: campo já visível e focado, sem botão intermediário
+    expect(screen.getByRole("combobox", { name: "Buscar paciente" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Buscar paciente por nome ou Gestor SUS" })).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Nome ou Gestor SUS/)).toBeInTheDocument();
     const progresso = screen.getByLabelText("Progresso do registro de retirada");
     expect(within(progresso).getByText("Paciente")).toBeInTheDocument();
     expect(within(progresso).getByText("Liberação")).toBeInTheDocument();
@@ -257,28 +255,24 @@ describe("RetiradaForm — fluxo em etapas", () => {
     expect(screen.getByText("Etapa 3 de 4")).toBeInTheDocument();
   });
 
-  it("foca o diálogo ao abrir e fecha por Escape (acessibilidade)", () => {
+  it("foca o campo de busca ao abrir — Sprint48 (sem cliques adicionais)", async () => {
     const onClose = vi.fn();
     render(<RetiradaForm onClose={onClose} onSalvo={() => {}} />);
 
-    expect(screen.getByRole("dialog", { name: "Registrar retirada" })).toHaveFocus();
+    // Sprint 48: input já focado, sem botão intermediário (autoFocus + efeito)
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Buscar paciente" })).toHaveFocus());
 
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("cicla o foco dentro do diálogo ao pressionar Tab (trap)", () => {
+  it("autocomplete apresenta resultados e permite seleção por teclado — Sprint48", async () => {
     render(<RetiradaForm onClose={() => {}} onSalvo={() => {}} />);
+    const input = screen.getByRole("combobox", { name: "Buscar paciente" });
+    mocks.listarPacientesAction.mockResolvedValue({ ok: true, data: [paciente()] });
+    fireEvent.change(input, { target: { value: "maria" } });
 
-    const continuar = screen.getByRole("button", { name: "Continuar" });
-    continuar.focus();
-
-    fireEvent.keyDown(window, { key: "Tab" });
-    expect(
-      screen.getByRole("button", { name: "Buscar paciente por nome ou Gestor SUS" })
-    ).toHaveFocus();
-
-    fireEvent.keyDown(window, { key: "Tab", shiftKey: true });
-    expect(continuar).toHaveFocus();
+    expect(await screen.findByText("Maria da Silva")).toBeInTheDocument();
+    expect(screen.getByText(/SUS: 123456/)).toBeInTheDocument();
   });
 });
