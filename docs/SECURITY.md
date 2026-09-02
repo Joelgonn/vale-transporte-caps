@@ -21,7 +21,7 @@
 ### 2. Autorização por Perfil (Sprint 44 — matriz oficial)
 - Ações são permitidas conforme o perfil do usuário. **Perfis do MVP (Sprint 03, RN26) atualizados Sprint 44:**
   - **Profissional Autorizador** → cadastrar pacientes **regulares e esporádicos**, criar liberações **contínuas e avulsas**, **registrar retiradas** (operação) e localizar/reutilizar pacientes
-  - **Recepcionista** → localizar/reutilizar qualquer paciente; cadastrar **pacientes esporádicos dentro do fluxo de liberação esporádica** (não cadastra regular independente); criar liberações **contínuas e avulsas** (fluxo operacional); **registrar retiradas**; renovar mantendo autorizador
+  - **Recepcionista** → localizar/reutilizar qualquer paciente; cadastrar **pacientes esporádicos dentro do fluxo de liberação avulsa para paciente esporádico** (não cadastra regular independente); criar liberações **contínuas e avulsas** (fluxo operacional); **registrar retiradas**; renovar mantendo autorizador
   - **Gestor** → administrar usuários (criar gestor/autorizador/recepcionista); cadastrar pacientes **regulares e esporádicos**, criar liberações **contínuas/avulsas**, **registrar retiradas**, localizar/reutilizar, consultar relatórios/auditoria
   - **Auditor** → fora do MVP (perfil futuro, somente leitura de logs)
 - Matriz de permissões por perfil: ver `DOMAIN.md` (tabela Sprint 44).
@@ -88,7 +88,7 @@
 |---|---|---|---|---|---|
 | **pacientes** | Visualizar | ✓ (sem CPF) | ✓ (sem CPF) | ✓ (com CPF) | A e R: apenas identificação + status; G: completo |
 | | Criar (regular) | ✓ | — (só reutiliza) | ✓ | Sprint 44: recepcionista NÃO cadastra regular independente |
-| | Criar (esporádico) | ✓ | ✓ (dentro do fluxo de liberação esporádica) | ✓ | Sprint 44: `pacientes_insert_*_44`; esporádico reutilizável 1→N |
+| | Criar (esporádico) | ✓ | ✓ (dentro do fluxo de liberação avulsa para paciente esporádico) | ✓ | Sprint 44: `pacientes_insert_*_44`; esporádico reutilizável 1→N |
 | | Localizar/reutilizar | ✓ | ✓ | ✓ | Todos localizam qualquer paciente existente |
 | | Alterar | ✓ (dados cadastrais — nunca status/origem/Gestor SUS/CPF; RN30) | — | somente status | Whitelist por perfil + trigger; trilha inclui `cpf`/`origem` |
 | | Cancelar/inativar | — | — | ✓ | Inativação = alteração de status |

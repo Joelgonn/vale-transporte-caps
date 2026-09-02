@@ -263,12 +263,6 @@ describe.skipIf(!recepcionistaHabilitado)("Concorrência — retiradas simultân
 
     // soma ANTES das inserções simultâneas (a liberação pode ter retiradas
     // pré-existentes de outros testes — a comparação deve ser delta-based).
-    const { data: antes } = await recepcionista
-      .from("retiradas")
-      .select("quantidade")
-      .eq("liberacao_id", alvo.id);
-    const somaAntes = (antes ?? []).reduce((acc: number, r: { quantidade: number }) => acc + r.quantidade, 0);
-
     const tentativas = [
       { liberacao_id: alvo.id, paciente_id: alvo.paciente_id, quantidade: parcela },
       { liberacao_id: alvo.id, paciente_id: alvo.paciente_id, quantidade: parcela },

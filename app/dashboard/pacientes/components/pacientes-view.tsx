@@ -112,7 +112,34 @@ export default function PacientesView(props: PacientesViewProps) {
           titulo="Pacientes"
           descricao="Acompanhamento no CAPS — pesquisa por nome ou Gestor SUS."
           acao={
-            permissoes.podeCriarRegular ? (
+            permissoes.podeCriarRegular && permissoes.podeCriarEsporadico ? (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormAberto({
+                      modo: "criar",
+                      origem: ORIGENS_PACIENTE.REGULAR,
+                    })
+                  }
+                  className={BOTAO_PRIMARIO}
+                >
+                  Novo paciente
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormAberto({
+                      modo: "criar",
+                      origem: ORIGENS_PACIENTE.ESPORADICO,
+                    })
+                  }
+                  className={BOTAO_SECUNDARIO}
+                >
+                  Paciente Esporádico
+                </button>
+              </div>
+            ) : permissoes.podeCriarRegular ? (
               <button
                 type="button"
                 onClick={() =>

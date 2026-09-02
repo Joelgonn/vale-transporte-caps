@@ -149,21 +149,21 @@ describe("PacientesView — permissões por perfil (política de UI)", () => {
     expect(screen.queryByRole("button", { name: "Reativar" })).not.toBeInTheDocument();
   });
 
-  it("profissional autorizador recebe cadastro regular e edição, sem alteração de status", () => {
+  it("profissional autorizador recebe cadastro regular e esporádico e edição, sem alteração de status — Sprint45", () => {
     renderizar({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
 
     expect(screen.getByRole("button", { name: "Novo paciente" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Paciente Esporádico" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Paciente Esporádico" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Editar" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Inativar" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reativar" })).not.toBeInTheDocument();
   });
 
-  it("gestor recebe cadastro regular e controle de status, mas não edição de dados", () => {
+  it("gestor recebe cadastro regular e esporádico e controle de status, mas não edição de dados — Sprint45", () => {
     renderizar({ perfil: PERFIS.GESTOR });
 
     expect(screen.getByRole("button", { name: "Novo paciente" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Paciente Esporádico" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Paciente Esporádico" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Inativar" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
   });
