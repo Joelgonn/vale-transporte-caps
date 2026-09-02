@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { TIPOS_LIBERACAO } from "@/lib/domain/enums";
+import { PatientSearch } from "@/components/ui/patient-search";
 import {
   TIPOS_RELATORIO,
   type FiltrosRelatorio,
@@ -39,6 +41,7 @@ type RelatoriosViewProps = {
   resumo?: ResultadoResumoRelatorio | null;
   erroInicial: string | null;
   candidatos?: { id: string; gestor_sus: string; nome: string }[];
+  pacienteSelecionado?: { id: string; gestor_sus: string; nome: string } | null;
 };
 
 // URL com os filtros atuais + ajustes (troca de tipo/paginação/limpar).
@@ -64,14 +67,15 @@ const INPUT =
   "h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none";
 
 export default function RelatoriosView(props: RelatoriosViewProps) {
-  const { filtros, resultado, resumo, erroInicial, candidatos } = props;
+  const { filtros, resultado, resumo, erroInicial, candidatos, pacienteSelecionado } = props;
+  const router = useRouter();
 
   const ehHistorico = filtros.tipo === "historico";
   const total = resultado?.total ?? 0;
   const porPagina = resultado?.porPagina ?? 20;
   const totalPaginas = Math.max(1, Math.ceil(total / porPagina));
   const semFiltros =
-    !filtros.de && !filtros.ate && !filtros.busca && !filtros.tipoLiberacao;
+    !filtros.de && !filtros.ate && !filtros.busca && !filtros.paciente && !filtros.tipoLiberacao;
   const mostraFiltroTipo =
     filtros.tipo === "liberacoes" ||
     filtros.tipo === "consolidado" ||
@@ -119,6 +123,27 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
             })}
           </nav>
 
+          {pacienteSelecionado ? (
+            <div className={`${CARTAO} flex items-center justify-between gap-3 p-4`}>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-brand-900">{pacienteSelecionado.nome}</p>
+                <p className="text-xs text-zinc-500">SUS {pacienteSelecionado.gestor_sus}</p>
+              </div>
+              <button type="button" onClick={() => router.push(construirUrl(filtros, { paciente: null, pagina: 1 }))} className={BOTAO_SECUNDARIO}>
+                Limpar
+              </button>
+            </div>
+          ) : (
+            <div className={`${CARTAO} p-4`}>
+              <PatientSearch
+                id="relatorios-resumo-patient"
+                label="Paciente (nome ou Gestor SUS)"
+                placeholder="🔎 Nome ou Gestor SUS..."
+                onSelect={(p) => router.push(construirUrl(filtros, { paciente: p.id, busca: null, pagina: 1 }))}
+              />
+            </div>
+          )}
+
           {/* Filtros — mesmos campos das demais abas, aplicados no servidor. */}
           <form
             method="get"
@@ -127,6 +152,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
             className={`flex flex-col gap-3 p-4 lg:flex-row lg:items-end ${CARTAO}`}
           >
             <input type="hidden" name="tipo" value="resumo" />
+            {filtros.paciente && <input type="hidden" name="paciente" value={filtros.paciente} />}
 
             <div className="flex flex-col gap-1.5">
               <label htmlFor="relatorios-resumo-tipo" className="text-xs font-medium text-zinc-600">
@@ -145,20 +171,6 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                   </option>
                 ))}
               </select>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="relatorios-resumo-busca" className="text-xs font-medium text-zinc-600">
-                Paciente (nome ou Gestor SUS)
-              </label>
-              <input
-                id="relatorios-resumo-busca"
-                name="busca"
-                type="search"
-                defaultValue={filtros.busca ?? ""}
-                placeholder="Buscar paciente"
-                className={INPUT}
-              />
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -323,41 +335,19 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
             )}
 
             {!candidatos && !erroInicial && (
-              <form
-                method="get"
-                action="/dashboard/relatorios"
-                aria-label="Buscar paciente para histórico"
-                className={`${CONTAINER} flex flex-col gap-3 p-4 lg:flex-row lg:items-end ${CARTAO}`}
-              >
-                <input type="hidden" name="tipo" value="historico" />
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="relatorios-filtro-busca-historico" className="text-xs font-medium text-zinc-600">
-                    Paciente (nome ou Gestor SUS)
-                  </label>
-                  <input
-                    id="relatorios-filtro-busca-historico"
-                    name="busca"
-                    type="search"
-                    placeholder="Buscar paciente"
-                    defaultValue=""
-                    className={INPUT}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5 lg:ml-1 lg:flex-row">
-                  <button
-                    type="submit"
-                    className="inline-flex h-11 items-center justify-center rounded-md bg-green-600 px-5 text-sm font-medium text-white transition-colors hover:bg-green-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-                  >
-                    Filtrar
-                  </button>
-                  <Link
-                    href={construirUrl(filtros, { tipo: "historico", pagina: 1 })}
-                    className={BOTAO_SECUNDARIO}
-                  >
+              <div className={`${CARTAO} p-4`}>
+                <PatientSearch
+                  id="relatorios-historico-patient"
+                  label="Paciente (nome ou Gestor SUS)"
+                  placeholder="🔎 Nome ou Gestor SUS..."
+                  onSelect={(p) => router.push(construirUrl({ ...filtros, tipo: "historico", pagina: 1 }, { paciente: p.id, busca: null }))}
+                />
+                <div className="mt-3">
+                  <Link href={construirUrl(filtros, { tipo: "historico", pagina: 1 })} className={BOTAO_SECUNDARIO}>
                     Limpar
                   </Link>
                 </div>
-              </form>
+              </div>
             )}
 
             {erroInicial && <FeedbackErro>{erroInicial}</FeedbackErro>}
@@ -804,6 +794,27 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
           })}
         </nav>
 
+        {pacienteSelecionado ? (
+          <div className={`${CARTAO} flex items-center justify-between gap-3 p-4`}>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-brand-900">{pacienteSelecionado.nome}</p>
+              <p className="text-xs text-zinc-500">SUS {pacienteSelecionado.gestor_sus}</p>
+            </div>
+            <button type="button" onClick={() => router.push(construirUrl(filtros, { paciente: null, pagina: 1 }))} className={BOTAO_SECUNDARIO}>
+              Limpar
+            </button>
+          </div>
+        ) : (
+          <div className={`${CARTAO} p-4`}>
+            <PatientSearch
+              id="relatorios-patient"
+              label="Paciente (nome ou Gestor SUS)"
+              placeholder="🔎 Nome ou Gestor SUS..."
+              onSelect={(p) => router.push(construirUrl(filtros, { paciente: p.id, busca: null, pagina: 1 }))}
+            />
+          </div>
+        )}
+
         {/* Filtros — aplicados no servidor (GET). */}
         <form
           method="get"
@@ -812,6 +823,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
           className={`flex flex-col gap-3 p-4 lg:flex-row lg:items-end ${CARTAO}`}
         >
           <input type="hidden" name="tipo" value={filtros.tipo} />
+          {filtros.paciente && <input type="hidden" name="paciente" value={filtros.paciente} />}
 
           {mostraFiltroTipo && (
             <div className="flex flex-col gap-1.5">
@@ -833,20 +845,6 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
               </select>
             </div>
           )}
-
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="relatorios-filtro-busca" className="text-xs font-medium text-zinc-600">
-              Paciente (nome ou Gestor SUS)
-            </label>
-            <input
-              id="relatorios-filtro-busca"
-              name="busca"
-              type="search"
-              defaultValue={filtros.busca ?? ""}
-              placeholder="Buscar paciente"
-              className={INPUT}
-            />
-          </div>
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="relatorios-filtro-de" className="text-xs font-medium text-zinc-600">

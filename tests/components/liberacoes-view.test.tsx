@@ -13,13 +13,14 @@ import type { LiberacaoComPaciente } from "@/lib/domain/liberacoes/types";
 const { mocks } = vi.hoisted(() => ({
   mocks: {
     refresh: vi.fn(),
+    push: vi.fn(),
     criarLiberacaoAction: vi.fn(),
     listarPacientesAction: vi.fn(),
   },
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: mocks.refresh }),
+  useRouter: () => ({ refresh: mocks.refresh, push: mocks.push }),
 }));
 
 vi.mock("@/app/actions/liberacoes", () => ({
@@ -102,11 +103,11 @@ describe("LiberacoesView — leitura", () => {
     expect(screen.getAllByText("Cancelada").length).toBeGreaterThan(0);
   });
 
-  it("busca repassada pela URL aparece no campo; a filtragem é do servidor", () => {
+  it("busca inteligente via PatientSearch renderiza; a filtragem é do servidor", () => {
     renderizar({ perfil: PERFIS.GESTOR, busca: "maria" });
 
-    const campo = screen.getByLabelText("Buscar liberações por paciente ou Gestor SUS");
-    expect(campo).toHaveValue("maria");
+    expect(screen.getByLabelText("Buscar por paciente ou Gestor SUS")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("🔎 Nome ou Gestor SUS...")).toBeInTheDocument();
   });
 
   it("estado vazio sem busca", () => {

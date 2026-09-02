@@ -59,11 +59,13 @@ async function exigirUsuarioAtivo(): Promise<{
 }
 
 export async function listarLiberacoesAction(
-  busca?: string
+  busca?: string,
+  pacienteId?: string
 ): Promise<AcaoResultado<LiberacaoComPaciente[]>> {
   try {
     await exigirUsuarioAtivo();
     const service = await LiberacaoService.create();
+    if (pacienteId) return { ok: true, data: await service.listarLiberacoes(busca, pacienteId) };
     return { ok: true, data: await service.listarLiberacoes(busca) };
   } catch (erro) {
     return { ok: false, error: mensagemDaAcao(erro) };

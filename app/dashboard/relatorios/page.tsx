@@ -74,10 +74,18 @@ export default async function RelatoriosPage({
       de: somenteData(params.de),
       ate: somenteData(params.ate),
       busca: params.busca?.trim() || null,
+      paciente: params.paciente?.trim() || null,
       tipoLiberacao: params.tl?.trim() || null,
       pagina: 1,
     };
     const resultado = await relatorioResumoAction(filtros);
+    // Resolve paciente selecionado para chip (quando filtrado por ID)
+    let pacienteSelecionado: { id: string; gestor_sus: string; nome: string } | null = null;
+    if (filtros.paciente) {
+      const { buscarPacienteAction } = await import("@/app/actions/pacientes");
+      const r = await buscarPacienteAction(filtros.paciente);
+      if (r.ok && r.data) pacienteSelecionado = r.data as unknown as typeof pacienteSelecionado;
+    }
     return (
       <RelatoriosView
         filtros={filtros}
@@ -85,6 +93,7 @@ export default async function RelatoriosPage({
         resumo={resultado.ok ? resultado.data : null}
         erroInicial={resultado.ok ? null : resultado.error}
         candidatos={[]}
+        pacienteSelecionado={pacienteSelecionado}
       />
     );
   }
@@ -193,11 +202,18 @@ export default async function RelatoriosPage({
     de: somenteData(params.de),
     ate: somenteData(params.ate),
     busca: params.busca?.trim() || null,
+    paciente: params.paciente?.trim() || null,
     tipoLiberacao: params.tl?.trim() || null,
     pagina: Number(params.pagina) || 1,
   };
 
   const resultado = await consultarRelatorioAction(filtros);
+  let pacienteSelecionadoPadrao: { id: string; gestor_sus: string; nome: string } | null = null;
+  if (filtros.paciente) {
+    const { buscarPacienteAction } = await import("@/app/actions/pacientes");
+    const r = await buscarPacienteAction(filtros.paciente);
+    if (r.ok && r.data) pacienteSelecionadoPadrao = r.data as unknown as typeof pacienteSelecionadoPadrao;
+  }
 
   return (
     <RelatoriosView
@@ -205,6 +221,7 @@ export default async function RelatoriosPage({
       resultado={resultado.ok ? resultado.data : null}
       erroInicial={resultado.ok ? null : resultado.error}
       candidatos={[]}
+      pacienteSelecionado={pacienteSelecionadoPadrao}
     />
   );
 }

@@ -4,12 +4,13 @@ import { getUsuarioFuncional } from "@/lib/auth/profile";
 import { permissoesLiberacoes } from "@/lib/domain/regras";
 import { normalizarBusca } from "@/lib/repositories/paciente-repository";
 import { listarLiberacoesAction } from "@/app/actions/liberacoes";
+import { buscarPacienteAction } from "@/app/actions/pacientes";
 import LiberacoesView from "./components/liberacoes-view";
 
 export default async function LiberacoesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; paciente?: string }>;
 }) {
   const supabase = await createClient();
   const {
@@ -45,16 +46,26 @@ export default async function LiberacoesPage({
     );
   }
 
-  const { q } = await searchParams;
+  const { q, paciente } = await searchParams;
   const busca = normalizarBusca(q);
+  const pacienteId = typeof paciente === "string" && paciente.trim() ? paciente.trim() : null;
 
-  const resultado = await listarLiberacoesAction(busca);
+  let pacienteSelecionado: { id: string; gestor_sus: string; nome: string; origem?: string | null } | null = null;
+  if (pacienteId) {
+    const r = await buscarPacienteAction(pacienteId);
+    if (r.ok && r.data) pacienteSelecionado = r.data as unknown as typeof pacienteSelecionado;
+  }
+
+  const resultado = pacienteId
+    ? await listarLiberacoesAction(undefined, pacienteId)
+    : await listarLiberacoesAction(busca);
 
   return (
     <LiberacoesView
       perfil={usuario!.perfil!}
       statusAtivo={usuario!.statusAtivo === true}
       busca={busca}
+      pacienteSelecionado={pacienteSelecionado}
       liberacoesIniciais={resultado.ok ? resultado.data : []}
       erroInicial={resultado.ok ? null : resultado.error}
     />

@@ -49,7 +49,8 @@ export class LiberacaoService {
     return this.repo.buscarPorId(id);
   }
 
-  async listarLiberacoes(busca?: string): Promise<LiberacaoComPaciente[]> {
+  async listarLiberacoes(busca?: string, pacienteId?: string): Promise<LiberacaoComPaciente[]> {
+    if (pacienteId) return this.repo.listar(busca, pacienteId);
     return this.repo.listar(busca);
   }
 }

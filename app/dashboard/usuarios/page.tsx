@@ -9,7 +9,7 @@ import UsuariosView from "./components/usuarios-view";
 export default async function UsuariosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; usuario?: string }>;
 }) {
   const supabase = await createClient();
   const {
@@ -44,14 +44,37 @@ export default async function UsuariosPage({
     );
   }
 
-  const { q } = await searchParams;
+  const { q, usuario: usuarioParam } = await searchParams;
   const busca = normalizarBusca(q);
+  const usuarioId = typeof usuarioParam === "string" && usuarioParam.trim() ? usuarioParam.trim() : null;
 
-  const resultado = await listarUsuariosAction(busca);
+  let usuarioSelecionado: import("@/lib/domain/usuarios/types").UsuarioFuncional | null = null;
+  let resultado: Awaited<ReturnType<typeof listarUsuariosAction>>;
+
+  if (usuarioId) {
+    const { UsuarioService } = await import("@/lib/services/usuario-service");
+    try {
+      const service = await UsuarioService.create();
+      const encontrado = await service.buscarUsuario(usuarioId);
+      if (encontrado) {
+        usuarioSelecionado = encontrado;
+        resultado = { ok: true, data: [encontrado] };
+      } else {
+        resultado = { ok: true, data: [] };
+      }
+    } catch (e) {
+      const { AppError } = await import("@/lib/domain/app-error");
+      const msg = e instanceof AppError ? e.message : "Ocorreu um erro inesperado.";
+      resultado = { ok: false, error: msg };
+    }
+  } else {
+    resultado = await listarUsuariosAction(busca);
+  }
 
   return (
     <UsuariosView
       busca={busca}
+      usuarioSelecionado={usuarioSelecionado}
       usuariosIniciais={resultado.ok ? resultado.data : []}
       erroInicial={resultado.ok ? null : resultado.error}
     />

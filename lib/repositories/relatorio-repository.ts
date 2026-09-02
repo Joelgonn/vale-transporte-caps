@@ -87,7 +87,8 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
     const de = normalizarTermo(filtros.de);
     const ate = normalizarDataAte(filtros.ate);
     const tipoLiberacao = normalizarTermo(filtros.tipoLiberacao);
-    const ids = await this.resolverIdsPacientes(normalizarTermo(filtros.busca));
+    const pacienteId = normalizarTermo(filtros.paciente);
+    const ids = pacienteId ? null : await this.resolverIdsPacientes(normalizarTermo(filtros.busca));
 
     if (ids && ids.length === 0) {
       return {
@@ -109,7 +110,8 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
     if (de) query = query.gte("data_inicio", de);
     if (ate) query = query.lte("data_inicio", ate);
     if (tipoLiberacao) query = query.eq("tipo", tipoLiberacao);
-    if (ids) query = query.in("paciente_id", ids);
+    if (pacienteId) query = query.eq("paciente_id", pacienteId);
+    else if (ids) query = query.in("paciente_id", ids);
 
     const { data, error, count } = await query
       .order("data_inicio", { ascending: false })
@@ -134,7 +136,8 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
 
     const de = normalizarTermo(filtros.de);
     const ate = normalizarDataAte(filtros.ate);
-    const ids = await this.resolverIdsPacientes(normalizarTermo(filtros.busca));
+    const pacienteId = normalizarTermo(filtros.paciente);
+    const ids = pacienteId ? null : await this.resolverIdsPacientes(normalizarTermo(filtros.busca));
 
     if (ids && ids.length === 0) {
       return {
@@ -155,7 +158,8 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
 
     if (de) query = query.gte("data_hora", de);
     if (ate) query = query.lte("data_hora", ate);
-    if (ids) query = query.in("paciente_id", ids);
+    if (pacienteId) query = query.eq("paciente_id", pacienteId);
+    else if (ids) query = query.in("paciente_id", ids);
 
     const { data, error, count } = await query
       .order("data_hora", { ascending: false })
@@ -183,7 +187,8 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
     const de = normalizarTermo(filtros.de);
     const ate = normalizarDataAte(filtros.ate);
     const tipoLiberacao = normalizarTermo(filtros.tipoLiberacao);
-    const ids = await this.resolverIdsPacientes(normalizarTermo(filtros.busca));
+    const pacienteId = normalizarTermo(filtros.paciente);
+    const ids = pacienteId ? null : await this.resolverIdsPacientes(normalizarTermo(filtros.busca));
 
     if (ids && ids.length === 0) {
       return {
@@ -204,7 +209,8 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
     if (de) query = query.gte("data_inicio", de);
     if (ate) query = query.lte("data_inicio", ate);
     if (tipoLiberacao) query = query.eq("tipo", tipoLiberacao);
-    if (ids) query = query.in("paciente_id", ids);
+    if (pacienteId) query = query.eq("paciente_id", pacienteId);
+    else if (ids) query = query.in("paciente_id", ids);
 
     const { data, error, count } = await query
       .order("data_inicio", { ascending: false })
@@ -317,7 +323,8 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
   // normalmente (por isso a consulta B é separada). Saldo = autorizado −
   // retirado, derivado em agregarResumo() — nunca armazenado.
   async obterResumo(filtros: FiltrosRelatorio): Promise<ResultadoResumoRelatorio> {
-    const ids = await this.resolverIdsPacientes(normalizarTermo(filtros.busca));
+    const pacienteId = normalizarTermo(filtros.paciente);
+    const ids = pacienteId ? null : await this.resolverIdsPacientes(normalizarTermo(filtros.busca));
 
     if (ids && ids.length === 0) {
       return {
@@ -342,7 +349,8 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
     if (de) queryLiberacoes = queryLiberacoes.gte("data_inicio", de);
     if (ate) queryLiberacoes = queryLiberacoes.lte("data_inicio", ate);
     if (tipoLiberacao) queryLiberacoes = queryLiberacoes.eq("tipo", tipoLiberacao);
-    if (ids) queryLiberacoes = queryLiberacoes.in("paciente_id", ids);
+    if (pacienteId) queryLiberacoes = queryLiberacoes.eq("paciente_id", pacienteId);
+    else if (ids) queryLiberacoes = queryLiberacoes.in("paciente_id", ids);
 
     let queryRetiradas = this.client
       .from("retiradas")
@@ -362,7 +370,8 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
     if (tipoLiberacao) {
       queryRetiradas = queryRetiradas.eq("liberacoes.tipo", tipoLiberacao);
     }
-    if (ids) queryRetiradas = queryRetiradas.in("paciente_id", ids);
+    if (pacienteId) queryRetiradas = queryRetiradas.eq("paciente_id", pacienteId);
+    else if (ids) queryRetiradas = queryRetiradas.in("paciente_id", ids);
 
     // As duas consultas são independentes — executam em paralelo.
     const [liberacoesResultado, retiradasResultado] = await Promise.all([

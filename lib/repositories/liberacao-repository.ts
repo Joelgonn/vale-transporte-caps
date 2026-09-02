@@ -11,7 +11,7 @@ import { normalizarBusca } from "@/lib/repositories/paciente-repository";
 
 // Contrato usado pelos services (permite injeção de fakes nos testes).
 export interface LiberacaoRepository {
-  listar(busca?: string): Promise<LiberacaoComPaciente[]>;
+  listar(busca?: string, pacienteId?: string): Promise<LiberacaoComPaciente[]>;
   buscarPorId(id: string): Promise<LiberacaoComPaciente | null>;
   criar(dados: NovaLiberacao): Promise<LiberacaoComPaciente>;
   atualizar(id: string, dados: AtualizacaoLiberacao): Promise<LiberacaoComPaciente>;
@@ -48,7 +48,19 @@ function mapearLista(data: unknown[]): LiberacaoComPaciente[] {
 export class LiberacaoRepositoryPostgres implements LiberacaoRepository {
   constructor(private readonly client: SupabaseClient) {}
 
-  async listar(busca?: string): Promise<LiberacaoComPaciente[]> {
+  async listar(busca?: string, pacienteId?: string): Promise<LiberacaoComPaciente[]> {
+    // Filtragem por paciente_id exato (seleção via PatientSearch) tem precedência
+    // sobre busca textual. Garante identidade por ID, não por texto digitado.
+    if (pacienteId) {
+      const { data, error } = await this.client
+        .from("liberacoes")
+        .select(`*, pacientes(${COLUNAS_PACIENTE})`)
+        .eq("paciente_id", pacienteId)
+        .order("data_inicio", { ascending: false });
+      if (error) throw mapSupabaseError(error);
+      return mapearLista(data ?? []);
+    }
+
     let query = this.client
       .from("liberacoes")
       .select(`*, pacientes(${COLUNAS_PACIENTE})`)

@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useTransition, useState } from "react";
 import { ativarUsuarioAction, inativarUsuarioAction } from "@/app/actions/usuarios";
 import {
@@ -17,18 +16,18 @@ import {
   BOTAO_SECUNDARIO,
   CARTAO,
   CONTAINER,
-  INPUT,
-  LINK,
 } from "@/components/ui/visual-tokens";
 import { PageHeader } from "@/components/ui/page-header";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
 import { FeedbackErro } from "@/components/ui/feedback";
+import { UserSearch } from "@/components/ui/user-search";
 import type { UsuarioFuncional } from "@/lib/domain/usuarios/types";
 import NovoUsuarioForm from "./novo-usuario-form";
 import { UsuarioStatus } from "./usuario-status";
 
 type UsuariosViewProps = {
   busca: string;
+  usuarioSelecionado?: UsuarioFuncional | null;
   usuariosIniciais: UsuarioFuncional[];
   erroInicial: string | null;
 };
@@ -87,34 +86,28 @@ export default function UsuariosView(props: UsuariosViewProps) {
           }
         />
 
-        <form
-          method="get"
-          action="/dashboard/usuarios"
-          className="flex flex-col gap-2 sm:flex-row sm:items-center"
-        >
-          <label htmlFor="busca-usuarios" className="sr-only">
-            Buscar usuários
-          </label>
-          <input
-            id="busca-usuarios"
-            name="q"
-            type="search"
-            defaultValue={props.busca}
-            placeholder="Buscar por nome ou e-mail"
-            aria-label="Buscar usuários por nome ou e-mail"
-            className={`${INPUT} flex-1`}
-          />
-          <div className="flex items-center gap-2">
-            <button type="submit" className={BOTAO_SECUNDARIO}>
-              Buscar
+        {props.usuarioSelecionado ? (
+          <div className={`${CARTAO} flex items-center justify-between gap-3 p-4`}>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-brand-900">{props.usuarioSelecionado.nome}</p>
+              <p className="text-xs text-zinc-500">
+                {props.usuarioSelecionado.email} · {ROTULO_PERFIL[props.usuarioSelecionado.perfil] ?? props.usuarioSelecionado.perfil}
+              </p>
+            </div>
+            <button type="button" onClick={() => router.push("/dashboard/usuarios")} className={BOTAO_SECUNDARIO}>
+              Limpar
             </button>
-            {props.busca && (
-              <Link href="/dashboard/usuarios" className={LINK}>
-                Limpar
-              </Link>
-            )}
           </div>
-        </form>
+        ) : (
+          <div className={`${CARTAO} p-4`}>
+            <UserSearch
+              id="busca-usuarios"
+              label="Buscar por nome ou e-mail"
+              placeholder="🔎 Nome ou e-mail..."
+              onSelect={(u) => router.push(`/dashboard/usuarios?usuario=${u.id}`)}
+            />
+          </div>
+        )}
 
         {erroStatus && <FeedbackErro>{erroStatus}</FeedbackErro>}
         {props.erroInicial && <FeedbackErro>{props.erroInicial}</FeedbackErro>}
@@ -122,7 +115,7 @@ export default function UsuariosView(props: UsuariosViewProps) {
         {vazio ? (
           <EstadoVazio
             mensagem={
-              props.busca
+              props.usuarioSelecionado || props.busca
                 ? "Nenhum usuário encontrado para esta busca."
                 : "Nenhum usuário cadastrado ainda."
             }

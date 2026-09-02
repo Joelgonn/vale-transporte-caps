@@ -9,14 +9,16 @@ import type { UsuarioFuncional } from "@/lib/domain/usuarios/types";
 const { mocks } = vi.hoisted(() => ({
   mocks: {
     refresh: vi.fn(),
+    push: vi.fn(),
     ativarUsuarioAction: vi.fn(),
     inativarUsuarioAction: vi.fn(),
     criarUsuarioCompletoAction: vi.fn(),
+    listarUsuariosAction: vi.fn(),
   },
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: mocks.refresh }),
+  useRouter: () => ({ refresh: mocks.refresh, push: mocks.push }),
 }));
 
 vi.mock("@/app/actions/usuarios", () => ({
@@ -24,7 +26,10 @@ vi.mock("@/app/actions/usuarios", () => ({
   inativarUsuarioAction: (...args: unknown[]) => mocks.inativarUsuarioAction(...args),
   criarUsuarioCompletoAction: (...args: unknown[]) =>
     mocks.criarUsuarioCompletoAction(...args),
+  listarUsuariosAction: (...args: unknown[]) => mocks.listarUsuariosAction(...args),
 }));
+
+
 
 function usuario(sobre?: Partial<UsuarioFuncional>): UsuarioFuncional {
   return {
@@ -98,11 +103,11 @@ describe("UsuariosView — leitura", () => {
     expect(screen.getByText("—")).toBeInTheDocument();
   });
 
-  it("pesquisa repassada pela URL aparece no campo", () => {
+  it("busca inteligente via UserSearch renderiza", () => {
     renderizar({ busca: "maria", usuarios: [usuario()] });
 
-    const campo = screen.getByLabelText("Buscar usuários por nome ou e-mail");
-    expect(campo).toHaveValue("maria");
+    expect(screen.getByLabelText("Buscar por nome ou e-mail")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("🔎 Nome ou e-mail...")).toBeInTheDocument();
   });
 
   it("estado vazio sem busca", () => {

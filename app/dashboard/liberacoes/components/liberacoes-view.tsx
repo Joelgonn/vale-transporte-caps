@@ -12,12 +12,11 @@ import {
   BOTAO_SECUNDARIO,
   CARTAO,
   CONTAINER,
-  INPUT,
-  LINK,
 } from "@/components/ui/visual-tokens";
 import { PageHeader } from "@/components/ui/page-header";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
 import { FeedbackErro, FeedbackSucesso } from "@/components/ui/feedback";
+import { PatientSearch } from "@/components/ui/patient-search";
 import { LiberacaoStatus } from "./liberacao-status";
 import LiberacaoForm from "./liberacao-form";
 import LiberacaoEditForm from "./liberacao-edit-form";
@@ -32,6 +31,7 @@ type LiberacoesViewProps = {
   perfil: PerfilUsuario;
   statusAtivo: boolean;
   busca: string;
+  pacienteSelecionado?: { id: string; gestor_sus: string; nome: string; origem?: string | null } | null;
   liberacoesIniciais: LiberacaoComPaciente[];
   erroInicial: string | null;
 };
@@ -90,34 +90,29 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
           }
         />
 
-        <form
-          method="get"
-          action="/dashboard/liberacoes"
-          className="flex flex-col gap-2 sm:flex-row sm:items-center"
-        >
-          <label htmlFor="busca-liberacoes" className="sr-only">
-            Buscar liberações
-          </label>
-          <input
-            id="busca-liberacoes"
-            name="q"
-            type="search"
-            defaultValue={props.busca}
-            placeholder="Buscar por paciente ou Gestor SUS"
-            aria-label="Buscar liberações por paciente ou Gestor SUS"
-            className={`${INPUT} flex-1`}
-          />
-          <div className="flex items-center gap-2">
-            <button type="submit" className={BOTAO_SECUNDARIO}>
-              Buscar
+        {props.pacienteSelecionado ? (
+          <div className={`${CARTAO} flex items-center justify-between gap-3 p-4`}>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-brand-900">{props.pacienteSelecionado.nome}</p>
+              <p className="text-xs text-zinc-500">
+                Gestor SUS {props.pacienteSelecionado.gestor_sus}
+                {props.pacienteSelecionado.origem === "esporadico" ? " · Esporádico" : props.pacienteSelecionado.origem === "regular" ? " · Regular" : ""}
+              </p>
+            </div>
+            <button type="button" onClick={() => router.push("/dashboard/liberacoes")} className={BOTAO_SECUNDARIO}>
+              Limpar
             </button>
-            {props.busca && (
-              <Link href="/dashboard/liberacoes" className={LINK}>
-                Limpar
-              </Link>
-            )}
           </div>
-        </form>
+        ) : (
+          <div className={`${CARTAO} p-4`}>
+            <PatientSearch
+              id="busca-liberacoes"
+              label="Buscar por paciente ou Gestor SUS"
+              placeholder="🔎 Nome ou Gestor SUS..."
+              onSelect={(p) => router.push(`/dashboard/liberacoes?paciente=${p.id}`)}
+            />
+          </div>
+        )}
 
         {props.erroInicial && <FeedbackErro>{props.erroInicial}</FeedbackErro>}
 
@@ -127,7 +122,7 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
           <p className="text-sm text-zinc-500" aria-live="polite">
             {props.liberacoesIniciais.length}{" "}
             {props.liberacoesIniciais.length === 1 ? "liberação" : "liberações"}
-            {props.busca
+            {props.pacienteSelecionado || props.busca
               ? " para esta busca."
               : props.liberacoesIniciais.length === 1
                 ? " registrada."
@@ -138,7 +133,7 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
         {vazio ? (
           <EstadoVazio
             mensagem={
-              props.busca
+              props.pacienteSelecionado || props.busca
                 ? "Nenhuma liberação encontrada para esta busca."
                 : props.perfil === "recepcionista"
                   ? "Nenhuma liberação ativa no momento."

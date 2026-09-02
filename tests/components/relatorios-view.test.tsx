@@ -1,8 +1,21 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import RelatoriosView from "@/app/dashboard/relatorios/components/relatorios-view";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
+
+vi.mock("@/app/actions/pacientes", () => ({
+  listarPacientesAction: vi.fn(async () => ({ ok: true, data: [] })),
+  buscarPacienteAction: vi.fn(async () => ({ ok: true, data: null })),
+}));
+
+vi.mock("@/app/actions/usuarios", () => ({
+  listarUsuariosAction: vi.fn(async () => ({ ok: true, data: [] })),
+}));
 import type {
   FiltrosRelatorio,
   ResultadoListaRelatorio,
