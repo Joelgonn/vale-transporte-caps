@@ -22,7 +22,7 @@
 | `nome` | text | sim | — | |
 | `cpf` | text | não | null | Dado sensível — LGPD. UNIQUE quando preenchido. **Mantido OPCIONAL (Sprint 05)** — obrigatoriedade permanece DECISÃO INSTITUCIONAL PENDENTE; não aplicar NOT NULL. |
 | `status` | enum `status_paciente` (`ativo`, `inativo`) | sim | `ativo` | Status do direito ao benefício (RN01). |
-| `origem` | enum `origem_paciente` (`regular`, `esporadico`) | sim | `regular` | **Sprint 38 (RN29):** `regular` = acompanhamento contínuo (cadastro por gestor/autorizador); `esporadico` = atendimento pontual criado pela recepção, recebe SOMENTE liberação avulsa. Pacientes pré-existentes = `regular`. **Sprint 41 (RN30): IMUTÁVEL após o cadastro — nenhum perfil converte origem (trigger `fn_pacientes_before`, migration `20260825000001`).** |
+| `origem` | enum `origem_paciente` (`regular`, `esporadico`) | sim | `regular` | **Sprint 38 (RN29) ampliada Sprint 44:** `regular` = acompanhamento contínuo (cadastro por gestor/autorizador; recepcionista só reutiliza); `esporadico` = atendimento pontual — pode ser criado por **qualquer dos três perfis** quando necessário para liberação esporádica, recebe SOMENTE liberação avulsa, e **deve ser reutilizado** (`1 paciente esporadico → N liberações avulsas`). Pacientes pré-existentes = `regular`. **Sprint 41 (RN30): IMUTÁVEL após o cadastro — nenhum perfil converte origem (trigger `fn_pacientes_before`, migration `20260825000001`).** |
 | `data_inicio_acompanhamento` | date | não | null | |
 | `data_fim_acompanhamento` | date | não | null | |
 | `unidade_id` | uuid | não | null | Expansão futura (RN17). |
@@ -34,7 +34,7 @@
 **Índices:** `UNIQUE(gestor_sus)`; `UNIQUE(cpf)`; índice em `(status)`.
 **Campos de status:** `status`.
 **Campos de data/hora:** `data_inicio_acompanhamento`, `data_fim_acompanhamento`, `created_at`, `updated_at`.
-**Regras de integridade:** RN01 (apenas ativos recebem vales); RN25 (Gestor SUS principal); RN20 (minimização — evitar dados sensíveis desnecessários); **RN29 (Sprint 38): origem do paciente — esporádico somente liberação avulsa (trigger `fn_liberacoes_before`); INSERT por perfil × origem via RLS (`pacientes_insert_regular` para gestor/autorizador, `pacientes_insert_recepcao_esporadico` para a recepção — migration `20260821000001`).**; **RN30 (Sprint 41): origem IMUTÁVEL após o cadastro — `fn_pacientes_before` rejeita qualquer UPDATE que altere `origem`, para todos os perfis (migration `20260825000001`). Edição de pacientes (mesma migration + app): gestor altera SOMENTE `status`; autorizador edita dados cadastrais (nunca status/origem/gestor_sus/cpf); recepcionista não edita. A trilha (`pacientes_audit`) inclui `cpf` e `origem` nos snapshots antes/depois.**
+**Regras de integridade:** RN01 (apenas ativos recebem vales); RN25 (Gestor SUS principal); RN20 (minimização — evitar dados sensíveis desnecessários); **RN29 (Sprint 38) ampliada Sprint 44: origem do paciente — esporádico somente liberação avulsa (trigger `fn_liberacoes_before`); INSERT por perfil × origem via RLS Sprint 44 (`pacientes_insert_gestor_44` e `pacientes_insert_autorizador_44` permitem regular+esporadico, `pacientes_insert_recepcionista_44` só esporadico — migration `20260902000001`); reutilização obrigatória de esporadicos (mesmo `gestor_sus` não duplicado).**; **RN30 (Sprint 41): origem IMUTÁVEL após o cadastro — `fn_pacientes_before` rejeita qualquer UPDATE que altere `origem`, para todos os perfis (migration `20260825000001`). Edição de pacientes (mesma migration + app): gestor altera SOMENTE `status`; autorizador edita dados cadastrais (nunca status/origem/gestor_sus/cpf); recepcionista não edita. A trilha (`pacientes_audit`) inclui `cpf` e `origem` nos snapshots antes/depois.**
 
 ## Entidade 2 — `usuarios`
 
@@ -72,7 +72,7 @@
 | `paciente_id` | uuid | sim | — | **FK → `pacientes.id`**. |
 | `tipo` | enum `tipo_liberacao` (`continua`, `avulsa`) | sim | — | RN05. |
 | `periodo_meses` | smallint | não | null | **Somente contínua**: 1, 3 ou 6 (RN13). Nulo para avulsa. |
-| `quantidade` | smallint | sim | — | 1, 2, 4 ou 8 (RN04).  **Sprint 42:** PREVISÃO administrativa (RN04) — NÃO bloqueia retiradas (RN31); retirado pode exceder. CHECK in (1,2,4,8). |
+| `quantidade` | smallint | sim | — | 1..999 (RN04 ampliada Sprint 42.1, `SEMANAS_POR_MES=4` — 1 mês = 4 semanas, convenção CAPS). **Sprint 42:** PREVISÃO administrativa (RN04) — NÃO bloqueia retiradas (RN31); retirado pode exceder. **Sprint 44:** estouro detectado via `isEstouro`/`estadoPrevisao` sem threshold institucional; retirada append-only sem bloqueio. CHECK `BETWEEN 1 AND 999` (migration `20260826000002`). |
 | `data_inicio` | timestamptz | sim | `now()` | Início da validade. |
 | `data_fim` | timestamptz | sim | calculado | Contínua: `data_inicio + periodo_meses`; avulsa: `data_inicio + 1 dia` (RN13, RN21). |
 | `profissional_autorizador_id` | uuid | sim | — | **FK → `usuarios.id`** (RN03). Deve ser `perfil = profissional_autorizador` e `status_ativo = true`. |
@@ -87,11 +87,11 @@
 **Relacionamentos:** `N ───< 1 pacientes`; `N ───< 1 usuarios` (autorizador); `N ───< 1 usuarios` (registrador); `1 ───< N retiradas`; `1 ───< N liberacoes` (renovações).
 **Constraints:**
 - check `tipo in ('continua','avulsa')`
-- check `quantidade in (1,2,4,8)`
+- check `quantidade BETWEEN 1 AND 999` (Sprint 42.2)
 - check `periodo_meses in (1,3,6)` quando contínua; `periodo_meses IS NULL` quando avulsa
 - check `data_fim > data_inicio`
-- `profissional_autorizador_id` e `registrado_por_id` são **papéis distintos** (Resolução Sprint 05): na criação, o autorizador também registra (iguais); na renovação, a recepção registra e o autorizador é o profissional mantido (diferentes). Nenhuma constraint os obriga a diferir — a regra vem do fluxo (RN18, RN23).
-- `renovacao_de_id` deve referenciar liberação do mesmo `paciente_id` e com `status` não ativa (validação de serviço; constraint com subquery a avaliar)
+- `profissional_autorizador_id` e `registrado_por_id` são **papéis distintos** (Resolução Sprint 05 + Sprint 44 autorização vs operação): na criação, o autorizador também registra (iguais); na renovação, a recepção registra e o autorizador é o profissional mantido (diferentes). **Sprint 44:** os três perfis podem criar liberações; a distinção é operacional, não bloqueio. Nenhuma constraint os obriga a diferir — a regra vem do fluxo (RN18, RN23).
+- `renovacao_de_id` deve referenciar liberação do mesmo `paciente_id` (RN23); pode renovar `ativa` ou `expirada`, não `cancelada` (Sprint 44 formalização — `lib/domain/liberacoes/renovacao.ts`). `UNIQUE(renovacao_de_id)` permanece pendente (verificar duplicidades).
 **Índices:** `(paciente_id, status)`; `(profissional_autorizador_id)`; `(renovacao_de_id)`; `(data_fim)`; `(tipo, quantidade)`.
 **Campos de status:** `status`.
 **Campos de data/hora:** `data_inicio`, `data_fim`, `created_at`, `updated_at`.
@@ -179,7 +179,7 @@ usuarios (1) ───< (N) auditoria_logs
 1. `pacientes.gestor_sus` UNIQUE.
 2. `pacientes.cpf` UNIQUE quando preenchido; **obrigatoriedade pendente (mantido opcional — Sprint 05)**.
 3. `usuarios.auth_user_id` UNIQUE; `usuarios.email` UNIQUE.
-4. `liberacoes.quantidade IN (1,2,4,8)`.
+4. `liberacoes.quantidade BETWEEN 1 AND 999` (Sprint 42.1/42.2, convenção 1 mês = 4 semanas).
 5. `liberacoes.tipo IN ('continua','avulsa')`.
 6. `liberacoes.periodo_meses IN (1,3,6)` para contínua; NULL para avulsa.
 7. `liberacoes.data_fim > liberacoes.data_inicio`.
@@ -262,4 +262,13 @@ Cada campo foi avaliado: *é necessário para uma regra, operação, segurança 
 - `fn_liberacoes_before`: nova branch de UPDATE — campos históricos imutáveis (paciente/tipo/período/autorizador/registro/renovação); gestor altera somente status+unidade_id; autorizador altera quantidade(previsão)/datas/justificativa/unidade_id.
 - Novo: grant UPDATE em liberacoes p/ authenticated + policy `liberacoes_update_autorizador_gestor`.
 
-- **Sprint 42.2:** `liberacoes_quantidade_check` redefinida para `quantidade between 1 and 999` (migration `20260826000002_liberacoes_previsao_check.sql` — NÃO aplicada ainda; aplicar com autorização explícita). Retrocompatível: liberações existentes (1..8) satisfazem a nova constraint.
+- **Sprint 42.2:** `liberacoes_quantidade_check` redefinida para `quantidade between 1 and 999` (migration `20260826000002_liberacoes_previsao_check.sql`).
+
+## Sprint 44 — Alinhamento do domínio e fluxos operacionais (migration 20260902000001)
+
+- Pacientes: `pacientes_insert_gestor_44`/`autorizador_44` (regular+esporadico), `pacientes_insert_recepcionista_44` (só esporadico).
+- Liberações: `liberacoes_insert_*_44` para os três perfis (contínua/avulsa); leitura ampliada aos três perfis.
+- Retiradas: `retiradas_select_44` e `retiradas_insert_44` ampliados aos três perfis (autorização vs operação).
+- `fn_liberacoes_before`: proteção de vigência — `UPDATE` que excluiria `min/max(data_hora)` de retiradas é rejeitado (P1).
+- Repositórios: removido `.limit(100)` silencioso — paginação em chunks de 1000 (relatorios + liberacoes).
+- Domínio: `origensPermitidasPorPerfil`, `validarVigenciaComRetiradas`, `isEstouro/estadoPrevisao`, `glossario.ts`, `eventos.ts`, `renovacao.ts`.

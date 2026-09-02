@@ -35,6 +35,10 @@ function chain(resultado: Resultado, registros: Registros, tabela: string) {
       chamada.metodos.push("limit");
       return qb;
     }),
+    range: vi.fn(() => {
+      chamada.metodos.push("range");
+      return qb;
+    }),
     order: vi.fn(() => {
       chamada.metodos.push("order");
       return qb;
@@ -125,12 +129,12 @@ describe("LiberacaoRepositoryPostgres", () => {
 
     const lista = await repo.listar("maria");
 
-    // 1ª consulta: v_pacientes com or(ilike nome/gestor_sus) + limit
+    // 1ª consulta Sprint 44: v_pacientes com or(ilike) + range (paginação em chunks, sem limit silencioso)
     const idxV = from.mock.calls.findIndex(([t]) => t === "v_pacientes");
     const vChamada = registros.calls.find((c) => c.tabela === "v_pacientes")!;
     expect(vChamada.metodos[0]).toBe("select:id");
     expect(vChamada.metodos).toContain("or");
-    expect(vChamada.metodos).toContain("limit");
+    expect(vChamada.metodos).toContain("range");
     const { or } = from.mock.results[idxV].value;
     expect(or).toHaveBeenCalledWith("nome.ilike.%maria%,gestor_sus.ilike.%maria%");
 

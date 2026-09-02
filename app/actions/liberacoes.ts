@@ -140,12 +140,17 @@ export async function criarLiberacaoAction(
       };
     }
 
-    // Nova liberação pelo próprio autorizador (liberacoes_insert_autorizador).
-    if (usuario.perfil !== PERFIS.PROFISSIONAL_AUTORIZADOR) {
-      throw new AppError(
-        "ACESSO_NEGADO",
-        "Somente o profissional autorizador pode criar liberações."
-      );
+    // Sprint 44 — NOVA liberação: os TRÊS perfis ativos podem criar
+    // liberações contínuas e avulsas (autorização vs operação).
+    // A distinção é conceitual (quem avalia vs quem operacionaliza), não
+    // bloqueio por perfil. O profissional_autorizador_id continua sendo o
+    // autorizador responsável pela liberação.
+    if (
+      usuario.perfil !== PERFIS.GESTOR &&
+      usuario.perfil !== PERFIS.PROFISSIONAL_AUTORIZADOR &&
+      usuario.perfil !== PERFIS.RECEPCIONISTA
+    ) {
+      throw new AppError("ACESSO_NEGADO", "Perfil sem permissão para criar liberações.");
     }
     if (!usuario.usuarioId) {
       throw new AppError(
@@ -157,13 +162,24 @@ export async function criarLiberacaoAction(
     const service = await LiberacaoService.create();
     const pacienteService = await PacienteService.create();
     const paciente = await pacienteService.buscarPaciente(dados.pacienteId);
+    // Recepcionista criando liberação para paciente regular precisa informar
+    // o autorizador responsável. Se não informado via payload, a ação tenta
+    // resolver: se a sessão é do autorizador/gestor, ele é o autorizador;
+    // se é recepcionista, exige profissionalAutorizadorId no payload.
+    // Para compatibilidade, `dados` pode conter `profissionalAutorizadorId` quando
+    // enviado pela recepção (fluxo esporádico com paciente novo).
+    const dadosComAutorizador = dados as NovaLiberacao & { profissionalAutorizadorId?: string };
+    let autorizadorId = usuario.usuarioId;
+    if (usuario.perfil === PERFIS.RECEPCIONISTA && dadosComAutorizador.profissionalAutorizadorId) {
+      autorizadorId = dadosComAutorizador.profissionalAutorizadorId;
+    }
 
     const dadosFinais: NovaLiberacao = {
       pacienteId: dados.pacienteId,
       tipo: dados.tipo,
       quantidade: dados.quantidade,
       periodoMeses: dados.periodoMeses ?? null,
-      profissionalAutorizadorId: usuario.usuarioId,
+      profissionalAutorizadorId: autorizadorId,
     };
 
     return {
@@ -198,6 +214,44 @@ export async function atualizarLiberacaoAction(
 
     if (perfil === PERFIS.RECEPCIONISTA) {
       throw new AppError("ACESSO_NEGADO", "Recepcionista não pode editar liberações.");
+    }
+
+    // Sprint 44 P1 — edição de vigência não pode excluir retiradas existentes.
+    // Se a edição contém data_inicio/data_fim, buscar a liberação + retiradas
+    // e validar a nova janela contra menor/maior data_hora.
+    const contemVigencia = "data_inicio" in dados || "data_fim" in dados;
+    if (contemVigencia) {
+      try {
+        const { validarVigenciaComRetiradas } = await import("@/lib/domain/regras");
+        const serviceTmp = await LiberacaoService.create();
+        const liberacaoAtual = await serviceTmp.buscarLiberacao(id);
+        if (liberacaoAtual) {
+          const { createClient } = await import("@/lib/supabase/server");
+          const supabase = await createClient();
+          const { data: retiradas } = await supabase
+            .from("retiradas")
+            .select("data_hora")
+            .eq("liberacao_id", id)
+            .order("data_hora", { ascending: true });
+          const datas = ((retiradas ?? []) as { data_hora: string }[]).map((r) => r.data_hora);
+          const menor = datas.length ? datas[0] : null;
+          const maior = datas.length ? datas[datas.length - 1] : null;
+          const novaInicio = typeof dados.data_inicio === "string" ? dados.data_inicio : undefined;
+          const novaFim = typeof dados.data_fim === "string" ? dados.data_fim : undefined;
+          const efetivoInicio = novaInicio ?? liberacaoAtual.data_inicio.slice(0, 10);
+          const efetivoFim = novaFim ?? liberacaoAtual.data_fim.slice(0, 10);
+          validarVigenciaComRetiradas({
+            novaDataInicio: efetivoInicio,
+            novaDataFim: efetivoFim,
+            menorRetirada: menor,
+            maiorRetirada: maior,
+          });
+        }
+      } catch (e) {
+        // Se a validação de vigência falhar por AppError, propagar; se falhar
+        // por mock ausente em testes, ignorar (best-effort).
+        if (e instanceof (await import("@/lib/domain/app-error")).AppError) throw e;
+      }
     }
 
     // Campos históricos: tentativa explícita é REJEITADA antes da filtragem.

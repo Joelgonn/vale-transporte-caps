@@ -57,16 +57,27 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
   // Busca por nome/Gestor SUS do PACIENTE (não são colunas de liberacoes/
   // retiradas). Segue o padrão seguro de Pacientes/Liberações: resolve os ids
   // via v_pacientes (sem CPF, RLS) e filtra por paciente_id.
+  // Sprint 44 P1 — removido .limit(100) silencioso: agora pagina em chunks de
+  // 1000 até esgotar, garantindo que 101/500 pacientes com mesmo termo não
+  // produzam relatório incompleto sem aviso.
   private async resolverIdsPacientes(termo?: string): Promise<string[] | null> {
     if (!termo) return null;
-    const { data: pacientes, error } = await this.client
-      .from("v_pacientes")
-      .select("id")
-      .or(`nome.ilike.%${termo}%,gestor_sus.ilike.%${termo}%`)
-      .limit(100);
-
-    if (error) throw mapSupabaseError(error);
-    return (pacientes ?? []).map((p: { id: string }) => p.id);
+    const tamanhoPagina = 1000;
+    let offset = 0;
+    const ids: string[] = [];
+    while (true) {
+      const { data: pacientes, error } = await this.client
+        .from("v_pacientes")
+        .select("id")
+        .or(`nome.ilike.%${termo}%,gestor_sus.ilike.%${termo}%`)
+        .range(offset, offset + tamanhoPagina - 1);
+      if (error) throw mapSupabaseError(error);
+      const pagina = (pacientes ?? []) as { id: string }[];
+      ids.push(...pagina.map((p) => p.id));
+      if (pagina.length < tamanhoPagina) break;
+      offset += tamanhoPagina;
+    }
+    return ids;
   }
 
   async listarLiberacoes(filtros: FiltrosRelatorio): Promise<ResultadoListaRelatorio> {

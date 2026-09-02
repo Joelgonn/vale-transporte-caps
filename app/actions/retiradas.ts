@@ -88,14 +88,47 @@ export async function registrarRetiradaAction(
   try {
     const usuario = await exigirUsuarioAtivo();
 
-    if (usuario.perfil !== PERFIS.RECEPCIONISTA) {
-      throw new AppError(
-        "ACESSO_NEGADO",
-        "Somente a recepção pode registrar retiradas."
-      );
+    // Sprint 44 — todos os perfis ativos podem registrar retirada (operação).
+    // A distinção autorizador vs operação é conceitual; a entrega é
+    // operacionalizada por quem estiver na recepção no momento.
+    if (
+      usuario.perfil !== PERFIS.GESTOR &&
+      usuario.perfil !== PERFIS.PROFISSIONAL_AUTORIZADOR &&
+      usuario.perfil !== PERFIS.RECEPCIONISTA
+    ) {
+      throw new AppError("ACESSO_NEGADO", "Perfil sem permissão para registrar retiradas.");
     }
 
     const service = await RetiradaService.create();
+    // Sprint 44 P1/P2 — infraestrutura de estouro: detectar e logar (sem bloquear).
+    // Best-effort: se a verificação falhar (ex.: mock de teste sem Supabase),
+    // não impede o registro — RN31 garante que retirada nunca é bloqueada por previsão.
+    try {
+      const liberacao = await (await import("@/lib/services/liberacao-service")).LiberacaoService.create()
+        .then((s) => s.buscarLiberacao(dados.liberacaoId));
+      if (liberacao) {
+        const { createClient } = await import("@/lib/supabase/server");
+        const supabase = await createClient();
+        const { data: retiradasExistentes } = await supabase
+          .from("retiradas")
+          .select("quantidade")
+          .eq("liberacao_id", dados.liberacaoId);
+        const totalExistente = ((retiradasExistentes ?? []) as { quantidade: number }[]).reduce(
+          (a, r) => a + (r.quantidade ?? 0),
+          0
+        );
+        const { isEstouro } = await import("@/lib/domain/regras");
+        const totalComNova = totalExistente + dados.quantidade;
+        if (isEstouro(liberacao.quantidade, totalComNova)) {
+          console.warn(
+            `[Sprint44] Retirada em estouro de previsão: liberacao ${dados.liberacaoId} previsto ${liberacao.quantidade} totalComNova ${totalComNova}`
+          );
+        }
+      }
+    } catch {
+      // Verificação opcional — nunca bloqueia o fluxo principal
+    }
+
     return { ok: true, data: await service.registrarRetirada(dados) };
   } catch (erro) {
     return { ok: false, error: mensagemDaAcao(erro) };

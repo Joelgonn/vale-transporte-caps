@@ -60,18 +60,50 @@ export class LiberacaoRepositoryPostgres implements LiberacaoRepository {
     // Segue o padrão seguro de Pacientes: resolve os ids correspondentes via
     // v_pacientes (sem CPF, RLS) e filtra liberacoes por paciente_id. Toda a
     // filtragem acontece no servidor/repositório (nunca SQL no componente).
+    // Sprint 44 P1 — removido .limit(100) silencioso: pagina em chunks de 1000
     if (termo) {
-      const { data: pacientes, error: erroIds } = await this.client
-        .from("v_pacientes")
-        .select("id")
-        .or(`nome.ilike.%${termo}%,gestor_sus.ilike.%${termo}%`)
-        .limit(100);
-
-      if (erroIds) throw mapSupabaseError(erroIds);
-
-      const ids = (pacientes ?? []).map((p: { id: string }) => p.id);
+      const tamanhoPagina = 1000;
+      let offset = 0;
+      const ids: string[] = [];
+      while (true) {
+        const { data: pacientes, error: erroIds } = await this.client
+          .from("v_pacientes")
+          .select("id")
+          .or(`nome.ilike.%${termo}%,gestor_sus.ilike.%${termo}%`)
+          .range(offset, offset + tamanhoPagina - 1);
+        if (erroIds) throw mapSupabaseError(erroIds);
+        const pagina = (pacientes ?? []) as { id: string }[];
+        ids.push(...pagina.map((p) => p.id));
+        if (pagina.length < tamanhoPagina) break;
+        offset += tamanhoPagina;
+      }
       if (ids.length === 0) return [];
-      query = query.in("paciente_id", ids);
+      // PostgREST .in com muitos ids pode exceder URL; se >200, particiona em
+      // múltiplas queries e mescla no app (sem N+1 extra quando cabe em 1).
+      if (ids.length <= 200) {
+        query = query.in("paciente_id", ids);
+      } else {
+        // fallback chunked: executa query em lotes e retorna mesclado direto
+        // (evita .in gigante). Implementação simples: primeira iteração com .in
+        // do lote 0 é feita fora do `query` pré-montado; aqui delegamos ao
+        // fluxo chunked retornando imediatamente.
+        const resultados: LiberacaoComPaciente[] = [];
+        for (let i = 0; i < ids.length; i += 200) {
+          const lote = ids.slice(i, i + 200);
+          const q = this.client
+            .from("liberacoes")
+            .select(`*, pacientes(${COLUNAS_PACIENTE})`)
+            .in("paciente_id", lote)
+            .order("data_inicio", { ascending: false });
+          const { data, error } = await q;
+          if (error) throw mapSupabaseError(error);
+          resultados.push(...mapearLista((data ?? []) as unknown[] as never));
+        }
+        // Ordenação global já feita por data_inicio desc dentro de cada lote;
+        // reordena final para garantir determinismo.
+        resultados.sort((a, b) => (a.data_inicio < b.data_inicio ? 1 : -1));
+        return resultados;
+      }
     }
 
     const { data, error } = await query;

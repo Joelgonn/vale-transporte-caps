@@ -35,6 +35,8 @@ Os filtros definidos foram **confirmados** como suficientes para o MVP:
 > **Não há saldo acumulado entre liberações (RN22):** não existe "saldo não retirado" transferível. Liberações autorizadas sem retirada dentro do período de validade expiram; o acompanhamento desse caso fica no relatório de pendências de retirada dentro da validade.
 >
 > **Total retirado (Sprint 05):** o total efetivamente entregue de uma liberação = **soma das retiradas** registradas; quantidade restante por liberação = autorizada − soma (controle técnico, ver `DATABASE.md`).
+> **Sprint 44 — Glossário oficial** (`lib/domain/relatorios/glossario.ts`): RESUMO `Previsto` (liberações com data_inicio no período) / `Retirado` (retiradas com data_hora no período, independente) / `Diferença` (Previsto−Retirado); CONSOLIDADO/HISTÓRICO `Previsto` (previsão da liberação) / `Retirado` (acumulado) / `Diferença`; LIBERAÇÕES `Previsto`+`Retirado` por liberação; RETIRADAS `Quantidade` individual. Convenção `1 mês = 4 semanas`.
+> **Sprint 44 — Histórico** preparado para `Estado atual + Eventos` via `auditoria_logs` (sem segunda trilha) — `lib/domain/relatorios/eventos.ts`.
 
 ## Relatórios Planejados
 

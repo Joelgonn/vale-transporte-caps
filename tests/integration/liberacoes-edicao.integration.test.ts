@@ -374,3 +374,92 @@ describe.skipIf(!habilitado)("CHECK de previsão 1..999 (Sprint 42.2)", () => {
     }
   });
 });
+
+// ── Sprint 42.6 — REGRESSÃO: grant UPDATE de liberações aplicado no banco ────
+//
+// Bug real de produção (commit 611608c): ao salvar uma edição de liberação,
+// TANTO o perfil AUTORIZADOR quanto o GESTOR recebiam
+//   "Você não tem permissão para executar esta operação."
+// Reproduzido contra o banco de PRODUÇÃO: qualquer UPDATE em public.liberacoes
+// por um usuário `authenticated` retornava SQLSTATE 42501
+//   "permission denied for table liberacoes"
+// porque a migration 20260826000001 (grant update ... to authenticated) NÃO foi
+// aplicada ao banco de produção — o UPDATE chegava antes da RLS/trigger.
+//
+// Este bloco NÃO usa o guard `edicaoAplicada()` (que silenciosamente PULA quando
+// a migration não está no banco). Ele PROVA a presença real do grant UPDATE:
+//   * se o grant estiver ausente → UPDATE quebra com 42501 → o teste FALHA
+//     (reproduzindo o bug de produção);
+//   * se o grant estiver presente → o UPDATE permitido do autorizador passa e o
+//     status continua bloqueado pelo trigger → o teste PASSA (correção).
+describe.skipIf(!habilitado)("Regressão Sprint 42.6 — grant UPDATE presente no banco", () => {
+  it("AUTORIZADOR edita justificativa SEM erro de permissão (grant UPDATE aplicado)", async () => {
+    const admin = adminClient();
+    const autorizadorId = await autorizadorAtualId(autorizador);
+    const pacienteId = await criarPaciente(autorizador, "Regressao Grant UPDATE");
+    let liberacaoId: string | null = null;
+    try {
+      liberacaoId = await criarLiberacao(autorizador, autorizadorId, pacienteId);
+
+      const { data, error } = await autorizador
+        .from("liberacoes")
+        .update({ justificativa: "ajuste de vigência" })
+        .eq("id", liberacaoId)
+        .select("justificativa")
+        .single();
+
+      // O bug de produção retornava 42501 (mapped p/ "permissão"). A correção
+      // (migration 20260826000001 aplicada) faz o UPDATE permitido passar.
+      expect(error).toBeNull();
+      expect(error?.code).not.toBe("42501");
+      expect(data?.justificativa).toBe("ajuste de vigência");
+    } finally {
+      await limpar(admin, { liberacoes: liberacaoId ? [liberacaoId] : [], pacientes: [pacienteId] });
+    }
+  });
+
+  it("AUTORIZADOR edita quantidade prevista SEM erro de permissão; status continua bloqueado", async () => {
+    const admin = adminClient();
+    const autorizadorId = await autorizadorAtualId(autorizador);
+    const pacienteId = await criarPaciente(autorizador, "Regressao Grant Qtd");
+    let liberacaoId: string | null = null;
+    try {
+      liberacaoId = await criarLiberacao(autorizador, autorizadorId, pacienteId);
+
+      const ok = await autorizador
+        .from("liberacoes")
+        .update({ quantidade: 8 })
+        .eq("id", liberacaoId);
+      expect(ok.error).toBeNull();
+      expect(ok.error?.code).not.toBe("42501");
+
+      const status = await autorizador
+        .from("liberacoes")
+        .update({ status: "cancelada" })
+        .eq("id", liberacaoId);
+      expect(status.error).not.toBeNull();
+      expect(status.error?.message).toMatch(/status da liberação/i);
+    } finally {
+      await limpar(admin, { liberacoes: liberacaoId ? [liberacaoId] : [], pacientes: [pacienteId] });
+    }
+  });
+
+  it("GESTOR altera status SEM erro de permissão (grant UPDATE aplicado)", async () => {
+    const admin = adminClient();
+    const autorizadorId = await autorizadorAtualId(autorizador);
+    const pacienteId = await criarPaciente(gestor, "Regressao Grant Gestor");
+    let liberacaoId: string | null = null;
+    try {
+      liberacaoId = await criarLiberacao(autorizador, autorizadorId, pacienteId);
+
+      const ok = await gestor
+        .from("liberacoes")
+        .update({ status: "cancelada" })
+        .eq("id", liberacaoId);
+      expect(ok.error).toBeNull();
+      expect(ok.error?.code).not.toBe("42501");
+    } finally {
+      await limpar(admin, { liberacoes: liberacaoId ? [liberacaoId] : [], pacientes: [pacienteId] });
+    }
+  });
+});

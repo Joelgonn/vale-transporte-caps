@@ -132,9 +132,9 @@ describe("DashboardShell", () => {
     expect(screen.queryByRole("link", { name: "Relatórios" })).toBeNull();
   });
 
-  it("Retiradas não aparecem para o profissional autorizador (somente recepção/gestão)", () => {
+  it("Retiradas TAMBÉM aparecem para o profissional autorizador — Sprint44 (todos operam)", () => {
     renderizarShell({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR, statusAtivo: true });
-    expect(screen.queryByRole("link", { name: "Retiradas" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Retiradas" })).toHaveAttribute("href", "/dashboard/retiradas");
   });
 
   it("logout funciona (botão Sair no painel)", async () => {

@@ -348,24 +348,30 @@ describe.skipIf(!habilitado)("Estabilização — renovação via PostgREST dire
     }
   });
 
-  it("recepção NÃO cria liberação nova via PostgREST direto (só renovação)", async () => {
+  it("recepção CRIA liberação nova via PostgREST direto — Sprint44 (todos criam)", async () => {
     const admin = adminClient();
     const autorizadorId = await usuarioAtualId(autorizador);
     const pacienteId = await pacienteTeste(admin);
 
+    let id: string | null = null;
     try {
-      const { data, error } = await recepcionista.from("liberacoes").insert({
-        paciente_id: pacienteId,
-        tipo: "continua",
-        quantidade: 2,
-        periodo_meses: 3,
-        profissional_autorizador_id: autorizadorId,
-      });
+      const { data, error } = await recepcionista
+        .from("liberacoes")
+        .insert({
+          paciente_id: pacienteId,
+          tipo: "continua",
+          quantidade: 2,
+          periodo_meses: 3,
+          profissional_autorizador_id: autorizadorId,
+        })
+        .select("id")
+        .single();
 
-      expect(error ?? null).not.toBeNull();
-      expect(data).toBeNull();
+      expect(error).toBeNull();
+      expect(data?.id).toBeTruthy();
+      id = data!.id;
     } finally {
-      // nada criado — sem cleanup
+      if (id) await limparLiberacoes(admin, [id]);
     }
   });
 });

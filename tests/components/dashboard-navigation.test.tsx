@@ -248,6 +248,7 @@ describe("matriz de navegação por perfil (FASE 6)", () => {
       [
         ["Pacientes", "/dashboard/pacientes"],
         ["Liberações", "/dashboard/liberacoes"],
+        ["Retiradas", "/dashboard/retiradas"],
       ],
     ],
     [
@@ -387,18 +388,18 @@ describe("regressão Sprint 41: recomposição da grade (sem col-span, sem órf�
     return el!;
   }
 
-  it("Gestor: 4 ações rápidas em grid de colunas iguais (base 1 col, desktop 3)", () => {
+  it("Gestor: 7 ações rápidas em grid de colunas iguais (base 1 col, desktop 3) — Sprint44", () => {
     renderizarHome();
     const ul = secao("dashboard-acoes-rapidas").querySelector("ul")!;
     expect(ul.className).toContain("grid-cols-1");
     expect(ul.className).toContain("lg:grid-cols-3");
     const itens = Array.from(ul.querySelectorAll("li"));
-    expect(itens).toHaveLength(4);
+    expect(itens).toHaveLength(7);
     for (const item of itens) {
       expect(item.className).not.toMatch(/col-span/);
       expect(item.querySelector("a")).not.toBeNull();
     }
-    for (const rotulo of ["Novo paciente", "Gerenciar usuários", "Consultar auditoria", "Consultar relatórios"]) {
+    for (const rotulo of ["Novo paciente", "Paciente esporádico", "Nova liberação", "Registrar retirada", "Gerenciar usuários", "Consultar auditoria", "Consultar relatórios"]) {
       expect(screen.getByRole("link", { name: new RegExp(`^${rotulo}`) })).toBeInTheDocument();
     }
   });
@@ -426,7 +427,7 @@ describe("regressão Sprint 41: recomposição da grade (sem col-span, sem órf�
     expect(pacientes.className).not.toMatch(/col-span/);
   });
 
-  it("recepcionista: grade se adapta naturalmente (3 ações, 3 módulos, sem placeholders)", () => {
+  it("recepcionista: grade se adapta naturalmente (4 ações, 3 módulos, sem placeholders) — Sprint44", () => {
     render(
       <RouterContext.Provider value={router()}>
         <DashboardHome
@@ -438,7 +439,7 @@ describe("regressão Sprint 41: recomposição da grade (sem col-span, sem órf�
     );
     const ulAcoes = secao("dashboard-acoes-rapidas").querySelector("ul")!;
     const itensAcoes = Array.from(ulAcoes.querySelectorAll("li"));
-    expect(itensAcoes).toHaveLength(3);
+    expect(itensAcoes).toHaveLength(4);
     for (const item of itensAcoes) {
       expect(item.className).not.toMatch(/col-span/);
     }

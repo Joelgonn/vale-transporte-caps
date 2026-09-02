@@ -55,7 +55,7 @@ describe("DashboardHome", () => {
     expect(screen.queryByRole("link", { name: LinkDoModulo("Auditoria") })).toBeNull();
   });
 
-  it("Ações rápidas por perfil (Gestor gerencia usuários e consulta auditoria)", () => {
+  it("Ações rápidas por perfil (Gestor gerencia usuários e consulta auditoria) — Sprint44 também registra retirada", () => {
     render(<DashboardHome email="gestor@caps.local" perfil={PERFIS.GESTOR} statusAtivo={true} />);
     expect(screen.getByRole("heading", { name: "Ações rápidas" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^Gerenciar usuários/ })).toHaveAttribute(
@@ -66,7 +66,8 @@ describe("DashboardHome", () => {
       "href",
       "/dashboard/auditoria"
     );
-    expect(screen.queryByRole("link", { name: /^Registrar retirada/ })).toBeNull();
+    // Sprint44: todos registram retirada
+    expect(screen.getByRole("link", { name: /^Registrar retirada/ })).toHaveAttribute("href", "/dashboard/retiradas");
   });
 
   it("Relatórios é um link real para o Gestor ativo, mas não para recepção/autorizador", () => {
@@ -88,7 +89,7 @@ describe("DashboardHome", () => {
     expect(screen.queryByRole("link", { name: LinkDoModulo("Relatórios") })).toBeNull();
   });
 
-  it("Ações rápidas por perfil (autorizador cria paciente e lança liberação)", () => {
+  it("Ações rápidas por perfil (autorizador cria paciente e lança liberação) — Sprint44 também registra retirada", () => {
     render(
       <DashboardHome email="autorizador@caps.local" perfil={PERFIS.PROFISSIONAL_AUTORIZADOR} statusAtivo={true} />
     );
@@ -101,10 +102,11 @@ describe("DashboardHome", () => {
       "/dashboard/liberacoes"
     );
     expect(screen.queryByRole("link", { name: /^Gerenciar usuários/ })).toBeNull();
-    expect(screen.queryByRole("link", { name: /^Registrar retirada/ })).toBeNull();
+    // Sprint44: autorizador também registra retirada
+    expect(screen.getByRole("link", { name: /^Registrar retirada/ })).toHaveAttribute("href", "/dashboard/retiradas");
   });
 
-  it("Ações rápidas por perfil (recepcionista renova liberação e registra retirada)", () => {
+  it("Ações rápidas por perfil (recepcionista renova liberação e registra retirada) — Sprint44 também cria liberação", () => {
     render(<DashboardHome email="recep@caps.local" perfil={PERFIS.RECEPCIONISTA} statusAtivo={true} />);
     expect(screen.getByRole("link", { name: /^Renovar liberação/ })).toHaveAttribute(
       "href",
@@ -114,7 +116,7 @@ describe("DashboardHome", () => {
       "href",
       "/dashboard/retiradas"
     );
-    expect(screen.queryByRole("link", { name: /^Nova liberação/ })).toBeNull();
+    expect(screen.getByRole("link", { name: /^Nova liberação/ })).toHaveAttribute("href", "/dashboard/liberacoes");
   });
 
   it("usuário inativo não vê ações e recebe orientação segura", () => {
@@ -151,9 +153,9 @@ describe("DashboardHome", () => {
     expect(screen.queryByText(/Próximo módulo em desenvolvimento/i)).toBeNull();
   });
 
-  it("profissional autorizador não vê o módulo de Retiradas", () => {
+  it("profissional autorizador TAMBÉM vê o módulo de Retiradas — Sprint44", () => {
     render(<DashboardHome email="autorizador@caps.local" perfil={PERFIS.PROFISSIONAL_AUTORIZADOR} statusAtivo={true} />);
-    expect(screen.queryByRole("link", { name: LinkDoModulo("Retiradas") })).toBeNull();
+    expect(screen.getByRole("link", { name: LinkDoModulo("Retiradas") })).toHaveAttribute("href", "/dashboard/retiradas");
   });
 
   it("visão geral mostra dados reais (perfil, situação, e-mail)", () => {

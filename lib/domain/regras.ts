@@ -117,12 +117,41 @@ export function validarNovoPaciente(dados: {
 // pacientes_insert_regular / pacientes_insert_recepcao_esporadico):
 //   * gestor / profissional_autorizador → 'regular';
 //   * recepcionista → 'esporadico' (exclusivamente atendimento esporádico).
+// Sprint 44 — matriz oficial (fluxo contínuo vs esporádico):
+//   * GESTOR        → regular + esporadico (ambos);
+//   * AUTORIZADOR   → regular + esporadico (ambos);
+//   * RECEPCIONISTA → esporadico dentro do fluxo de liberação esporádica;
+//                    regular somente via reutilização (localizar existente),
+//                    não como cadastro independente.
+// Para compatibilidade, a função legada retorna a origem "principal" do perfil;
+// a lista completa por perfil está em origensPermitidasPorPerfil (Sprint 44).
 export function origemPermitidaPorPerfil(
   perfil: PerfilUsuario
 ): OrigemPaciente {
   return perfil === PERFIS.RECEPCIONISTA
     ? ORIGENS_PACIENTE.ESPORADICO
     : ORIGENS_PACIENTE.REGULAR;
+}
+
+// Sprint 44 — lista completa de origens que cada perfil pode CRIAR
+// (origem pertence ao PACIENTE, não à liberação — RN29/RN30).
+export function origensPermitidasPorPerfil(
+  perfil: PerfilUsuario
+): readonly OrigemPaciente[] {
+  if (perfil === PERFIS.GESTOR || perfil === PERFIS.PROFISSIONAL_AUTORIZADOR) {
+    return [ORIGENS_PACIENTE.REGULAR, ORIGENS_PACIENTE.ESPORADICO];
+  }
+  if (perfil === PERFIS.RECEPCIONISTA) {
+    return [ORIGENS_PACIENTE.ESPORADICO];
+  }
+  return [];
+}
+
+export function podeCriarPacienteComOrigem(
+  perfil: PerfilUsuario,
+  origem: OrigemPaciente
+): boolean {
+  return (origensPermitidasPorPerfil(perfil) as readonly string[]).includes(origem);
 }
 
 // Padrão de e-mail aceito pelo produto (validação de cadastro e formulários).
@@ -322,13 +351,17 @@ export function podeAutorizar(
 }
 
 // Permissões de UI para a página de pacientes, derivadas de perfil + status.
+// Sprint 44 — matriz oficial:
+//   GESTOR        → cria regular + esporadico, localiza/reutiliza, edita status;
+//   AUTORIZADOR   → cria regular + esporadico, localiza/reutiliza, edita dados;
+//   RECEPCIONISTA → NÃO cria regular independente; cria esporadico dentro do fluxo
+//                  operacional (liberação esporádica) + localiza/reutiliza qualquer
+//                  paciente existente.
 // Espelham o que as policies RLS/triggers do banco de fato permitem (a autoridade
 // continua no banco):
 //  - leitura: qualquer perfil reconhecido e ativo (v_pacientes / policy select);
-//  - INSERT regular (gestor/autorizador ativos): policy pacientes_insert_regular
-//    (migration 20260821000001) — origem obrigatória 'regular';
-//  - INSERT esporádico (recepcionista ativa): policy
-//    pacientes_insert_recepcao_esporadico — origem obrigatória 'esporadico';
+//  - INSERT: policies pacientes_insert_* (Sprint 44: todos os perfis ativos podem
+//            criar conforme origensPermitidasPorPerfil);
 //  - UPDATE de dados: somente profissional_autorizador ativo (trigger bloqueia status);
 //  - UPDATE de status: somente gestor ativo (trigger bloqueia demais campos).
 export function permissoesPacientes(
@@ -344,11 +377,18 @@ export function permissoesPacientes(
   const ativo = perfil != null && statusAtivo === true;
   return {
     podeAcessar: ativo,
+    // Sprint 44: gestor e autorizador criam regular; recepcionista NÃO (só reutiliza)
     podeCriarRegular:
       ativo &&
       (perfil === PERFIS.GESTOR ||
         perfil === PERFIS.PROFISSIONAL_AUTORIZADOR),
-    podeCriarEsporadico: ativo && perfil === PERFIS.RECEPCIONISTA,
+    // Sprint 44: os três perfis ativos podem criar esporadico (gestor/autorizador
+    // diretamente; recepcionista dentro do fluxo operacional)
+    podeCriarEsporadico:
+      ativo &&
+      (perfil === PERFIS.GESTOR ||
+        perfil === PERFIS.PROFISSIONAL_AUTORIZADOR ||
+        perfil === PERFIS.RECEPCIONISTA),
     podeEditarDados: ativo && perfil === PERFIS.PROFISSIONAL_AUTORIZADOR,
     podeAlterarStatus: ativo && perfil === PERFIS.GESTOR,
   };
@@ -373,17 +413,20 @@ export function permissoesUsuarios(
 }
 
 // Permissões de UI para a página de liberações (Sprint 18), derivadas de perfil
-// + status e espelhando as policies RLS reais (migrations 09/13/14):
+// + status e espelhando as policies RLS reais (migrations 09/13/14 + Sprint 44):
 //  - leitura: qualquer perfil ATIVO (autorizador/gestor veem todas;
 //    recepcionista somente status 'ativa' — liberacoes_select_recepcao_ativas);
-//  - INSERT "nova liberação": somente profissional_autorizador ativo
-//    (liberacoes_insert_autorizador);
+//  - INSERT "nova liberação": Sprint 44 — os TRÊS perfis ativos podem criar
+//    liberações (contínua e avulsa); a distinção é AUTORIZAÇÃO (avaliação do
+//    autorizador) vs OPERAÇÃO (entrega na recepção), não bloqueio por perfil.
+//    Policies Sprint 44: liberacoes_insert_* por perfil ativo.
 //  - INSERT "renovação": somente recepcionista ativa com renovacao_de_id
-//    informado (liberacoes_insert_recepcao_renovacao);
+//    informado (liberacoes_insert_recepcao_renovacao) — mantido;
 //  - UPDATE "editar" (Sprint 42): autorizador edita previsão/janela/justificativa;
 //    gestor altera status + campos administrativos; recepcionista não edita
 //    (policy liberacoes_update_autorizador_gestor + split fino no trigger);
 //  - sem delete de liberações (revogado — migration 15).
+// Sprint 44 — recepcionista PODE criar liberações contínuas e avulsas.
 export function permissoesLiberacoes(
   perfil: PerfilUsuario | null,
   statusAtivo: boolean | null
@@ -396,9 +439,14 @@ export function permissoesLiberacoes(
   visualizaSomenteAtivas: boolean;
 } {
   const ativo = perfil != null && statusAtivo === true;
+  const podeCriarLiberacao =
+    ativo &&
+    (perfil === PERFIS.GESTOR ||
+      perfil === PERFIS.PROFISSIONAL_AUTORIZADOR ||
+      perfil === PERFIS.RECEPCIONISTA);
   return {
     podeAcessar: ativo,
-    podeCriar: ativo && perfil === PERFIS.PROFISSIONAL_AUTORIZADOR,
+    podeCriar: podeCriarLiberacao,
     podeRenovar: ativo && perfil === PERFIS.RECEPCIONISTA,
     podeEditar: ativo && perfil === PERFIS.PROFISSIONAL_AUTORIZADOR,
     podeAlterarStatus: ativo && perfil === PERFIS.GESTOR,
@@ -516,12 +564,79 @@ export function validarAtualizacaoLiberacao(
   }
 }
 
+// ── Sprint 44 — P1: vigência não pode excluir retiradas existentes ─────────
+//
+// Regra: ao editar data_inicio/data_fim, a nova janela deve CONTINUAR contendo
+// todas as retiradas já registradas (menor data_hora e maior data_hora).
+// Preserva semanticamente o histórico: retirada válida no momento do registro
+// não pode virar "fora da validade" por edição retroativa.
+export function validarVigenciaComRetiradas(params: {
+  novaDataInicio?: string | null;
+  novaDataFim?: string | null;
+  menorRetirada?: string | null;
+  maiorRetirada?: string | null;
+}): void {
+  const { novaDataInicio, novaDataFim, menorRetirada, maiorRetirada } = params;
+  // Se não há retiradas, qualquer janela coerente é válida (já validado acima)
+  if (!menorRetirada && !maiorRetirada) return;
+  // Se a edição não altera vigência, nada a validar aqui
+  if (!novaDataInicio && !novaDataFim) return;
+
+  // Comparação lexicográfica de ISO (YYYY-MM-DD...)
+  if (
+    typeof novaDataInicio === "string" &&
+    novaDataInicio.length > 0 &&
+    menorRetirada &&
+    novaDataInicio > menorRetirada.slice(0, 10)
+  ) {
+    throw new AppError(
+      "VALIDACAO",
+      "A nova data de início não pode excluir retiradas já registradas. A menor retirada é anterior ao novo início."
+    );
+  }
+  if (
+    typeof novaDataFim === "string" &&
+    novaDataFim.length > 0 &&
+    maiorRetirada &&
+    novaDataFim < maiorRetirada.slice(0, 10)
+  ) {
+    throw new AppError(
+      "VALIDACAO",
+      "A nova data de fim não pode excluir retiradas já registradas. Há retiradas posteriores ao novo fim."
+    );
+  }
+}
+
+// ── Sprint 44 — P1/P2: estouro de previsão (RN31) ──────────────────────────
+// RN31: quantidade é PREVISÃO, não bloqueia. Porém, para gestão, é útil
+// distinguir "retirada normal" de "retirada em situação de estouro".
+// Não existe threshold institucional documentado (nenhum 20% ou +10 fixo);
+// portanto NÃO bloqueamos nem exigimos justificativa arbitrária aqui.
+// Esta infraestrutura apenas DETECTA e permite ao repositório/UI SINALIZAR.
+// Se decisão institucional futura definir threshold, basta parametrizar
+// `limite` aqui — sem mudar o fluxo de retirada (sempre append-only).
+export type EstadoPrevisao = "dentro" | "estouro";
+export function estadoPrevisao(
+  quantidadePrevista: number,
+  totalRetirado: number
+): EstadoPrevisao {
+  return totalRetirado > quantidadePrevista ? "estouro" : "dentro";
+}
+export function isEstouro(
+  quantidadePrevista: number,
+  totalRetiradoIncluindoNova: number
+): boolean {
+  return estadoPrevisao(quantidadePrevista, totalRetiradoIncluindoNova) === "estouro";
+}
+
 // Permissões de UI para a página de retiradas (Sprint 20), derivadas de perfil
-// + status e espelhando as policies RLS reais (migrations 09/13/14):
-//  - leitura: somente recepcionista e gestor ATIVOS (retiradas_select_recepcao_
-//    gestor; o autorizador não acessa retiradas);
-//  - INSERT "registrar retirada": somente recepcionista ativa
-//    (retiradas_insert_recepcao);
+// + status e espelhando as policies RLS reais (migrations 09/13/14 + Sprint 44):
+//  - leitura: Sprint 44 — os TRÊS perfis ativos acessam retiradas para operar
+//    (autorizador avalia, recepcionista entrega, gestor administra);
+//    RLS Sprint 44: retiradas_select ampliada aos três perfis ativos;
+//  - INSERT "registrar retirada": Sprint 44 — GESTOR, AUTORIZADOR e RECEPCIONISTA
+//    ativos podem registrar retirada (operação na recepção); RLS Sprint 44:
+//    retiradas_insert por perfil ativo;
 //  - sem update/delete de retiradas (append-only — sem policies).
 // O responsável (usuarios) só é legível pelo Gestor ativo (usuarios_select_gestor).
 export function permissoesRetiradas(
@@ -533,11 +648,10 @@ export function permissoesRetiradas(
   visualizaResponsavel: boolean;
 } {
   const ativo = perfil != null && statusAtivo === true;
-  const leRetiradas =
-    perfil === PERFIS.RECEPCIONISTA || perfil === PERFIS.GESTOR;
+  // Sprint 44: todos os perfis ativos operam retiradas (autorização vs operação)
   return {
-    podeAcessar: ativo && leRetiradas,
-    podeRegistrar: ativo && perfil === PERFIS.RECEPCIONISTA,
+    podeAcessar: ativo,
+    podeRegistrar: ativo,
     visualizaResponsavel: perfil === PERFIS.GESTOR,
   };
 }
@@ -607,13 +721,10 @@ export function capacidadeDashboard(
     // Gestão de usuários é exclusiva do Gestor ativo.
     usuarios: perfil === PERFIS.GESTOR && statusAtivo === true,
     // Todos os perfis ativos acessam o módulo de liberações
-    // (autorizador/gestor veem todas; recepcionista somente ativas — RLS).
+    // (Sprint 44: os três perfis criam liberações; recepcionista vê só ativas — RLS).
     liberacoes: ativo,
-    // Retiradas são somente leitura para recepcionista/gestor ativos e de
-    // registro apenas para a recepção (RLS retiradas_select_* e insert_recepcao).
-    retiradas:
-      ativo &&
-      (perfil === PERFIS.RECEPCIONISTA || perfil === PERFIS.GESTOR),
+    // Sprint 44: todos os perfis ativos acessam e registram retiradas
+    retiradas: ativo,
     // Auditoria é exclusiva do Gestor ativo (policy auditoria_select_gestor).
     auditoria: perfil === PERFIS.GESTOR && statusAtivo === true,
     // Relatórios são exclusivos do Gestor ativo (REPORTS.md — decisão

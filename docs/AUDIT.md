@@ -130,6 +130,14 @@ Todo log deve conter, no mínimo:
 
 A assinatura eletrônica neste contexto é a **combinação de identidade autenticada + ação + timestamp + registro afetado**, registrada de forma imutável. Não há assinatura criptográfica manual: a autenticação do usuário (com credenciais próprias) é o vínculo confiável entre o autor e a ação.
 
+## Sprint 44 — Histórico Estado + Eventos
+
+O histórico evolui de **Estado atual + soma de retiradas** para **Estado atual + Eventos**.
+- **Estado atual:** paciente/tipo/período/previsão/retirado/diferença/status/datas (via `liberacoes` + `retiradas`).
+- **Eventos:** criação/renovação/retirada/alteração de previsão/vigência/cancelamento — fonte única `auditoria_logs` (sem segunda trilha). `lib/domain/relatorios/eventos.ts` define `HistoricoCompleto` e mapeamento puro.
+- **P1 Vigência:** alteração que excluiria retiradas é rejeitada (preserva semântica do evento original).
+- **Estouro (RN31):** retirada acima da previsão não é bloqueada; o domínio apenas sinaliza via `isEstouro`/`estadoPrevisao` para a próxima UX.
+
 ## O que NÃO é decidido nesta Sprint
 
 - Nenhuma tabela de auditoria será criada.

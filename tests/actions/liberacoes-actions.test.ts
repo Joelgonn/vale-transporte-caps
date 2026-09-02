@@ -337,7 +337,7 @@ describe("criarLiberacaoAction — identidade da sessão", () => {
     expect(fake.criarLiberacao).not.toHaveBeenCalled();
   });
 
-  it("nova liberação por não-autorizador é bloqueada sem chamar o banco", async () => {
+  it("recepcionista TAMBÉM cria liberação direta — Sprint44 (todos os perfis criam)", async () => {
     comPerfil({ perfil: PERFIS.RECEPCIONISTA, statusAtivo: true });
     const fake = serviceFake();
     mocks.createService.mockResolvedValue(fake);
@@ -348,9 +348,11 @@ describe("criarLiberacaoAction — identidade da sessão", () => {
       quantidade: 1,
     });
 
-    expect(resultado.ok).toBe(false);
-    if (!resultado.ok) expect(resultado.error).toContain("autorizador");
-    expect(fake.criarLiberacao).not.toHaveBeenCalled();
+    expect(resultado.ok).toBe(true);
+    expect(fake.criarLiberacao).toHaveBeenCalledWith(
+      expect.objectContaining({ pacienteId: "p1", tipo: TIPOS_LIBERACAO.AVULSA }),
+      "regular"
+    );
   });
 
   it("usuário inativo é bloqueado", async () => {

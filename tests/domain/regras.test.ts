@@ -407,25 +407,25 @@ describe("permissoesPacientes (política de UI espelhando a RLS)", () => {
     expect(p.podeAlterarStatus).toBe(false);
   });
 
-  it("gestor ativo: acesso + criar regular + alterar status (sem editar dados)", () => {
+  it("gestor ativo: acesso + criar regular + esporadico + alterar status (sem editar dados) — Sprint44", () => {
     const p = permissoesPacientes(PERFIS.GESTOR, true);
     expect(p.podeAcessar).toBe(true);
     expect(p.podeCriarRegular).toBe(true);
-    expect(p.podeCriarEsporadico).toBe(false);
+    expect(p.podeCriarEsporadico).toBe(true);
     expect(p.podeEditarDados).toBe(false);
     expect(p.podeAlterarStatus).toBe(true);
   });
 
-  it("profissional autorizador ativo: acesso + criar regular + editar dados (sem alterar status)", () => {
+  it("profissional autorizador ativo: acesso + criar regular+esporadico + editar dados (sem alterar status) — Sprint44", () => {
     const p = permissoesPacientes(PERFIS.PROFISSIONAL_AUTORIZADOR, true);
     expect(p.podeAcessar).toBe(true);
     expect(p.podeCriarRegular).toBe(true);
-    expect(p.podeCriarEsporadico).toBe(false);
+    expect(p.podeCriarEsporadico).toBe(true);
     expect(p.podeEditarDados).toBe(true);
     expect(p.podeAlterarStatus).toBe(false);
   });
 
-  it("recepcionista ativa: criar esporádico + leitura (sem criar regular/editar/status)", () => {
+  it("recepcionista ativa: criar esporádico + leitura (sem criar regular/editar/status) — Sprint44 reutiliza regular", () => {
     const p = permissoesPacientes(PERFIS.RECEPCIONISTA, true);
     expect(p.podeAcessar).toBe(true);
     expect(p.podeCriarRegular).toBe(false);
@@ -482,7 +482,7 @@ describe("permissoesLiberacoes (Sprint 18 — política de UI espelhando a RLS)"
     expect(p.podeRenovar).toBe(false);
   });
 
-  it("autorizador ativo: acessa e cria, sem renovação", () => {
+  it("autorizador ativo: acessa e cria, sem renovação — Sprint44", () => {
     const p = permissoesLiberacoes(PERFIS.PROFISSIONAL_AUTORIZADOR, true);
     expect(p.podeAcessar).toBe(true);
     expect(p.podeCriar).toBe(true);
@@ -490,18 +490,18 @@ describe("permissoesLiberacoes (Sprint 18 — política de UI espelhando a RLS)"
     expect(p.visualizaSomenteAtivas).toBe(false);
   });
 
-  it("recepcionista ativa: acessa (somente ativas) e renova, sem criar nova", () => {
+  it("recepcionista ativa: acessa (somente ativas), cria e renova — Sprint44", () => {
     const p = permissoesLiberacoes(PERFIS.RECEPCIONISTA, true);
     expect(p.podeAcessar).toBe(true);
-    expect(p.podeCriar).toBe(false);
+    expect(p.podeCriar).toBe(true);
     expect(p.podeRenovar).toBe(true);
     expect(p.visualizaSomenteAtivas).toBe(true);
   });
 
-  it("gestor ativo: acessa, não cria nem renova (RLS só autoriza autorizador/recepção)", () => {
+  it("gestor ativo: acessa e cria (Sprint44 — todos criam), não renova", () => {
     const p = permissoesLiberacoes(PERFIS.GESTOR, true);
     expect(p.podeAcessar).toBe(true);
-    expect(p.podeCriar).toBe(false);
+    expect(p.podeCriar).toBe(true);
     expect(p.podeRenovar).toBe(false);
     expect(p.visualizaSomenteAtivas).toBe(false);
   });
@@ -522,10 +522,10 @@ describe("permissoesRetiradas (Sprint 20 — política de UI espelhando a RLS)",
     expect(p.visualizaResponsavel).toBe(false);
   });
 
-  it("autorizador ativo NÃO acessa retiradas (módulo da recepção/gestão)", () => {
+  it("autorizador ativo ACESSA e registra retiradas — Sprint44 (autorização vs operação)", () => {
     const p = permissoesRetiradas(PERFIS.PROFISSIONAL_AUTORIZADOR, true);
-    expect(p.podeAcessar).toBe(false);
-    expect(p.podeRegistrar).toBe(false);
+    expect(p.podeAcessar).toBe(true);
+    expect(p.podeRegistrar).toBe(true);
     expect(p.visualizaResponsavel).toBe(false);
   });
 
@@ -536,10 +536,10 @@ describe("permissoesRetiradas (Sprint 20 — política de UI espelhando a RLS)",
     expect(p.visualizaResponsavel).toBe(false);
   });
 
-  it("gestor ativo: acessa (somente leitura), não registra, mas vê o responsável", () => {
+  it("gestor ativo: acessa, registra e vê o responsável — Sprint44", () => {
     const p = permissoesRetiradas(PERFIS.GESTOR, true);
     expect(p.podeAcessar).toBe(true);
-    expect(p.podeRegistrar).toBe(false);
+    expect(p.podeRegistrar).toBe(true);
     expect(p.visualizaResponsavel).toBe(true);
   });
 });

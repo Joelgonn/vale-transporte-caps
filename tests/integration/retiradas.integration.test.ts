@@ -265,44 +265,54 @@ describe.skipIf(!habilitado)("Integração — retiradas (Sprint 20)", () => {
     }
   });
 
-  // Para o gestor alcançar o RLS de INSERT é preciso uma liberação REAL: o
-  // trigger fn_retiradas_before (before insert) roda ANTES da checagem RLS
-  // (WITH CHECK) e, com uma liberação inexistente, ele próprio levantaria
-  // NAO_ENCONTRADO. Com liberação válida o trigger passa e a policy
-  // retiradas_insert_recepcao (perfil = recepcionista) é quem rejeita.
-  it("gestor ativo NÃO registra retirada (RLS de INSERT)", async () => {
+  // Sprint 44 — todos os perfis ativos (gestor/autorizador/recepcionista) podem
+  // registrar retirada (operação na recepção; autorização vs operação).
+  it("gestor ativo REGISTRA retirada — Sprint44 (todos operam)", async () => {
     const admin = adminClient();
     const autorizadorId = await usuarioAtualId(autorizador);
     const pacienteId = await pacienteTeste(admin);
     const service = new RetiradaService(new RetiradaRepositoryPostgres(gestor));
     let liberacaoId: string | null = null;
+    const ids: string[] = [];
 
     try {
       liberacaoId = await criarLiberacaoTeste(autorizador, autorizadorId, pacienteId, 4);
 
-      const erro = await erroDe(
-        service.registrarRetirada({
-          liberacaoId,
-          pacienteId,
-          quantidade: 1,
-        })
-      );
+      const registrada = await service.registrarRetirada({
+        liberacaoId,
+        pacienteId,
+        quantidade: 1,
+      });
 
-      expect(erro).toBeInstanceOf(AppError);
-      expect((erro as AppError).code).toBe("ACESSO_NEGADO");
+      expect(registrada.quantidade).toBe(1);
+      ids.push(registrada.id);
     } finally {
+      await limparRetiradas(admin, ids);
       if (liberacaoId) await limparLiberacoes(admin, [liberacaoId]);
     }
   });
 
-  // RLS de SELECT filtra silenciosamente (sem erro): autorizador fora de
-  // retiradas_select_recepcao_gestor recebe lista vazia.
-  it("profissional autorizador NÃO enxerga retiradas (RLS de SELECT)", async () => {
-    const service = new RetiradaService(new RetiradaRepositoryPostgres(autorizador));
+  // Sprint 44 — autorizador TAMBÉM enxerga retiradas (todos operam)
+  it("profissional autorizador ENXERGA retiradas — Sprint44", async () => {
+    const admin = adminClient();
+    const autorizadorId = await usuarioAtualId(autorizador);
+    const pacienteId = await pacienteTeste(admin);
+    const recep = new RetiradaService(new RetiradaRepositoryPostgres(recepcionista));
+    const autorService = new RetiradaService(new RetiradaRepositoryPostgres(autorizador));
+    let liberacaoId: string | null = null;
+    const ids: string[] = [];
 
-    const todas = await service.listarRetiradas();
+    try {
+      liberacaoId = await criarLiberacaoTeste(autorizador, autorizadorId, pacienteId, 4);
+      const r = await recep.registrarRetirada({ liberacaoId, pacienteId, quantidade: 1 });
+      ids.push(r.id);
 
-    expect(todas).toEqual([]);
+      const todas = await autorService.listarRetiradas();
+      expect(todas.some((x) => x.id === r.id)).toBe(true);
+    } finally {
+      await limparRetiradas(admin, ids);
+      if (liberacaoId) await limparLiberacoes(admin, [liberacaoId]);
+    }
   });
 
   // Usuário inativo não enxerga nenhuma liberação (RLS de leitura exige

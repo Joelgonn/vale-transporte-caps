@@ -76,13 +76,25 @@ export async function criarPacienteAction(
       );
     }
 
-    const origemPermitida: OrigemPaciente = origemPermitidaPorPerfil(
-      usuario.perfil
-    );
-    if (dados.origem != null && dados.origem !== origemPermitida) {
+    // Sprint 44 — todos os perfis podem criar as duas origens, exceto
+    // recepcionista que NÃO cria regular independente.
+    const origemSolicitada = dados.origem ?? origemPermitidaPorPerfil(usuario.perfil);
+    const { podeCriarPacienteComOrigem } = await import("@/lib/domain/regras");
+    if (!podeCriarPacienteComOrigem(usuario.perfil as PerfilUsuario, origemSolicitada as OrigemPaciente)) {
       throw new AppError(
         "ACESSO_NEGADO",
         "Seu perfil não pode cadastrar paciente com esta origem."
+      );
+    }
+    // Recepcionista: se tentar regular, negar explicitamente (mesmo que a
+    // policy negaria, mensagem mais clara na action)
+    if (
+      usuario.perfil === PERFIS.RECEPCIONISTA &&
+      origemSolicitada === "regular"
+    ) {
+      throw new AppError(
+        "ACESSO_NEGADO",
+        "Recepcionista não pode cadastrar paciente regular como cadastro independente. Localize o paciente existente ou crie um paciente esporádico dentro do fluxo de liberação esporádica."
       );
     }
 
@@ -91,7 +103,7 @@ export async function criarPacienteAction(
       ok: true,
       data: await service.criarPaciente({
         ...dados,
-        origem: origemPermitida,
+        origem: origemSolicitada as OrigemPaciente,
       }),
     };
   } catch (erro) {

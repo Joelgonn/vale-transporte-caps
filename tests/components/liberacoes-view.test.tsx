@@ -158,9 +158,9 @@ describe("LiberacoesView — permissões por perfil (política de UI)", () => {
     expect(screen.queryByRole("button", { name: "Renovar" })).not.toBeInTheDocument();
   });
 
-  it("recepcionista NÃO recebe 'Nova liberação' (sem fluxo paralelo)", () => {
+  it("recepcionista TAMBÉM recebe 'Nova liberação' — Sprint44 (fluxo operacional)", () => {
     renderizar({ perfil: PERFIS.RECEPCIONISTA });
-    expect(screen.queryByRole("button", { name: "Nova liberação" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Nova liberação" })).toBeInTheDocument();
   });
 
   it("recepcionista recebe 'Renovar' apenas para liberações ativas", () => {
@@ -176,10 +176,10 @@ describe("LiberacoesView — permissões por perfil (política de UI)", () => {
     expect(screen.getAllByRole("button", { name: "Renovar" })).toHaveLength(2);
   });
 
-  it("gestor não recebe ação de criação nem de renovação (somente leitura)", () => {
+  it("gestor TAMBÉM recebe 'Nova liberação' mas não Renovar — Sprint44", () => {
     renderizar({ perfil: PERFIS.GESTOR });
 
-    expect(screen.queryByRole("button", { name: "Nova liberação" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Nova liberação" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Renovar" })).not.toBeInTheDocument();
   });
 });

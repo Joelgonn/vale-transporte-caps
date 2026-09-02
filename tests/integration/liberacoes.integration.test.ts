@@ -253,10 +253,9 @@ describe.skipIf(!habilitado)("Integração — liberações (Sprints 18/19)", ()
     }
   });
 
-  // A RLS liberacoes_insert_autorizador NÃO habilita INSERT da recepção (só a
-  // policy liberacoes_insert_recepcao_renovacao, que exige renovacao_de_id).
-  // Este teste valida o que a RLS DE FATO impõe: a recepção NÃO cria liberação nova.
-  it("recepção NÃO cria liberação nova (RLS de INSERT)", async () => {
+  // Sprint 44 — os três perfis podem criar liberações (contínua/avulsa) no
+  // fluxo operacional (autorização vs operação). A recepção CRIA.
+  it("recepção CRIA liberação nova — Sprint44 (todos os perfis criam)", async () => {
     const admin = adminClient();
     const autorizadorId = await usuarioAtualId(autorizador);
     const pacienteId = await pacienteTeste(admin);
@@ -271,11 +270,15 @@ describe.skipIf(!habilitado)("Integração — liberações (Sprints 18/19)", ()
       periodoMeses: 3,
       profissionalAutorizadorId: autorizadorId,
     };
-    const erroCriar = await erroDe(
-      recepcionistaService.criarLiberacao(novaPelaRecepcao)
-    );
-    expect(erroCriar).toBeInstanceOf(AppError);
-    expect((erroCriar as AppError).code).toBe("ACESSO_NEGADO");
+    let id: string | null = null;
+    try {
+      const criada = await recepcionistaService.criarLiberacao(novaPelaRecepcao);
+      id = criada.id;
+      expect(criada.status).toBe("ativa");
+      expect(criada.paciente_id).toBe(pacienteId);
+    } finally {
+      if (id) await limparLiberacoes(admin, [id]);
+    }
   });
 
   // Migration 20260813000002 (aplicada): a policy liberacoes_insert_autorizador
@@ -444,28 +447,42 @@ describe.skipIf(!habilitado)("Integração — origem do paciente (Sprint 38)", 
     expect(data).toBeNull();
   });
 
-  it("✗ gestor NÃO cria paciente esporadico (RLS)", async () => {
+  it("✓ gestor CRIA paciente esporadico — Sprint44 (todos perfis + esporadico)", async () => {
     if (!(await origemAplicada())) return;
+    const admin = adminClient();
     const gestorSus = `9${sufixo()}4`;
-    const { data, error } = await gestor
-      .from("pacientes")
-      .insert({ gestor_sus: gestorSus, nome: "Deveria Falhar", origem: "esporadico" })
-      .select("id")
-      .single();
-    expect(error).not.toBeNull();
-    expect(data).toBeNull();
+    let id: string | null = null;
+    try {
+      const { data, error } = await gestor
+        .from("pacientes")
+        .insert({ gestor_sus: gestorSus, nome: "Esporadico Gestor44", origem: "esporadico" })
+        .select("id, origem")
+        .single();
+      expect(error).toBeNull();
+      expect(data?.origem).toBe("esporadico");
+      id = data!.id;
+    } finally {
+      if (id) await limparPacientes(admin, [id]);
+    }
   });
 
-  it("✗ autorizador NÃO cria paciente esporadico (RLS)", async () => {
+  it("✓ autorizador CRIA paciente esporadico — Sprint44 (todos + esporadico)", async () => {
     if (!(await origemAplicada())) return;
+    const admin = adminClient();
     const gestorSus = `9${sufixo()}5`;
-    const { data, error } = await autorizador
-      .from("pacientes")
-      .insert({ gestor_sus: gestorSus, nome: "Deveria Falhar", origem: "esporadico" })
-      .select("id")
-      .single();
-    expect(error).not.toBeNull();
-    expect(data).toBeNull();
+    let id: string | null = null;
+    try {
+      const { data, error } = await autorizador
+        .from("pacientes")
+        .insert({ gestor_sus: gestorSus, nome: "Esporadico Autorizador44", origem: "esporadico" })
+        .select("id, origem")
+        .single();
+      expect(error).toBeNull();
+      expect(data?.origem).toBe("esporadico");
+      id = data!.id;
+    } finally {
+      if (id) await limparPacientes(admin, [id]);
+    }
   });
 
   it("✓ paciente esporádico recebe liberação avulsa (RN29)", async () => {

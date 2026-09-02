@@ -146,9 +146,9 @@ describe("RetiradasView — permissões por perfil (política de UI)", () => {
     expect(screen.getByRole("button", { name: "Registrar retirada" })).toBeInTheDocument();
   });
 
-  it("gestor é somente leitura (sem ação de registro)", () => {
+  it("gestor também registra retirada — Sprint44 (todos operam)", () => {
     renderizar({ perfil: PERFIS.GESTOR });
-    expect(screen.queryByRole("button", { name: "Registrar retirada" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Registrar retirada" })).toBeInTheDocument();
   });
 });
 

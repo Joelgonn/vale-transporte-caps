@@ -156,10 +156,10 @@ describe.skipIf(!autorizadorHabilitado)("Relatórios — autorizador (RLS permit
     }
   });
 
-  it("AUTORIZADOR NÃO recebe retiradas (política restrita a recepção/gestão)", async () => {
+  it("AUTORIZADOR RECEBE retiradas — Sprint44 (todos operam)", async () => {
     const { data, error } = await autorizador.from("retiradas").select("*").limit(10);
     expect(error).toBeNull();
-    expect(totalLinhas(data)).toBe(0);
+    expect(Array.isArray(data)).toBe(true);
   });
 });
 

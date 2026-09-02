@@ -18,16 +18,16 @@
 - O provedor de identidade é o **Supabase Auth** (JWT), com sessão validada no servidor a cada requisição sensível.
 - O usuário logado é a base para identificação em **qualquer ação** (ver `AUDIT.md`).
 
-### 2. Autorização por Perfil
-- Ações são permitidas conforme o perfil do usuário. **Perfis do MVP (Sprint 03, RN26):**
-  - **Profissional Autorizador** → criar liberações (Assistente Social, Psicólogo, Terapeuta Ocupacional, **com cadastro ativo** — RN27) e cadastrar **pacientes regulares**
-  - **Recepcionista** → registrar retiradas e renovações; cadastrar **pacientes esporádicos** (somente liberação avulsa — RN29, Sprint 38)
-  - **Gestor** → administrar usuários e consultar relatórios; cadastrar **pacientes regulares** (Sprint 38)
+### 2. Autorização por Perfil (Sprint 44 — matriz oficial)
+- Ações são permitidas conforme o perfil do usuário. **Perfis do MVP (Sprint 03, RN26) atualizados Sprint 44:**
+  - **Profissional Autorizador** → cadastrar pacientes **regulares e esporádicos**, criar liberações **contínuas e avulsas**, **registrar retiradas** (operação) e localizar/reutilizar pacientes
+  - **Recepcionista** → localizar/reutilizar qualquer paciente; cadastrar **pacientes esporádicos dentro do fluxo de liberação esporádica** (não cadastra regular independente); criar liberações **contínuas e avulsas** (fluxo operacional); **registrar retiradas**; renovar mantendo autorizador
+  - **Gestor** → administrar usuários (criar gestor/autorizador/recepcionista); cadastrar pacientes **regulares e esporádicos**, criar liberações **contínuas/avulsas**, **registrar retiradas**, localizar/reutilizar, consultar relatórios/auditoria
   - **Auditor** → fora do MVP (perfil futuro, somente leitura de logs)
-- Matriz de permissões por perfil: ver `DOMAIN.md`.
+- Matriz de permissões por perfil: ver `DOMAIN.md` (tabela Sprint 44).
 - Autorização verificada em **todas as camadas** (middleware, server actions e RLS), nunca apenas na UI.
-- **RESOLVIDO (Sprint 38): cadastro de pacientes pela recepção** — a recepção cadastra exclusivamente pacientes com `origem = 'esporadico'` (policies `pacientes_insert_regular` / `pacientes_insert_recepcao_esporadico` + trigger RN29 no banco; a origem é derivada do perfil da sessão no servidor).
-- **DECISÃO INSTITUCIONAL PENDENTE:** hierarquia de perfis, permissões granulares, múltiplos perfis por usuário, consulta de relatórios por profissionais autorizadores.
+- **Sprint 44:** policies `pacientes_insert_*_44`, `liberacoes_insert_*_44`, `retiradas_*_44` refletem a matriz; `origem` pertence ao paciente (RN29/RN30) e é reutilizável (`1 esporádico → N liberações`).
+- **DECISÃO INSTITUCIONAL PENDENTE:** hierarquia de perfis, múltiplos perfis por usuário, consulta de relatórios por autorizadores.
 
 ### 3. Princípio do Menor Privilégio
 - Cada usuário acessa apenas o necessário para sua função.
@@ -87,19 +87,23 @@
 | Entidade | Operação | A | R | G | Observação |
 |---|---|---|---|---|---|
 | **pacientes** | Visualizar | ✓ (sem CPF) | ✓ (sem CPF) | ✓ (com CPF) | A e R: apenas identificação + status; G: completo |
-| | Criar | ✓ | PENDENTE | — | |
-| | Alterar | ✓ (dados cadastrais — nunca status/origem/Gestor SUS/CPF; RN30: origem IMUTÁVEL, Sprint 41) | — (RESOLVIDO Sprint 41: recepcionista não edita pacientes) | somente status (ação administrativa) | Whitelist por perfil na action + trigger `fn_pacientes_before`; trilha inclui `cpf`/`origem` |
-| | Cancelar/inativar | — | — | ✓ | Inativação = alteração de status (ação administrativa) |
+| | Criar (regular) | ✓ | — (só reutiliza) | ✓ | Sprint 44: recepcionista NÃO cadastra regular independente |
+| | Criar (esporádico) | ✓ | ✓ (dentro do fluxo de liberação esporádica) | ✓ | Sprint 44: `pacientes_insert_*_44`; esporádico reutilizável 1→N |
+| | Localizar/reutilizar | ✓ | ✓ | ✓ | Todos localizam qualquer paciente existente |
+| | Alterar | ✓ (dados cadastrais — nunca status/origem/Gestor SUS/CPF; RN30) | — | somente status | Whitelist por perfil + trigger; trilha inclui `cpf`/`origem` |
+| | Cancelar/inativar | — | — | ✓ | Inativação = alteração de status |
 | | Administrar | — | — | ✓ | |
-| **liberacoes** | Visualizar | ✓ | ✓ | ✓ | A: histórico; R: ativas do paciente; G: todas |
-| | Criar | ✓ | apenas renovação | — | Autorização (RN18); renovação pela recepção (RN23) |
-| | Alterar | ✓ (Sprint 42: previsão/datas/justificativa/unidade — nunca status/paciente/tipo/renovação) | — | status (cancelamento administrativo) + unidade | Whitelist por perfil + policy `liberacoes_update_autorizador_gestor` + trigger; auditoria antes/depois |
-| | Cancelar | PENDENTE | — | PENDENTE | |
+| **liberacoes** | Visualizar | ✓ | ✓ (só ativas) | ✓ | Sprint 44: todos criam; recepcionista vê só ativas |
+| | Criar (contínua) | ✓ | ✓ | ✓ | Sprint 44: `liberacoes_insert_*_44` — autorização vs operação |
+| | Criar (avulsa) | ✓ | ✓ | ✓ | Idem |
+| | Renovar | — (recepção renova) | ✓ (mantendo autorizador) | — (cria direta) | RN23 |
+| | Alterar | ✓ (previsão/datas/justificativa) | — | status + unidade | Sprint 44 P1: vigência não exclui retiradas |
+| | Cancelar | ✓ (via status) | — | ✓ | Status `cancelada` |
 | | Administrar | — | — | — | |
-| **retiradas** | Visualizar | — | ✓ | ✓ | R: do paciente (registro/histórico); G: todas; A: sem necessidade |
-| | Criar | — | ✓ | — | Somente recepção (RN18) |
-| | Alterar | — | — | — | Sem alteração (registro do momento) |
-| | Cancelar/estorno | — | PENDENTE | — | |
+| **retiradas** | Visualizar | ✓ | ✓ | ✓ | Sprint 44: todos os perfis operam |
+| | Criar | ✓ | ✓ | ✓ | Sprint 44: `retiradas_insert_44` — todos ativos; RN31 sem bloqueio |
+| | Alterar | — | — | — | Append-only |
+| | Cancelar/estorno | — | — | — | Sem UPDATE/DELETE |
 | | Administrar | — | — | — | |
 | **usuarios** | Visualizar | — | — | ✓ | **Dado administrativo** |
 | | Criar | — | — | ✓ | |

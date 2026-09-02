@@ -189,8 +189,10 @@ describe("criarPacienteAction — origem derivada do perfil da sessão (Sprint 3
     expect(mocks.instancia.criarPaciente).not.toHaveBeenCalled();
   });
 
-  it("✗ gestor NÃO consegue criar esporadico", async () => {
+  it("✓ gestor CONSEGUE criar esporadico — Sprint44 (todos perfis + esporadico)", async () => {
     comPerfil({ perfil: PERFIS.GESTOR });
+    const criado = pacienteSemCpf({ nome: "Ana", origem: ORIGENS_PACIENTE.ESPORADICO });
+    mocks.instancia.criarPaciente.mockResolvedValue(criado);
 
     const resultado = await criarPacienteAction({
       gestor_sus: "789",
@@ -198,13 +200,14 @@ describe("criarPacienteAction — origem derivada do perfil da sessão (Sprint 3
       origem: ORIGENS_PACIENTE.ESPORADICO,
     });
 
-    expect(resultado.ok).toBe(false);
-    if (!resultado.ok) expect(resultado.error).toContain("origem");
-    expect(mocks.instancia.criarPaciente).not.toHaveBeenCalled();
+    expect(resultado.ok).toBe(true);
+    expect(mocks.instancia.criarPaciente).toHaveBeenCalledWith(expect.objectContaining({ origem: ORIGENS_PACIENTE.ESPORADICO }));
   });
 
-  it("✗ autorizador NÃO consegue criar esporadico", async () => {
+  it("✓ autorizador CONSEGUE criar esporadico — Sprint44 (todos + esporadico)", async () => {
     comPerfil({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
+    const criado = pacienteSemCpf({ nome: "Ana", origem: ORIGENS_PACIENTE.ESPORADICO });
+    mocks.instancia.criarPaciente.mockResolvedValue(criado);
 
     const resultado = await criarPacienteAction({
       gestor_sus: "789",
@@ -212,8 +215,8 @@ describe("criarPacienteAction — origem derivada do perfil da sessão (Sprint 3
       origem: ORIGENS_PACIENTE.ESPORADICO,
     });
 
-    expect(resultado.ok).toBe(false);
-    expect(mocks.instancia.criarPaciente).not.toHaveBeenCalled();
+    expect(resultado.ok).toBe(true);
+    expect(mocks.instancia.criarPaciente).toHaveBeenCalledWith(expect.objectContaining({ origem: ORIGENS_PACIENTE.ESPORADICO }));
   });
 
   it("usuário inativo é bloqueado antes do serviço", async () => {

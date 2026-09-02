@@ -167,16 +167,26 @@ Registro imutável de ações relevantes no sistema.
 - Imutabilidade técnica: append-only, hash chain, WORM storage?
 
 
-### Resumo de Vales (Relatórios — Sprint 40)
+### Resumo de Vales e Glossário (Relatórios — Sprint 40 atualizado Sprint 44)
 
-A aba **Resumo** de /dashboard/relatorios (exclusiva do Gestor ativo) agrega dados já
-existentes — sem nova estrutura no banco. Semântica do período:
+Glossário oficial centralizado em `lib/domain/relatorios/glossario.ts` (Sprint 44):
 
-- **AUTORIZADO**: liberações cuja data_inicio está dentro do período selecionado;
-- **RETIRADO**: retiradas cuja data_hora está dentro do período selecionado (conjunto
-  independente do anterior — uma retirada contra liberação iniciada antes do período conta
-  no período em que ocorreu);
-- **SALDO**: sempre derivado = autorizado − retirado. Nunca armazenado.
+**RESUMO** (agrega dados existentes, sem nova estrutura no banco):
+- **Previsto**: quantidade prevista autorizada por liberações cujo `data_inicio` pertence ao período.
+- **Retirado**: retiradas cuja `data_hora` pertence ao período — conjunto independente do previsto.
+- **Diferença**: `Previsto − Retirado` no período (derivado, nunca armazenado). Negativa = estouro operacional (RN31, não bloqueio).
+- Convenção: `1 mês = 4 semanas` (`SEMANAS_POR_MES=4`) para previsão administrativa.
+
+**CONSOLIDADO/HISTÓRICO** (por liberação):
+- **Previsto**: previsão daquela liberação (`liberacoes.quantidade`).
+- **Retirado**: total acumulado daquela liberação (`Σ retiradas`).
+- **Diferença**: `Previsto − Retirado acumulado`.
+
+**LIBERAÇÕES**: `Previsto` (previsão da liberação) + `Retirado` (total da liberação).
+**RETIRADAS**: `Quantidade` (retirada individual).
+Os números entre abas podem diferir porque representam conceitos diferentes — o importante é o significado explícito.
+
+**HISTÓRICO — Sprint 44 P2:** preparado para **Estado atual + Eventos**. Estado atual = paciente/tipo/período/previsão/retirado/diferença/status/datas; Eventos = criação/renovação/retirada/alteração de previsão/vigência/cancelamento via `auditoria_logs` (sem segunda trilha). `lib/domain/relatorios/eventos.ts` define a infraestrutura para a próxima UX.
 
 A UI declara explicitamente essa semântica para evitar interpretações mistas dos totais.
 
@@ -251,22 +261,24 @@ Auditoria (N) ───< (1) Entidade Afetada  // Log referencia qualquer entida
 - **Expansão futura:** a modelagem prevê campo de unidade nas entidades operacionais, sem complexidade de multi-tenant no MVP.
 - **Numeração de vales:** sem rastreamento individual enquanto não houver controle de estoque físico.
 
-### Matriz de Permissões (perfil × ação) — MVP (Sprint 03)
+### Matriz de Permissões (perfil × ação) — MVP (Sprint 03) atualizada Sprint 44
 
 | Ação | Prof. Autorizador | Recepcionista | Gestor |
 |---|---|---|---|
-| Cadastrar paciente regular | Sim | Não (Sprint 38) | Sim |
-| Cadastrar paciente esporádico | Não | Sim — somente avulsas (RN29, Sprint 38) | Não |
+| Cadastrar paciente regular | Sim | Não — só localiza/reutiliza existente | Sim |
+| Cadastrar paciente esporádico | Sim | Sim — dentro do fluxo de liberação esporádica | Sim |
+| Localizar/reutilizar paciente (qualquer origem) | Sim | Sim | Sim |
 | Alterar dados/status do paciente | Alterar dados | Não | Status |
 | Consultar paciente | Sim (sem CPF) | Sim (sem CPF) | Sim (com CPF) |
-| Criar liberação | Sim (profissões habilitadas e cadastro ativo) | Não | Não |
-| Registrar renovação | Não | Sim (mantendo profissional autorizador) | Não |
-| Alterar/cancelar liberação | PENDENTE | Não | PENDENTE |
-| Registrar retirada | Não | Sim | Não |
-| Consultar retiradas | Não | Sim | Sim |
-| Consultar relatórios | PENDENTE | Não | Sim |
+| Criar liberação contínua | Sim | Sim (fluxo operacional) | Sim |
+| Criar liberação avulsa | Sim | Sim (fluxo operacional) | Sim |
+| Registrar renovação | Não (renova quem está na recepção) | Sim (mantendo profissional autorizador) | Não (gestor cria liberação direta) |
+| Alterar/cancelar liberação | Sim (previsão/datas/justificativa) | Não | Sim (status/unidade) |
+| Registrar retirada | Sim (operação) | Sim (operação) | Sim (operação) |
+| Consultar retiradas | Sim | Sim | Sim |
+| Consultar relatórios | PENDENTE (Sprint 44: ainda só Gestor) | Não | Sim |
 | Consultar logs de auditoria | Não | Não | Sim |
-| Administrar usuários | Não | Não | Sim |
+| Administrar usuários (criar gestor/autorizador/recepcionista) | Não | Não | Sim |
 
 > Auditor (somente leitura de logs) está fora do MVP — perfil futuro.
 > Consultar paciente pelo Recepcionista é necessário para registrar retiradas/renovações.
@@ -375,11 +387,11 @@ Auditoria (N) ───< (1) Entidade Afetada  // Log referencia qualquer entida
 
 **REGRA DEFINIDA (RN25):** o **identificador principal** do paciente é o número do **Gestor SUS**; o **CPF** também é armazenado.
 
-**REGRA DEFINIDA (RN29 — Sprint 38):** todo paciente possui uma **origem** (`origem_paciente`: `regular` | `esporadico`). Paciente **esporádico** é cadastrado exclusivamente pela recepção para atendimento pontual e **somente pode receber liberação avulsa** (nunca contínua). A regra é garantida no banco (trigger `fn_liberacoes_before`), não apenas na UI. Pacientes regulares são cadastrados por Gestor ou profissional autorizador.
+**REGRA DEFINIDA (RN29 — Sprint 38, ampliada Sprint 44):** todo paciente possui uma **origem** (`origem_paciente`: `regular` | `esporadico`). Paciente **esporádico** pode ser cadastrado por **qualquer dos três perfis** (Gestor, Autorizador ou Recepcionista) quando necessário para liberação esporádica, e **somente pode receber liberação avulsa** (nunca contínua). Pacientes regulares são cadastrados por Gestor ou Autorizador; Recepcionista **não cadastra regular independente** — apenas **localiza/reutiliza** o cadastro existente. A reutilização é obrigatória: um mesmo paciente esporádico (`ex.: João, origem=esporadico`) pode possuir **várias liberações avulsas ao longo do tempo** (`1 paciente → N liberações → N retiradas`), não devendo ser recriado a cada atendimento. A regra RN29 é garantida no banco (trigger `fn_liberacoes_before`), não apenas na UI.
 
+**CONCEITO Sprint 44 — Autorização vs Operação:** Autorizador avalia necessidade/tempo de tratamento e cria a liberação contínua (ato autorizativo); Recepcionista operacionaliza a entrega (localiza a liberação existente, entrega os vales e registra a retirada); Gestor pode executar ambos os papéis. Recepcionista **pode criar liberações contínuas e avulsas** no fluxo operacional — não está impedido por perfil.
 
-
-**REGRA DEFINIDA (RN31 — Sprint 42):** `liberacoes.quantidade` é uma **PREVISÃO administrativa** (escala RN04: 1/2/4/8) — **NÃO bloqueia retiradas**. A autorização real é o PAR **vigência** (RN13/RN21) + **status 'ativa'**: enquanto a liberação estiver vigente e ativa, novas retiradas são aceitas, mesmo que o consumo acumulado ultrapasse a previsão ("Diferença" negativa). O histórico completo permanece auditado (`liberacoes_audit` registra antes/depois de qualquer edição). **Edição de liberações (Sprint 42):** campos históricos imutáveis para todos (paciente, tipo, período, autorizador, registro, renovação); **profissional_autorizador** edita previsão/datas/justificativa/unidade; **gestor** altera status (cancelamento administrativo) e unidade; **recepcionista** não edita. Garantido no banco (policy `liberacoes_update_autorizador_gestor` + branch UPDATE de `fn_liberacoes_before`, migration `20260826000001`) e na aplicação (whitelist `CAMPOS_EDICAO_LIBERACAO_POR_PERFIL`).
+**REGRA DEFINIDA (RN31 — Sprint 42, infraestrutura Sprint 44):** `liberacoes.quantidade` é uma **PREVISÃO administrativa** (1..999, convenção `1 mês = 4 semanas` — `SEMANAS_POR_MES=4`) — **NÃO bloqueia retiradas**. A autorização real é o PAR **vigência** (RN13/RN21) + **status 'ativa'**: enquanto a liberação estiver vigente e ativa, novas retiradas são aceitas, mesmo que o consumo acumulado ultrapasse a previsão ("Diferença" negativa). O histórico completo permanece auditado (`liberacoes_audit` registra antes/depois de qualquer edição). **Estouro:** não há threshold institucional documentado (nenhum 20% ou +10 fixo); o domínio apenas **detecta** (`isEstouro`/`estadoPrevisao` em `lib/domain/regras.ts`) e **sinaliza** sem bloquear (append-only preservado). Se decisão futura definir threshold, a infraestrutura já permite exigir justificativa sem mudar o fluxo. **Edição de liberações (Sprint 42):** campos históricos imutáveis para todos (paciente, tipo, período, autorizador, registro, renovação); **profissional_autorizador** edita previsão/datas/justificativa/unidade; **gestor** altera status (cancelamento administrativo) e unidade; **recepcionista** não edita. **P1 Sprint 44:** edição de `data_inicio/data_fim` que excluiria retiradas existentes é **rejeitada** no domínio (`validarVigenciaComRetiradas`) e no banco (`fn_liberacoes_before` checa `min/max(data_hora)`). Garantido no banco (policy `liberacoes_update_autorizador_gestor` + branch UPDATE de `fn_liberacoes_before`, migration `20260826000001` + `20260902000001`) e na aplicação (whitelist `CAMPOS_EDICAO_LIBERACAO_POR_PERFIL`).
 
 **REGRA DEFINIDA (RN30 — Sprint 41):** a **origem do paciente é IMUTÁVEL após o cadastro** — um paciente regular NÃO pode virar esporádico e um esporádico NÃO pode virar regular. A garantia definitiva está no PostgreSQL: `fn_pacientes_before` rejeita qualquer UPDATE que altere `origem`, para TODOS os perfis (migration `20260825000001`). A aplicação reforça a regra com whitelist por perfil na action de atualização. **Edição de pacientes:** gestor altera SOMENTE o `status`; profissional autorizador edita os dados cadastrais permitidos (nunca status, origem, Gestor SUS ou CPF — RN25 + decisão institucional); recepcionista não edita pacientes. A trilha de auditoria (`pacientes_audit`) inclui `cpf` e `origem` nos snapshots antes/depois.
 

@@ -77,10 +77,13 @@ describe("moduloAtual", () => {
 });
 
 describe("acoesRapidasPorPerfil", () => {
-  it("Gestor ativo cria paciente regular, gerencia usuários e consulta auditoria e relatórios", () => {
+  it("Gestor ativo cria paciente regular, gerencia usuários e consulta auditoria e relatórios — Sprint44", () => {
     const acoes = acoesRapidasPorPerfil(PERFIS.GESTOR, true);
     expect(acoes.map((a) => a.rotulo)).toEqual([
       "Novo paciente",
+      "Paciente esporádico",
+      "Nova liberação",
+      "Registrar retirada",
       "Gerenciar usuários",
       "Consultar auditoria",
       "Consultar relatórios",
@@ -90,16 +93,19 @@ describe("acoesRapidasPorPerfil", () => {
     );
   });
 
-  it("autorizador ativo cria paciente e lança liberação", () => {
+  it("autorizador ativo cria paciente e lança liberação — Sprint44 também esporádico e retirada", () => {
     expect(acoesRapidasPorPerfil(PERFIS.PROFISSIONAL_AUTORIZADOR, true).map((a) => a.rotulo)).toEqual([
       "Novo paciente",
+      "Paciente esporádico",
       "Nova liberação",
+      "Registrar retirada",
     ]);
   });
 
-  it("recepcionista ativa cadastra esporádico, renova liberação e registra retirada", () => {
+  it("recepcionista ativa cadastra esporádico, cria liberação, renova e registra retirada — Sprint44", () => {
     expect(acoesRapidasPorPerfil(PERFIS.RECEPCIONISTA, true).map((a) => a.rotulo)).toEqual([
       "Paciente esporádico",
+      "Nova liberação",
       "Renovar liberação",
       "Registrar retirada",
     ]);
