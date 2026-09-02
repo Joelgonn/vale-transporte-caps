@@ -158,9 +158,10 @@ describe("LiberacoesView — permissões por perfil (política de UI)", () => {
     expect(screen.queryByRole("button", { name: "Renovar" })).not.toBeInTheDocument();
   });
 
-  it("recepcionista TAMBÉM recebe 'Nova liberação' — Sprint44 (fluxo operacional)", () => {
+  it("recepcionista NÃO recebe 'Nova liberação' — Sprint47 (usa Atendimento para avulsa)", () => {
     renderizar({ perfil: PERFIS.RECEPCIONISTA });
-    expect(screen.getByRole("button", { name: "Nova liberação" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Nova liberação" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Novo atendimento" })).toHaveAttribute("href", "/dashboard/atendimento");
   });
 
   it("recepcionista recebe 'Renovar' apenas para liberações ativas", () => {

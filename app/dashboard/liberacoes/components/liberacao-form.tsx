@@ -27,7 +27,7 @@ import { FeedbackErro, FeedbackSucesso } from "@/components/ui/feedback";
 import { mensagemUsuario } from "@/components/ui/mensagens";
 
 type LiberacaoFormProps =
-  | { modo: "criar"; onClose: () => void; onSalvo: () => void }
+  | { modo: "criar"; perfil?: string | null; onClose: () => void; onSalvo: () => void }
   | {
       modo: "renovar";
       origem: LiberacaoComPaciente;

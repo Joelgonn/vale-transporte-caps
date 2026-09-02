@@ -404,13 +404,13 @@ describe("regressão Sprint 41: recomposição da grade (sem col-span, sem órf�
     }
   });
 
-  it("Gestor: 7 módulos em grid 3×2 de larguras iguais (sem col-span) — Sprint46 historico", () => {
+  it("Gestor: 8 módulos em grid 3×2 de larguras iguais (sem col-span) — Sprint46 historico + Sprint47 atendimento", () => {
     renderizarHome();
     const grade = secao("dashboard-modulos").querySelector("div.grid")!;
     expect(grade.className).toContain("sm:grid-cols-2");
     expect(grade.className).toContain("lg:grid-cols-3");
     const cards = Array.from(grade.querySelectorAll("a"));
-    expect(cards).toHaveLength(7);
+    expect(cards).toHaveLength(8);
     for (const card of cards) {
       expect(card.className).not.toMatch(/col-span/);
     }
@@ -427,7 +427,7 @@ describe("regressão Sprint 41: recomposição da grade (sem col-span, sem órf�
     expect(pacientes.className).not.toMatch(/col-span/);
   });
 
-  it("recepcionista: grade se adapta naturalmente (4 ações, 3 módulos, sem placeholders) — Sprint44", () => {
+  it("recepcionista: grade se adapta naturalmente (4 ações, 4 módulos com atendimento, sem placeholders) — Sprint47", () => {
     render(
       <RouterContext.Provider value={router()}>
         <DashboardHome
@@ -446,7 +446,7 @@ describe("regressão Sprint 41: recomposição da grade (sem col-span, sem órf�
     expect(screen.getByRole("link", { name: /^Paciente esporádico/ })).toBeInTheDocument();
     const gradeModulos = secao("dashboard-modulos").querySelector("div.grid")!;
     const cards = Array.from(gradeModulos.querySelectorAll("a"));
-    expect(cards).toHaveLength(3);
+    expect(cards).toHaveLength(4);
     for (const card of cards) {
       expect(card.className).not.toMatch(/col-span/);
     }

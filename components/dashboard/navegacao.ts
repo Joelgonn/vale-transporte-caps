@@ -20,6 +20,7 @@ export type CapacidadeDashboard = {
   auditoria: boolean;
   relatorios: boolean;
   historico: boolean;
+  atendimento: boolean;
 };
 
 export type IconeId =
@@ -29,7 +30,8 @@ export type IconeId =
   | "usuarios"
   | "auditoria"
   | "relatorios"
-  | "historico";
+  | "historico"
+  | "atendimento";
 
 export type Modulo = {
   slug: IconeId;
@@ -94,6 +96,14 @@ export function modulosPorCapacidade(cap: CapacidadeDashboard): Modulo[] {
       rotulo: "Histórico",
       descricao: "Histórico operacional por paciente — autorizações, entregas e diferenças.",
       href: "/dashboard/historico",
+    });
+  }
+  if (cap.atendimento) {
+    modulos.push({
+      slug: "atendimento",
+      rotulo: "Atendimento",
+      descricao: "Atendimento da recepção — localizar, cadastrar esporádico, liberar avulsa e retirar.",
+      href: "/dashboard/atendimento",
     });
   }
   return modulos;

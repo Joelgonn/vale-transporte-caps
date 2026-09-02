@@ -74,7 +74,7 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
           titulo="Liberações"
           descricao={descricao}
           acao={
-            permissoes.podeCriar ? (
+            permissoes.podeCriarContinua ? (
               <button
                 type="button"
                 onClick={() => setFormAberto({ modo: "criar" })}
@@ -82,6 +82,10 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
               >
                 Nova liberação
               </button>
+            ) : permissoes.podeCriarAvulsa ? (
+              <Link href="/dashboard/atendimento" className={BOTAO_PRIMARIO}>
+                Novo atendimento
+              </Link>
             ) : undefined
           }
         />

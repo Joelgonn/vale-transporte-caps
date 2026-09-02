@@ -20,6 +20,7 @@ function capacidade(sobre: Partial<CapacidadeDashboard> = {}): CapacidadeDashboa
     auditoria: false,
     relatorios: false,
     historico: false,
+    atendimento: false,
     ...sobre,
   };
 }
@@ -153,6 +154,9 @@ describe("capacidadeDashboard (integração com regras.ts)", () => {
             break;
           case "historico":
             expect(cap.historico).toBe(true);
+            break;
+          case "atendimento":
+            expect(cap.atendimento).toBe(true);
             break;
         }
       }

@@ -1,7 +1,7 @@
 "use server";
 
 import { AppError } from "@/lib/domain/app-error";
-import { PERFIS, type PerfilUsuario } from "@/lib/domain/enums";
+import { PERFIS, TIPOS_LIBERACAO, type PerfilUsuario } from "@/lib/domain/enums";
 import type {
   AtualizacaoLiberacao,
   CriarLiberacaoDados,
@@ -140,17 +140,21 @@ export async function criarLiberacaoAction(
       };
     }
 
-    // Sprint 44 — NOVA liberação: os TRÊS perfis ativos podem criar
-    // liberações contínuas e avulsas (autorização vs operação).
-    // A distinção é conceitual (quem avalia vs quem operacionaliza), não
-    // bloqueio por perfil. O profissional_autorizador_id continua sendo o
-    // autorizador responsável pela liberação.
+    // Sprint 47 — recepção NÃO cria autorização contínua.
+    // GESTOR e AUTORIZADOR criam contínua e avulsa; RECEPCIONISTA cria
+    // SOMENTE avulsa (fluxo avulso para paciente esporádico).
     if (
       usuario.perfil !== PERFIS.GESTOR &&
       usuario.perfil !== PERFIS.PROFISSIONAL_AUTORIZADOR &&
       usuario.perfil !== PERFIS.RECEPCIONISTA
     ) {
       throw new AppError("ACESSO_NEGADO", "Perfil sem permissão para criar liberações.");
+    }
+    if (usuario.perfil === PERFIS.RECEPCIONISTA && (dados as { tipo?: string }).tipo === TIPOS_LIBERACAO.CONTINUA) {
+      throw new AppError(
+        "ACESSO_NEGADO",
+        "Recepção não cria autorização contínua. Localize a liberação contínua já existente para registrar a retirada."
+      );
     }
     if (!usuario.usuarioId) {
       throw new AppError(

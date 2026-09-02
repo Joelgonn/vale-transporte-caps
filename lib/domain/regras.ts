@@ -412,41 +412,49 @@ export function permissoesUsuarios(
   };
 }
 
-// Permissões de UI para a página de liberações (Sprint 18), derivadas de perfil
-// + status e espelhando as policies RLS reais (migrations 09/13/14 + Sprint 44):
+// Permissões de UI para a página de liberações (Sprint 18 + Sprint 47).
+// Sprint 47 — corrige Sprint44: recepção NÃO cria autorização contínua.
 //  - leitura: qualquer perfil ATIVO (autorizador/gestor veem todas;
 //    recepcionista somente status 'ativa' — liberacoes_select_recepcao_ativas);
-//  - INSERT "nova liberação": Sprint 44 — os TRÊS perfis ativos podem criar
-//    liberações (contínua e avulsa); a distinção é AUTORIZAÇÃO (avaliação do
-//    autorizador) vs OPERAÇÃO (entrega na recepção), não bloqueio por perfil.
-//    Policies Sprint 44: liberacoes_insert_* por perfil ativo.
+//  - INSERT "nova liberação": GESTOR e AUTORIZADOR criam contínua e avulsa;
+//    RECEPCIONISTA cria SOMENTE avulsa (dentro do fluxo avulso para paciente
+//    esporádico) e OPERA contínua existente (registra retirada), não autoriza.
+//    Policies: liberacoes_insert_gestor/autorizador (sem renovacao_de_id) e
+//    liberacoes_insert_recepcionista_44 (qualquer, mas validação RN29 + tipo
+//    bloqueia contínua para recepcionista via action).
 //  - INSERT "renovação": somente recepcionista ativa com renovacao_de_id
 //    informado (liberacoes_insert_recepcao_renovacao) — mantido;
 //  - UPDATE "editar" (Sprint 42): autorizador edita previsão/janela/justificativa;
 //    gestor altera status + campos administrativos; recepcionista não edita
 //    (policy liberacoes_update_autorizador_gestor + split fino no trigger);
 //  - sem delete de liberações (revogado — migration 15).
-// Sprint 44 — recepcionista PODE criar liberações contínuas e avulsas.
+// Sprint 47 — recepção NÃO pode criar contínua (apenas avulsa no fluxo operacional).
 export function permissoesLiberacoes(
   perfil: PerfilUsuario | null,
   statusAtivo: boolean | null
 ): {
   podeAcessar: boolean;
   podeCriar: boolean;
+  podeCriarAvulsa: boolean;
+  podeCriarContinua: boolean;
   podeRenovar: boolean;
   podeEditar: boolean;
   podeAlterarStatus: boolean;
   visualizaSomenteAtivas: boolean;
 } {
   const ativo = perfil != null && statusAtivo === true;
-  const podeCriarLiberacao =
+  const podeCriarAvulsa =
     ativo &&
     (perfil === PERFIS.GESTOR ||
       perfil === PERFIS.PROFISSIONAL_AUTORIZADOR ||
       perfil === PERFIS.RECEPCIONISTA);
+  const podeCriarContinua =
+    ativo && (perfil === PERFIS.GESTOR || perfil === PERFIS.PROFISSIONAL_AUTORIZADOR);
   return {
     podeAcessar: ativo,
-    podeCriar: podeCriarLiberacao,
+    podeCriar: podeCriarAvulsa,
+    podeCriarAvulsa,
+    podeCriarContinua,
     podeRenovar: ativo && perfil === PERFIS.RECEPCIONISTA,
     podeEditar: ativo && perfil === PERFIS.PROFISSIONAL_AUTORIZADOR,
     podeAlterarStatus: ativo && perfil === PERFIS.GESTOR,
@@ -702,6 +710,7 @@ export function estadoUsuario(
 // permissões de UI já sancionadas (permissoesPacientes/permissoesUsuarios/
 // permissoesLiberacoes/permissoesRetiradas) e as policies RLS.
 // Sprint 46 — inclui Historico como modulo premium (usa mesma permissão de Relatórios — gestor).
+// Sprint 47 — inclui Atendimento (recepção) — operacional, todos os ativos acessam.
 export function capacidadeDashboard(
   perfil: PerfilUsuario | null,
   statusAtivo: boolean | null
@@ -714,6 +723,7 @@ export function capacidadeDashboard(
   auditoria: boolean;
   relatorios: boolean;
   historico: boolean;
+  atendimento: boolean;
 } {
   const ativo = perfil != null && statusAtivo === true;
   return {
@@ -733,5 +743,6 @@ export function capacidadeDashboard(
     // institucional pendente para o autorizador, não implementada).
     relatorios: perfil === PERFIS.GESTOR && statusAtivo === true,
     historico: perfil === PERFIS.GESTOR && statusAtivo === true,
+    atendimento: ativo,
   };
 }

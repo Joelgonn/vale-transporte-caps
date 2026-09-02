@@ -75,4 +75,10 @@ export const ICONES_MODULO: Record<IconeId, ReactNode> = {
       <path d="M12 8v5l3 2" />
     </Svg>
   ),
+  atendimento: (
+    <Svg>
+      <path d="M8 10h8M8 14h5" />
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+    </Svg>
+  ),
 };
