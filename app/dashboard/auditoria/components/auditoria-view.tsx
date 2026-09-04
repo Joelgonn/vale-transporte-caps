@@ -171,9 +171,7 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4">
-            <p className="text-xs font-medium text-zinc-600">Período do evento</p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[200px_200px_auto] lg:items-end">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[200px_200px_auto] lg:items-end border-t border-zinc-100 pt-4">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="auditoria-filtro-de" className="text-xs font-medium text-zinc-600">
                   De
@@ -215,7 +213,6 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
                 </Link>
               </div>
             </div>
-          </div>
         </form>
 
         {!erroInicial && (
