@@ -21,6 +21,8 @@ type Props = {
   // Para controle externo do valor (opcional)
   value?: string;
   onValueChange?: (v: string) => void;
+  // Sprint 73.1 — notifica alteração da busca para invalidar seleção anterior
+  onQueryChange?: (query: string) => void;
 };
 
 export function PatientSearch({
@@ -31,6 +33,7 @@ export function PatientSearch({
   defaultValue = "",
   showCreate = false,
   onSelect,
+  onQueryChange,
 }: Props) {
   const [query, setQuery] = useState(defaultValue);
   const [resultados, setResultados] = useState<PacienteSemCpf[] | null>(null);
@@ -96,8 +99,10 @@ export function PatientSearch({
           aria-autocomplete="list"
           value={query}
           onChange={(e) => {
-            setQuery(e.target.value);
+            const v = e.target.value;
+            setQuery(v);
             setMostrar(true);
+            onQueryChange?.(v);
           }}
           onFocus={() => {
             if (query.trim().length >= 2 && resultados) setMostrar(true);

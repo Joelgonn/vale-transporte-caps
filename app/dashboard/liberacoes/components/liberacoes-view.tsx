@@ -164,6 +164,27 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
     router.push(`/dashboard/liberacoes?paciente=${p.id}`);
   }
 
+  // Sprint 73.1 — invalidação imediata ao iniciar nova busca (texto ≠ seleção)
+  function handleQueryChange(q: string) {
+    // Qualquer alteração de texto após seleção deve invalidar a seleção anterior
+    // e a situação verificada (continuaAtiva, erro, loading)
+    if (selecionado) {
+      requestIdRef.current++;
+      setSelecionado(null);
+      setFetchState({ loading: false, error: null, continua: null });
+      if (props.pacienteSelecionado) {
+        router.push("/dashboard/liberacoes");
+      }
+      return;
+    }
+    // Mesmo sem seleção, limpa situação residual (card anterior, erro)
+    if (fetchState.continua || fetchState.error || fetchState.loading) {
+      requestIdRef.current++;
+      setFetchState({ loading: false, error: null, continua: null });
+    }
+    void q;
+  }
+
   function handleRetry() {
     setRetryTick((n) => n + 1);
   }
@@ -173,15 +194,60 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
       <div className={`${CONTAINER} flex flex-col gap-6`}>
         <PageHeader titulo="Liberações" descricao={descricao} />
 
-        {/* Sprint 73 — UX cognitiva: PESQUISAR PACIENTE → SELECIONAR → VERIFICAR → NOVA LIBERAÇÃO
-            PatientSearch ANTES do botão, no mesmo nível visual ou acima. */}
+        {/* Sprint 73.1 — composição: busca e ação no MESMO NÍVEL VISUAL (desktop)
+            [ PatientSearch...................... ] [ Nova liberação ]
+            Mobile empilha naturalmente. */}
         <div className={`${CARTAO} p-4`}>
-          <PatientSearch
-            id="busca-liberacoes"
-            label="Buscar por paciente ou Gestor SUS"
-            placeholder="🔎 Nome ou Gestor SUS..."
-            onSelect={handleSelect}
-          />
+          <div className="flex flex-col gap-4 md:flex-row md:items-end">
+            <div className="flex-1">
+              <PatientSearch
+                id="busca-liberacoes"
+                label="Buscar por paciente ou Gestor SUS"
+                placeholder="🔎 Nome ou Gestor SUS..."
+                onSelect={handleSelect}
+                onQueryChange={handleQueryChange}
+              />
+            </div>
+            <div className="flex shrink-0 flex-col gap-2 md:pb-[22px]">
+              <div className="flex items-center gap-3">
+                {permissoes.podeCriarContinua ? (
+                  <button
+                    type="button"
+                    disabled={novaLiberacaoDesabilitada}
+                    title={motivoDesabilitado}
+                    aria-describedby={novaLiberacaoDesabilitada ? "nova-liberacao-ajuda" : undefined}
+                    onClick={() => {
+                      if (novaLiberacaoDesabilitada) return;
+                      setFormAberto({ modo: "criar", pacienteInicial: selecionado! });
+                    }}
+                    className={`${BOTAO_PRIMARIO} disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    Nova liberação
+                  </button>
+                ) : permissoes.podeCriarAvulsa ? (
+                  <Link href="/dashboard/atendimento" className={BOTAO_PRIMARIO}>
+                    Novo atendimento
+                  </Link>
+                ) : null}
+                {loadingSituacao && <span className="text-sm text-zinc-500">Verificando situação...</span>}
+              </div>
+            </div>
+          </div>
+          {novaLiberacaoDesabilitada && motivoDesabilitado && !erroSituacao && (
+            <p id="nova-liberacao-ajuda" className="mt-3 text-sm text-zinc-500">
+              {motivoDesabilitado}
+            </p>
+          )}
+          {erroSituacao && (
+            <div className="mt-3 flex flex-col gap-2">
+              <p id="nova-liberacao-ajuda" role="alert" className="text-sm text-red-600">
+                {erroSituacao}
+              </p>
+              <button type="button" onClick={handleRetry} className={BOTAO_SECUNDARIO}>
+                Tentar novamente
+              </button>
+            </div>
+          )}
         </div>
 
         {selecionado ? (
@@ -198,47 +264,6 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
             </button>
           </div>
         ) : null}
-
-        {/* Botão no mesmo nível visual da busca ou abaixo — nunca isolado acima */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-3">
-            {permissoes.podeCriarContinua ? (
-              <button
-                type="button"
-                disabled={novaLiberacaoDesabilitada}
-                title={motivoDesabilitado}
-                aria-describedby={novaLiberacaoDesabilitada ? "nova-liberacao-ajuda" : undefined}
-                onClick={() => {
-                  if (novaLiberacaoDesabilitada) return;
-                  setFormAberto({ modo: "criar", pacienteInicial: selecionado! });
-                }}
-                className={`${BOTAO_PRIMARIO} disabled:opacity-50 disabled:cursor-not-allowed`}
-              >
-                Nova liberação
-              </button>
-            ) : permissoes.podeCriarAvulsa ? (
-              <Link href="/dashboard/atendimento" className={BOTAO_PRIMARIO}>
-                Novo atendimento
-              </Link>
-            ) : null}
-            {loadingSituacao && <span className="text-sm text-zinc-500">Verificando situação...</span>}
-          </div>
-          {novaLiberacaoDesabilitada && motivoDesabilitado && !erroSituacao && (
-            <p id="nova-liberacao-ajuda" className="text-sm text-zinc-500">
-              {motivoDesabilitado}
-            </p>
-          )}
-          {erroSituacao && (
-            <div className="flex flex-col gap-2">
-              <p id="nova-liberacao-ajuda" role="alert" className="text-sm text-red-600">
-                {erroSituacao}
-              </p>
-              <button type="button" onClick={handleRetry} className={BOTAO_SECUNDARIO}>
-                Tentar novamente
-              </button>
-            </div>
-          )}
-        </div>
 
         {isEsporadico && (
           <div className={`${CARTAO} border-l-4 border-l-amber-400 p-4`}>
