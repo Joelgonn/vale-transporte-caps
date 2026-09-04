@@ -229,16 +229,15 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
                     Novo atendimento
                   </Link>
                 ) : null}
-                {loadingSituacao && <span className="text-sm text-zinc-500">Verificando situação...</span>}
               </div>
             </div>
           </div>
-          {novaLiberacaoDesabilitada && motivoDesabilitado && !erroSituacao && (
+          {!selecionado && motivoDesabilitado && (
             <p id="nova-liberacao-ajuda" className="mt-3 text-sm text-zinc-500">
               {motivoDesabilitado}
             </p>
           )}
-          {erroSituacao && (
+          {erroSituacao && !selecionado && (
             <div className="mt-3 flex flex-col gap-2">
               <p id="nova-liberacao-ajuda" role="alert" className="text-sm text-red-600">
                 {erroSituacao}
@@ -250,48 +249,61 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
           )}
         </div>
 
+        {/* Sprint 73.2 — card contextual único: paciente + situação + ações */}
         {selecionado ? (
-          <div className={`${CARTAO} flex items-center justify-between gap-3 p-4`}>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-brand-900">{selecionado.nome}</p>
-              <p className="text-xs text-zinc-500">
-                Gestor SUS {selecionado.gestor_sus}
-                {selecionado.origem === "esporadico" ? " · Esporádico" : selecionado.origem === "regular" ? " · Regular" : ""}
-              </p>
+          <div className={`${CARTAO} p-4`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-brand-900">{selecionado.nome}</p>
+                <p className="text-xs text-zinc-500">
+                  Gestor SUS {selecionado.gestor_sus}
+                  {selecionado.origem === "esporadico" ? " · Esporádico" : selecionado.origem === "regular" ? " · Regular" : ""}
+                </p>
+              </div>
+              <button type="button" onClick={() => router.push("/dashboard/liberacoes")} className={BOTAO_SECUNDARIO}>
+                Limpar
+              </button>
             </div>
-            <button type="button" onClick={() => router.push("/dashboard/liberacoes")} className={BOTAO_SECUNDARIO}>
-              Limpar
-            </button>
+
+            <div className="mt-3">
+              {loadingSituacao ? (
+                <p className="text-sm text-zinc-500">Verificando situação...</p>
+              ) : erroSituacao ? (
+                <div className="flex flex-col gap-2">
+                  <p role="alert" className="text-sm text-red-600">
+                    {erroSituacao}
+                  </p>
+                  <button type="button" onClick={handleRetry} className={`${BOTAO_SECUNDARIO} self-start`}>
+                    Tentar novamente
+                  </button>
+                </div>
+              ) : isEsporadico ? (
+                <p className="text-sm font-medium text-amber-900">Paciente esporádico não pode receber liberação contínua.</p>
+              ) : temContinuaAtiva && continuaAtiva ? (
+                <div className="border-l-4 border-l-amber-400 pl-3">
+                  <p className="text-sm font-semibold text-amber-900">Este paciente já possui uma liberação contínua ativa.</p>
+                  <p className="mt-1 text-xs text-zinc-600">
+                    {ROTULO_TIPO_LIBERACAO[continuaAtiva.tipo]} · {periodoTexto(continuaAtiva)} · {continuaAtiva.quantidade} previstos
+                    {(continuaAtiva as unknown as { vales_por_dia?: number | null }).vales_por_dia
+                      ? ` · ${(continuaAtiva as unknown as { vales_por_dia?: number | null }).vales_por_dia} vales/dia`
+                      : " · Quantidade diária não informada"}{" "}
+                    · {continuaAtiva.status}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link href={`/dashboard/liberacoes?paciente=${selecionado?.id}#lib-${continuaAtiva.id}`} className={BOTAO_SECUNDARIO}>
+                      Ver liberação
+                    </Link>
+                    <Link href="/dashboard/retiradas" className={BOTAO_SECUNDARIO}>
+                      Registrar retirada
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-zinc-600">Paciente elegível para uma nova liberação contínua.</p>
+              )}
+            </div>
           </div>
         ) : null}
-
-        {isEsporadico && (
-          <div className={`${CARTAO} border-l-4 border-l-amber-400 p-4`}>
-            <p className="text-sm font-semibold text-amber-900">Paciente esporádico não pode receber liberação contínua.</p>
-            <p className="mt-1 text-xs text-zinc-600">Liberação contínua é exclusiva para pacientes com acompanhamento regular (RN29).</p>
-          </div>
-        )}
-
-        {temContinuaAtiva && continuaAtiva && !isEsporadico && !erroSituacao && (
-          <div className={`${CARTAO} border-l-4 border-l-amber-400 p-4`}>
-            <p className="text-sm font-semibold text-amber-900">Este paciente já possui uma liberação contínua ativa.</p>
-            <p className="mt-1 text-xs text-zinc-600">
-              {ROTULO_TIPO_LIBERACAO[continuaAtiva.tipo]} · {periodoTexto(continuaAtiva)} · {continuaAtiva.quantidade} previstos
-              {(continuaAtiva as unknown as { vales_por_dia?: number | null }).vales_por_dia
-                ? ` · ${(continuaAtiva as unknown as { vales_por_dia?: number | null }).vales_por_dia} vales/dia`
-                : ""}{" "}
-              · {continuaAtiva.status}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Link href={`/dashboard/liberacoes?paciente=${selecionado?.id}#lib-${continuaAtiva.id}`} className={BOTAO_SECUNDARIO}>
-                Ver liberação
-              </Link>
-              <Link href="/dashboard/retiradas" className={BOTAO_SECUNDARIO}>
-                Registrar retirada
-              </Link>
-            </div>
-          </div>
-        )}
 
         {props.erroInicial && !selecionado && <FeedbackErro>{props.erroInicial}</FeedbackErro>}
 
