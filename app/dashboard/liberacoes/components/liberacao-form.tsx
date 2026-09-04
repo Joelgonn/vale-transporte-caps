@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
-import { criarLiberacaoAction } from "@/app/actions/liberacoes";
+import { criarLiberacaoAction, listarLiberacoesAction } from "@/app/actions/liberacoes";
 import { PatientSearch } from "@/components/ui/patient-search";
 import {
   ORIGENS_PACIENTE,
@@ -75,6 +76,10 @@ function formatarData(iso: string | null | undefined): string {
   return ano && mes && dia ? `${dia}/${mes}/${ano}` : iso;
 }
 
+function periodoTexto(lib: LiberacaoComPaciente): string {
+  return `${formatarData(lib.data_inicio)} – ${formatarData(lib.data_fim)}`;
+}
+
 export default function LiberacaoForm(props: LiberacaoFormProps) {
   const isRenovacao = props.modo === "renovar";
   const origem = isRenovacao ? props.origem : null;
@@ -82,6 +87,8 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
   // Paciente selecionado (somente no modo criar). Guarda o registro completo de
   // v_pacientes para conhecer a ORIGEM e aplicar RN29 na UI.
   const [paciente, setPaciente] = useState<PacienteSemCpf | null>(null);
+  const [continuaAtiva, setContinuaAtiva] = useState<LiberacaoComPaciente | null>(null);
+  const [carregandoContinua, setCarregandoContinua] = useState(false);
   const [tipo, setTipo] = useState<TipoLiberacao>(
     (origem?.tipo as TipoLiberacao | undefined) ?? TIPOS_LIBERACAO.CONTINUA
   );
@@ -103,15 +110,27 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
       : (origem?.quantidade ?? 1));
 
   const [passo, setPasso] = useState(1);
+
+  async function verificarContinuaAtiva(p: PacienteSemCpf) {
+    setCarregandoContinua(true);
+    setContinuaAtiva(null);
+    const r = await listarLiberacoesAction(undefined, p.id);
+    setCarregandoContinua(false);
+    if (r.ok) {
+      const encontrada = r.data.find((l) => l.tipo === TIPOS_LIBERACAO.CONTINUA && l.status === "ativa");
+      setContinuaAtiva(encontrada ?? null);
+    }
+  }
   const [errosPasso, setErrosPasso] = useState<ErroCampo[]>([]);
 
   // Validação local de cada etapa (mesmas regras do servidor) — impede avançar
   // com o passo incompleto e evita submissões claramente inválidas.
+  // Sprint 72 — bloqueia avanço se paciente já possui contínua ativa.
   function errosDoPasso(p: number): ErroCampo[] {
     if (p === 1) {
-      return paciente
-        ? []
-        : [{ campo: "paciente", mensagem: "Selecione o paciente." }];
+      if (!paciente) return [{ campo: "paciente", mensagem: "Selecione o paciente." }];
+      if (continuaAtiva) return [{ campo: "paciente", mensagem: "Este paciente já possui uma liberação contínua ativa." }];
+      return [];
     }
     if (p === 2) {
       const erros: ErroCampo[] = [];
@@ -380,6 +399,7 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
                     disabled={bloq}
                     onClick={() => {
                       setPaciente(null);
+                      setContinuaAtiva(null);
                       limparErro("paciente");
                     }}
                     className="h-9 shrink-0 rounded-md border border-zinc-300 px-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-50"
@@ -393,12 +413,14 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
                   label="Paciente"
                   placeholder="🔎 Nome ou Gestor SUS..."
                   onSelect={(p) => {
-                    setPaciente(p);
+                    setPaciente(p as unknown as PacienteSemCpf);
+                    setContinuaAtiva(null);
                     limparErro("paciente");
+                    verificarContinuaAtiva(p as unknown as PacienteSemCpf);
                     // RN29 — paciente esporádico só recebe liberação avulsa:
                     // força o tipo e limpa erro de período.
                     if (
-                      p.origem === ORIGENS_PACIENTE.ESPORADICO &&
+                      (p as unknown as { origem?: string }).origem === ORIGENS_PACIENTE.ESPORADICO &&
                       tipo !== TIPOS_LIBERACAO.AVULSA
                     ) {
                       setTipo(TIPOS_LIBERACAO.AVULSA);
@@ -406,6 +428,27 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
                     }
                   }}
                 />
+              )}
+              {carregandoContinua && <p className="text-sm text-zinc-500">Verificando liberações ativas...</p>}
+              {paciente && continuaAtiva && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm font-semibold text-amber-900">Este paciente já possui uma liberação contínua ativa.</p>
+                  <p className="mt-1 text-xs text-amber-800">
+                    Contínua · {periodoTexto(continuaAtiva)} · {continuaAtiva.quantidade} previstos
+                    {(continuaAtiva as unknown as { vales_por_dia?: number | null }).vales_por_dia
+                      ? ` · ${(continuaAtiva as unknown as { vales_por_dia?: number | null }).vales_por_dia} vales/dia`
+                      : " · Quantidade diária não informada"}{" "}
+                    · {continuaAtiva.status}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link href={`/dashboard/liberacoes?paciente=${paciente.id}#lib-${continuaAtiva.id}`} className={BOTAO_SECUNDARIO}>
+                      Ver liberação
+                    </Link>
+                    <Link href="/dashboard/retiradas" className={BOTAO_SECUNDARIO}>
+                      Registrar retirada
+                    </Link>
+                  </div>
+                </div>
               )}
               {erroDe("paciente") && (
                 <p id="erro-paciente" className="text-sm text-red-600">
