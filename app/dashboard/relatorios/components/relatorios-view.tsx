@@ -86,7 +86,8 @@ const INPUT =
   "h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none";
 
 export default function RelatoriosView(props: RelatoriosViewProps) {
-  const { filtros, resultado, resumo, erroInicial, candidatos, pacienteSelecionado } = props;
+  const { filtros, resultado, resumo, erroInicial, candidatos: _candidatos, pacienteSelecionado } = props;
+  void _candidatos;
   const router = useRouter();
 
   const ehHistorico = filtros.tipo === "historico";
@@ -307,10 +308,10 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
   }
 
   // ---------------------------------------------------------------
-  // Ramificação HISTÓRICO POR PACIENTE (Sprint 38)
+  // Ramificação HISTÓRICO POR PACIENTE (Sprint 38, corrigido Sprint 56)
   // ---------------------------------------------------------------
   if (ehHistorico) {
-    // Etapa de busca: nenhum paciente selecionado ainda.
+    // Etapa de busca: nenhum paciente selecionado — PatientSearch sempre visível.
     if (!resultado) {
       return (
         <div className="flex flex-1 flex-col py-6">
@@ -321,56 +322,45 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
             />
             {erroInicial && <FeedbackErro>{erroInicial}</FeedbackErro>}
 
-            {candidatos && candidatos.length > 0 && (
-              <>
-                <p className="text-sm text-zinc-500">
-                  Encontrado(s) {candidatos.length} paciente(s). Selecione um para visualizar o histórico.
-                </p>
-                <ul className="flex flex-col gap-2">
-                  {candidatos.map((c) => (
-                    <li key={c.id} className="flex items-center gap-3">
-                      <Link
-                        href={construirUrl(filtros, { paciente: c.id, busca: null, pagina: 1 })}
-                        className="font-medium text-brand-900 underline"
-                      >
-                        {c.nome}
-                      </Link>
-                      <span className="text-xs text-zinc-500">
-                        SUS {c.gestor_sus}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-
-            {!candidatos || candidatos.length === 0 && (erroInicial || true) && (
-              <EstadoVazio
-                mensagem={
-                  !erroInicial
-                    ? "Selecione um paciente para consultar o histórico."
-                    : erroInicial
-                }
-              />
-            )}
-
-            {!candidatos && !erroInicial && (
-              <div className={`${CARTAO} p-4`}>
-                <PatientSearch
-                  id="relatorios-historico-patient"
-                  label="Paciente (nome ou Gestor SUS)"
-                  placeholder="Nome ou Gestor SUS..."
-                  onSelect={(p) => router.push(construirUrl({ ...filtros, tipo: "historico", pagina: 1 }, { paciente: p.id, busca: null }))}
-                />
-                <div className="mt-3">
-                  <Link href={construirUrl(filtros, { tipo: "historico", pagina: 1 })} className={BOTAO_SECUNDARIO}>
-                    Limpar
+            <nav aria-label="Tipo de relatório" className="flex flex-wrap gap-2">
+              {TIPOS_RELATORIO.map((tipo) => {
+                const ativo = filtros.tipo === tipo;
+                return (
+                  <Link
+                    key={tipo}
+                    title={TOOLTIP_TIPO_RELATORIO[tipo] ?? ""}
+                    href={construirUrl(filtros, {
+                      tipo,
+                      pagina: 1,
+                      paciente: null,
+                      status: null,
+                      origem: null,
+                      situacaoConsolidado: null,
+                      situacaoLiberacoes: null,
+                      situacaoRetiradas: null,
+                    })}
+                    aria-current={ativo ? "page" : undefined}
+                    className={
+                      ativo
+                        ? "inline-flex h-10 items-center rounded-md bg-brand-900 px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                        : "inline-flex h-10 items-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:border-brand-300 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-reduce:transition-none"
+                    }
+                  >
+                    {ROTULO_TIPO_RELATORIO[tipo]}
                   </Link>
-                </div>
-              </div>
-            )}
+                );
+              })}
+            </nav>
 
-            {erroInicial && <FeedbackErro>{erroInicial}</FeedbackErro>}
+            <div className={`${CARTAO} p-4`}>
+              <PatientSearch
+                id="relatorios-historico-patient"
+                label="Paciente (nome ou Gestor SUS)"
+                placeholder="Nome ou Gestor SUS..."
+                onSelect={(p) => router.push(construirUrl({ ...filtros, tipo: "historico", pagina: 1 }, { paciente: p.id, busca: null }))}
+              />
+              <p className="mt-2 text-xs text-zinc-500">Digite o nome ou Gestor SUS para localizar um paciente.</p>
+            </div>
           </div>
         </div>
       );

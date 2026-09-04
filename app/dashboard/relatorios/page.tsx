@@ -4,10 +4,7 @@ import { getUsuarioFuncional } from "@/lib/auth/profile";
 import { permissoesRelatorios } from "@/lib/domain/regras";
 import { TIPOS_RELATORIO, type FiltrosRelatorio } from "@/lib/domain/relatorios/types";
 import { consultarRelatorioAction, relatorioResumoAction } from "@/app/actions/relatorios";
-import { listarPacientesAction } from "@/app/actions/pacientes";
 import RelatoriosView from "./components/relatorios-view";
-import { PageHeader } from "@/components/ui/page-header";
-import { FeedbackErro } from "@/components/ui/feedback";
 
 type RelatoriosSearchParams = {
   tipo?: string;
@@ -99,7 +96,8 @@ export default async function RelatoriosPage({
     );
   }
 
-  // === Fluxo do Histórico por Paciente (Sprint 38) ===
+  // === Fluxo do Histórico por Paciente (Sprint 38, corrigido) ===
+  // Histórico é sempre patient-centric via PatientSearch; não usa busca textual via URL.
   if (tipo === "historico") {
     if (params.paciente) {
       // Paciente já selecionado — consultar o relatório histórico.
@@ -125,64 +123,8 @@ export default async function RelatoriosPage({
       );
     }
 
-    if (params.busca) {
-      // Etapa de busca: sugerir pacientes correspondentes via v_pacientes.
-      const buscaAcao = await listarPacientesAction(params.busca);
-      if (buscaAcao.ok) {
-        if (!buscaAcao.data || buscaAcao.data.length === 0) {
-          return (
-            <div className="flex flex-1 flex-col py-6">
-              <PageHeader
-                titulo="Relatórios"
-                descricao="Consultas de liberações, retiradas e consolidado — exclusivas do Gestor."
-              />
-              <FeedbackErro>Nenhum paciente encontrado.</FeedbackErro>
-              <button
-                type="button"
-                onClick={() => window.location.reload()}
-                className="inline-flex h-10 items-center rounded-md bg-brand-900 px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-              >
-                Buscar outro paciente
-              </button>
-            </div>
-          );
-        }
-// Candidatos encontrados — renderizar com lista de seleção.
-        const filtros: FiltrosRelatorio = {
-          tipo: "historico",
-          pagina: 1,
-        };
-        return (
-          <RelatoriosView
-            filtros={filtros}
-            resultado={null}
-            erroInicial={null}
-            candidatos={buscaAcao.data}
-          />
-        );
-      }
-      // Em caso de erro na ação.
-      return (
-        <div className="flex flex-1 flex-col py-6">
-          <PageHeader
-            titulo="Relatórios"
-            descricao="Consultas de liberações, retiradas e consolidado — exclusivas do Gestor."
-          />
-          <FeedbackErro>
-            {buscaAcao.error ?? "Ocorreu um erro inesperado."}
-          </FeedbackErro>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="inline-flex h-10 items-center rounded-md bg-brand-900 px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-          >
-            Buscar outro paciente
-          </button>
-        </div>
-      );
-    }
-
-    // Etapa inicial: nenhum termo digitado ainda.
+    // Etapa inicial: nenhum paciente selecionado — exibir PatientSearch diretamente.
+    // Não usa ?busca= nem candidatos; o autocomplete do PatientSearch resolve.
     const filtros: FiltrosRelatorio = {
       tipo: "historico",
       pagina: 1,
