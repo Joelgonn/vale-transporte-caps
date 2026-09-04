@@ -35,6 +35,11 @@ import {
   calcularTotaisLiberacoes,
   filtrarPorSituacaoLiberacoes,
 } from "@/lib/domain/relatorios/liberacoes";
+import {
+  calcularContadoresRetiradas,
+  calcularTotaisRetiradas,
+  filtrarPorSituacaoRetiradas,
+} from "@/lib/domain/relatorios/retiradas";
 
 // Contrato usado pelos services (permite injeção de fakes nos testes).
 export interface RelatorioRepository {
@@ -173,51 +178,73 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
     };
   }
 
+  // Sprint 55 — Retiradas operacionais: chunked + totais/contadores + tipo/situação
   async listarRetiradas(filtros: FiltrosRelatorio): Promise<ResultadoListaRelatorio> {
     const porPagina = POR_PAGINA_RELATORIO;
-    const offset = (filtros.pagina - 1) * porPagina;
 
     const de = normalizarTermo(filtros.de);
     const ate = normalizarDataAte(filtros.ate);
+    const tipoLiberacao = normalizarTermo(filtros.tipoLiberacao);
+    const situacao = normalizarTermo(filtros.situacaoRetiradas);
     const pacienteId = normalizarTermo(filtros.paciente);
     const ids = pacienteId ? null : await this.resolverIdsPacientes(normalizarTermo(filtros.busca));
 
     if (ids && ids.length === 0) {
+      const vazioTotais = calcularTotaisRetiradas([]);
       return {
         tipo: "retiradas",
         linhas: [],
         total: 0,
         pagina: filtros.pagina,
         porPagina,
+        totais: vazioTotais,
+        contadores: calcularContadoresRetiradas([]),
       };
     }
 
-    let query = this.client
-      .from("retiradas")
-      .select(
-        `*, pacientes(${COLUNAS_PACIENTE}), liberacoes(id, tipo, quantidade), recepcionista:usuarios!retiradas_recepcionista_id_fkey(id, nome)`,
-        { count: "exact" }
-      );
+    // Chunked busca do conjunto base (filtros de período/paciente/tipo)
+    const tamanhoPagina = 1000;
+    let offset = 0;
+    const todasBrutas: unknown[] = [];
+    while (true) {
+      // Para filtro por tipo, usamos !inner para que PostgREST filtre linhas de topo
+      const selectTipo = tipoLiberacao ? "liberacoes!inner(id, tipo, quantidade, data_inicio, data_fim, status)" : "liberacoes(id, tipo, quantidade, data_inicio, data_fim, status)";
+      let query = this.client
+        .from("retiradas")
+        .select(`*, pacientes(${COLUNAS_PACIENTE_LIBERACOES}), ${selectTipo}, recepcionista:usuarios!retiradas_recepcionista_id_fkey(id, nome)`);
+      if (de) query = query.gte("data_hora", de);
+      if (ate) query = query.lte("data_hora", ate);
+      if (tipoLiberacao) query = query.eq("liberacoes.tipo", tipoLiberacao);
+      if (pacienteId) query = query.eq("paciente_id", pacienteId);
+      else if (ids) query = query.in("paciente_id", ids);
+      const { data, error } = await query
+        .order("data_hora", { ascending: false })
+        .range(offset, offset + tamanhoPagina - 1);
+      if (error) throw mapSupabaseError(error);
+      const pagina = (data ?? []) as unknown[];
+      todasBrutas.push(...pagina);
+      if (pagina.length < tamanhoPagina) break;
+      offset += tamanhoPagina;
+    }
 
-    if (de) query = query.gte("data_hora", de);
-    if (ate) query = query.lte("data_hora", ate);
-    if (pacienteId) query = query.eq("paciente_id", pacienteId);
-    else if (ids) query = query.in("paciente_id", ids);
+    const todasLinhas = todasBrutas.map((linha) => mapearLinhaRetiradas(linha as LinhaRetiradaBruta));
 
-    const { data, error, count } = await query
-      .order("data_hora", { ascending: false })
-      .range(offset, offset + porPagina - 1);
+    const contadores = calcularContadoresRetiradas(todasLinhas);
+    const filtradas = filtrarPorSituacaoRetiradas(todasLinhas, situacao);
+    const totais = calcularTotaisRetiradas(filtradas);
 
-    if (error) throw mapSupabaseError(error);
+    const total = filtradas.length;
+    const inicio = (filtros.pagina - 1) * porPagina;
+    const linhasPaginadas = filtradas.slice(inicio, inicio + porPagina);
 
     return {
       tipo: "retiradas",
-      linhas: (data ?? []).map((linha) =>
-        mapearLinhaRetiradas(linha as LinhaRetiradaBruta)
-      ),
-      total: count ?? 0,
+      linhas: linhasPaginadas,
+      total,
       pagina: filtros.pagina,
       porPagina,
+      totais,
+      contadores,
     };
   }
 

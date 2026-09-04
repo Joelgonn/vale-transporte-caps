@@ -200,20 +200,24 @@ describe("RelatorioRepositoryPostgres", () => {
     const resultado = await repo.listarRetiradas({
       tipo: "retiradas",
       de: "2026-01-01",
-      pagina: 2,
+      pagina: 1,
     });
 
     const chamada = registros.calls.find((c) => c.tabela === "retiradas")!;
     const select = chamada.metodos.find((m) => m.startsWith("select:"))!;
     expect(select).toContain("recepcionista:usuarios!retiradas_recepcionista_id_fkey");
+    expect(select).toContain("pacientes(id, gestor_sus, nome, origem)");
     expect(chamada.metodos).toContain("gte:data_hora=2026-01-01");
     expect(chamada.metodos).toContain("order:data_hora");
-    expect(chamada.metodos).toContain("range:20-39");
+    // chunked fetch usa range 0-999 (Sprint 55) e pagina em memória
+    expect(chamada.metodos.some((m) => m.startsWith("range:"))).toBe(true);
 
     expect(resultado.tipo).toBe("retiradas");
     if (resultado.tipo !== "retiradas") return;
     expect(resultado.linhas[0].recepcionista?.nome).toBe("Joana Recep");
     expect(resultado.linhas[0].liberacao?.quantidade).toBe(1);
+    expect(resultado.totais.registros).toBe(1);
+    expect(resultado.contadores).toBeDefined();
   });
 
   it("listarConsolidado deriva saldo por liberação e aplica filtros", async () => {

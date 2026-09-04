@@ -182,20 +182,29 @@ describe("RelatoriosView — tabela de retiradas", () => {
         total: 1,
         pagina: 1,
         porPagina: 20,
+        totais: { registros: 1, valesRetirados: 2, pacientesDistintos: 1, avulsas: 1, continuas: 0 },
+        contadores: { acimaPrevisao: 1, foraVigencia: 0 },
       },
     });
     expect(screen.getAllByText("05/01/2026 · 10:30").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Avulsa · 1").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Avulsa").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Joana Recep").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Período")).toBeNull();
   });
 
-  it("não oferece o filtro de tipo de liberação no relatório de retiradas", () => {
+  it("oferece o filtro de tipo de liberação no relatório de retiradas (Sprint 55)", () => {
     renderizar({
       filtros: filtros({ tipo: "retiradas" }),
-      resultado: { tipo: "retiradas", linhas: [], total: 0, pagina: 1, porPagina: 20 },
+      resultado: {
+        tipo: "retiradas",
+        linhas: [],
+        total: 0,
+        pagina: 1,
+        porPagina: 20,
+        totais: { registros: 0, valesRetirados: 0, pacientesDistintos: 0, avulsas: 0, continuas: 0 },
+        contadores: { acimaPrevisao: 0, foraVigencia: 0 },
+      },
     });
-    expect(screen.queryByLabelText("Tipo de liberação")).toBeNull();
+    expect(screen.getByLabelText("Tipo de liberação")).toBeInTheDocument();
   });
 });
 

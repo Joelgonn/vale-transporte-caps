@@ -67,7 +67,7 @@ function construirUrl(filtros: FiltrosRelatorio, ajustes: Partial<FiltrosRelator
   if (uniao.paciente) params.set("paciente", uniao.paciente);
   if (uniao.status) params.set("status", uniao.status);
   if (uniao.origem) params.set("origem", uniao.origem);
-  const sit = uniao.situacaoLiberacoes ?? uniao.situacaoConsolidado;
+  const sit = uniao.situacaoRetiradas ?? uniao.situacaoLiberacoes ?? uniao.situacaoConsolidado;
   if (sit) params.set("sit", sit);
   if (uniao.pagina > 1) params.set("pagina", String(uniao.pagina));
   return `/dashboard/relatorios?${params.toString()}`;
@@ -1340,8 +1340,128 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
   }
 
   // ---------------------------------------------------------------
-  // Fluxo PADRÃO (retiradas) — liberações/consolidado já tratados acima
+  // Fluxo RETIRADAS operacionais (Sprint 55)
   // ---------------------------------------------------------------
+  if (filtros.tipo === "retiradas") {
+    const retiradas =
+      resultado && resultado.tipo === "retiradas"
+        ? (resultado as Extract<ResultadoListaRelatorio, { tipo: "retiradas" }>)
+        : null;
+    const sitRet = filtros.situacaoRetiradas ?? null;
+    const totaisRet = retiradas?.totais ?? { registros: 0, valesRetirados: 0, pacientesDistintos: 0, avulsas: 0, continuas: 0 };
+    const contadoresRet = retiradas?.contadores ?? { acimaPrevisao: 0, foraVigencia: 0 };
+    const totalRet = retiradas?.total ?? 0;
+    const porPaginaRet = retiradas?.porPagina ?? 20;
+    const totalPaginasRet = Math.max(1, Math.ceil(totalRet / porPaginaRet));
+    const semFiltrosRet = !filtros.de && !filtros.ate && !filtros.busca && !filtros.paciente && !filtros.tipoLiberacao && !sitRet;
+    return (
+      <div className="flex flex-1 flex-col py-6">
+        <div className={`${CONTAINER} flex flex-col gap-6`}>
+          <PageHeader titulo="Relatórios" descricao="Consultas de liberações, retiradas e consolidado — exclusivas do Gestor." />
+          {erroInicial && <FeedbackErro>{erroInicial}</FeedbackErro>}
+          <nav aria-label="Tipo de relatório" className="flex flex-wrap gap-2">
+            {TIPOS_RELATORIO.map((tipo) => {
+              const ativo = filtros.tipo === tipo;
+              return (
+                <Link
+                  key={tipo}
+                  href={construirUrl(filtros, { tipo, pagina: 1, paciente: null, status: null, origem: null, situacaoConsolidado: null, situacaoLiberacoes: null, situacaoRetiradas: null })}
+                  aria-current={ativo ? "page" : undefined}
+                  className={ativo ? "inline-flex h-10 items-center rounded-md bg-brand-900 px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600" : "inline-flex h-10 items-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:border-brand-300 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-reduce:transition-none"}
+                >
+                  {ROTULO_TIPO_RELATORIO[tipo]}
+                </Link>
+              );
+            })}
+          </nav>
+          {pacienteSelecionado ? (
+            <div className={`${CARTAO} flex items-center justify-between gap-3 p-4`}>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-brand-900">{pacienteSelecionado.nome}</p>
+                <p className="text-xs text-zinc-500">SUS {pacienteSelecionado.gestor_sus}</p>
+              </div>
+              <button type="button" onClick={() => router.push(construirUrl(filtros, { paciente: null, pagina: 1 }))} className={BOTAO_SECUNDARIO}>
+                Limpar
+              </button>
+            </div>
+          ) : (
+            <div className={`${CARTAO} p-4`}>
+              <PatientSearch id="relatorios-patient" label="Paciente (nome ou Gestor SUS)" placeholder="🔎 Nome ou Gestor SUS..." onSelect={(p) => router.push(construirUrl(filtros, { paciente: p.id, busca: null, pagina: 1 }))} />
+            </div>
+          )}
+          <form method="get" action="/dashboard/relatorios" aria-label="Filtros de relatórios" className={`flex flex-col gap-3 p-4 lg:flex-row lg:items-end ${CARTAO}`}>
+            <input type="hidden" name="tipo" value={filtros.tipo} />
+            {filtros.paciente && <input type="hidden" name="paciente" value={filtros.paciente} />}
+            {sitRet && <input type="hidden" name="sit" value={sitRet} />}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="relatorios-filtro-tipo" className="text-xs font-medium text-zinc-600">Tipo de liberação</label>
+              <select id="relatorios-filtro-tipo" name="tl" defaultValue={filtros.tipoLiberacao ?? ""} className={INPUT}>
+                <option value="">Todos</option>
+                {Object.values(TIPOS_LIBERACAO).map((tipo) => (
+                  <option key={tipo} value={tipo}>{rotuloTipoLiberacao(tipo)}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="relatorios-filtro-de" className="text-xs font-medium text-zinc-600">De</label>
+              <input id="relatorios-filtro-de" name="de" type="date" defaultValue={filtros.de ?? ""} className={INPUT} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="relatorios-filtro-ate" className="text-xs font-medium text-zinc-500">Até</label>
+              <input id="relatorios-filtro-ate" name="ate" type="date" defaultValue={filtros.ate ?? ""} className={INPUT} />
+            </div>
+            <div className="flex flex-col gap-1.5 lg:ml-1 lg:flex-row">
+              <button type="submit" className="inline-flex h-11 items-center justify-center rounded-md bg-green-600 px-5 text-sm font-medium text-white transition-colors hover:bg-green-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">Filtrar</button>
+              <Link href={construirUrl(filtros, { de: null, ate: null, busca: null, tipoLiberacao: null, pagina: 1, paciente: null, status: null, origem: null, situacaoConsolidado: null, situacaoLiberacoes: null, situacaoRetiradas: null })} className={BOTAO_SECUNDARIO}>Limpar</Link>
+            </div>
+          </form>
+          {!erroInicial && !retiradas && <p className="text-sm text-zinc-500" aria-live="polite">Carregando retiradas...</p>}
+          {!erroInicial && retiradas && totalRet === 0 && sitRet && <EstadoVazio mensagem="Não há retiradas nesta situação." />}
+          {!erroInicial && retiradas && totalRet === 0 && !sitRet && <EstadoVazio mensagem={semFiltrosRet ? "Não há retiradas para os filtros selecionados." : "Não há retiradas para os filtros selecionados."} />}
+          {!erroInicial && retiradas && totalRet > 0 && (
+            <>
+              <dl className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                <div className={`${CARTAO} p-4`}><dt className="text-xs uppercase tracking-wide text-zinc-500">Retiradas</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.registros}</dd></div>
+                <div className={`${CARTAO} p-4`}><dt className="text-xs uppercase tracking-wide text-zinc-500">Vales retirados</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.valesRetirados}</dd></div>
+                <div className={`${CARTAO} p-4`}><dt className="text-xs uppercase tracking-wide text-zinc-500">Pacientes atendidos</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.pacientesDistintos}</dd></div>
+                <div className={`${CARTAO} p-4`}><dt className="text-xs uppercase tracking-wide text-zinc-500">Retiradas avulsas</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.avulsas}</dd></div>
+                <div className={`${CARTAO} p-4`}><dt className="text-xs uppercase tracking-wide text-zinc-500">Retiradas contínuas</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.continuas}</dd></div>
+                <div className={`${CARTAO} p-4`}><dt className="text-xs uppercase tracking-wide text-zinc-500">Acima da previsão</dt><dd className="mt-1 text-2xl font-semibold text-red-700">{contadoresRet.acimaPrevisao}</dd></div>
+              </dl>
+              {(contadoresRet.acimaPrevisao > 0 || contadoresRet.foraVigencia > 0) && (
+                <div className={`${CARTAO} p-4`}>
+                  <h3 className="text-sm font-semibold text-brand-900">Situações que merecem atenção</h3>
+                  <p className="mt-1 text-xs text-zinc-500">Indicadores operacionais — não indicam erro automático.</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link href={construirUrl(filtros, { situacaoRetiradas: null, situacaoConsolidado: null, situacaoLiberacoes: null, pagina: 1 })} className={!sitRet ? "inline-flex h-8 items-center rounded-full bg-brand-900 px-3.5 text-xs font-medium text-white" : "inline-flex h-8 items-center rounded-full border border-zinc-300 bg-white px-3.5 text-xs font-medium text-zinc-700 hover:border-zinc-400"}>Todos · {totaisRet.registros}</Link>
+                    <Link href={construirUrl(filtros, { situacaoRetiradas: "acima_previsao", situacaoConsolidado: "acima_previsao", situacaoLiberacoes: "acima_previsao", pagina: 1 })} className={sitRet === "acima_previsao" ? "inline-flex h-8 items-center rounded-full bg-red-600 px-3.5 text-xs font-medium text-white" : "inline-flex h-8 items-center rounded-full border border-red-200 bg-red-50 px-3.5 text-xs font-medium text-red-700 hover:bg-red-100"}>🔴 Acima da previsão · {contadoresRet.acimaPrevisao}</Link>
+                    {contadoresRet.foraVigencia > 0 && (
+                      <Link href={construirUrl(filtros, { situacaoRetiradas: "fora_vigencia", situacaoConsolidado: "fora_vigencia", situacaoLiberacoes: "fora_vigencia", pagina: 1 })} className={sitRet === "fora_vigencia" ? "inline-flex h-8 items-center rounded-full bg-orange-500 px-3.5 text-xs font-medium text-white" : "inline-flex h-8 items-center rounded-full border border-orange-200 bg-orange-50 px-3.5 text-xs font-medium text-orange-700 hover:bg-orange-100"}>🟠 Fora da vigência · {contadoresRet.foraVigencia}</Link>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-zinc-500" aria-live="polite">{totalRet} {totalRet === 1 ? "retirada" : "retiradas"} encontrada{totalRet === 1 ? "" : "s"}{sitRet ? ` — filtro: ${sitRet}` : ""}.</p>
+                <TabelaRetiradas linhas={retiradas.linhas} filtros={filtros} />
+              </div>
+              {totalRet > 0 && (
+                <nav aria-label="Paginação" className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-zinc-500">Página {filtros.pagina} de {totalPaginasRet}</p>
+                  <div className="flex gap-2">
+                    {filtros.pagina > 1 && <Link href={construirUrl(filtros, { pagina: filtros.pagina - 1 })} className={BOTAO_SECUNDARIO}>Anterior</Link>}
+                    {filtros.pagina < totalPaginasRet && <Link href={construirUrl(filtros, { pagina: filtros.pagina + 1 })} className={BOTAO_SECUNDARIO}>Próxima</Link>}
+                  </div>
+                </nav>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback (não deve ocorrer)
   return (
     <div className="flex flex-1 flex-col py-6">
       <div className={`${CONTAINER} flex flex-col gap-6`}>
@@ -1797,58 +1917,101 @@ function TabelaRetiradas({
   filtros: FiltrosRelatorio;
 }) {
   void filtros;
+  // Mapa para situação "Acima da previsão" (total por liberação na página — best-effort)
+  const mapa = new Map<string, { previsto: number; total: number }>();
+  for (const l of linhas) {
+    const id = l.liberacao?.id;
+    if (!id) continue;
+    const previsto = l.liberacao?.quantidade ?? 0;
+    const cur = mapa.get(id) ?? { previsto, total: 0 };
+    cur.total += l.quantidade;
+    mapa.set(id, cur);
+  }
   return (
     <>
       <div className={`${CARTAO} hidden overflow-x-auto md:block`}>
         <table className="w-full text-left text-sm">
-          <CabecalhoTabela
-            colunas={["Data e hora", "Paciente", "Liberação", "Quantidade", "Recepcionista"]}
-          />
+          <CabecalhoTabela colunas={["Paciente", "Origem", "Tipo", "Data/Hora", "Retirado", "Previsto", "Situação", "Registrado por"]} />
           <tbody className="divide-y divide-zinc-100">
-            {linhas.map((linha) => (
-              <tr key={linha.id} className="transition-colors duration-150 hover:bg-brand-50/40 motion-reduce:transition-none">
-                <td className="px-4 py-3 text-zinc-600">{formatarDataHora(linha.dataHora)}</td>
-                <td className="px-4 py-3">
-                  <p className="font-medium text-brand-900">{linha.paciente?.nome ?? "—"}</p>
-                  <p className="text-xs text-zinc-500">SUS {linha.paciente?.gestor_sus ?? "—"}</p>
-                </td>
-                <td className="px-4 py-3 text-zinc-700">
-                  {linha.liberacao ? `${rotuloTipoLiberacao(linha.liberacao.tipo)} · ${linha.liberacao.quantidade}` : "—"}
-                </td>
-                <td className="px-4 py-3 text-zinc-700">{linha.quantidade}</td>
-                <td className="px-4 py-3 text-zinc-600">{linha.recepcionista?.nome ?? "—"}</td>
-              </tr>
-            ))}
+            {linhas.map((linha) => {
+              const prevista = linha.liberacao?.quantidade ?? null;
+              const foraVig =
+                (linha.liberacao as unknown as { data_inicio?: string; data_fim?: string } | null)?.data_inicio &&
+                (linha.liberacao as unknown as { data_inicio?: string; data_fim?: string } | null)?.data_fim
+                  ? linha.dataHora < (linha.liberacao as unknown as { data_inicio: string }).data_inicio ||
+                    linha.dataHora > (linha.liberacao as unknown as { data_fim: string }).data_fim
+                  : false;
+              const acima = (() => {
+                const id = linha.liberacao?.id;
+                if (!id) return false;
+                const entry = mapa.get(id);
+                return entry ? entry.total > (entry.previsto ?? 0) : false;
+              })();
+              const situacao = foraVig ? "Fora da vigência" : acima ? "Acima da previsão" : "Normal";
+              return (
+                <tr
+                  key={linha.id}
+                  className={`transition-colors duration-150 motion-reduce:transition-none ${acima ? "bg-red-50/40 hover:bg-red-50/60" : foraVig ? "bg-orange-50/30 hover:bg-orange-50/50" : "hover:bg-brand-50/40"}`}
+                >
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-brand-900">{linha.paciente?.nome ?? "—"}</p>
+                    <p className="text-xs text-zinc-500">SUS {linha.paciente?.gestor_sus ?? "—"}</p>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-zinc-600">
+                    {linha.paciente?.origem ? (ROTULO_ORIGEM_PACIENTE[linha.paciente.origem as keyof typeof ROTULO_ORIGEM_PACIENTE] ?? linha.paciente.origem) : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-700">{linha.liberacao ? rotuloTipoLiberacao(linha.liberacao.tipo) : "—"}</td>
+                  <td className="px-4 py-3 text-zinc-600">{formatarDataHora(linha.dataHora)}</td>
+                  <td className="px-4 py-3 font-medium text-brand-900">{linha.quantidade}</td>
+                  <td className="px-4 py-3 text-zinc-700">{prevista ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${acima ? "text-red-700" : foraVig ? "text-orange-700" : "text-zinc-600"}`}>
+                      {situacao}
+                      {acima && <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden />}
+                      {foraVig && <span className="h-2 w-2 rounded-full bg-orange-400" aria-hidden />}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-zinc-600">{linha.recepcionista?.nome ?? "—"}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       <ul className="flex flex-col gap-3 md:hidden">
-        {linhas.map((linha) => (
-          <li key={linha.id} className={`${CARTAO} p-4`}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-base font-semibold text-brand-900">
-                  {linha.paciente?.nome ?? "—"}
-                </p>
-                <p className="text-xs text-zinc-500">{formatarDataHora(linha.dataHora)}</p>
+        {linhas.map((linha) => {
+          const prevista = linha.liberacao?.quantidade ?? null;
+          const foraVig =
+            (linha.liberacao as unknown as { data_inicio?: string; data_fim?: string } | null)?.data_inicio &&
+            (linha.liberacao as unknown as { data_inicio?: string; data_fim?: string } | null)?.data_fim
+              ? linha.dataHora < (linha.liberacao as unknown as { data_inicio: string }).data_inicio ||
+                linha.dataHora > (linha.liberacao as unknown as { data_fim: string }).data_fim
+              : false;
+          const acima = (() => {
+            const id = linha.liberacao?.id;
+            if (!id) return false;
+            const entry = mapa.get(id);
+            return entry ? entry.total > (entry.previsto ?? 0) : false;
+          })();
+          return (
+            <li key={linha.id} className={`${CARTAO} p-4`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold text-brand-900">{linha.paciente?.nome ?? "—"}</p>
+                  <p className="text-xs text-zinc-500">{formatarDataHora(linha.dataHora)} · {linha.liberacao ? rotuloTipoLiberacao(linha.liberacao.tipo) : "—"}</p>
+                  {linha.paciente?.origem && <p className="text-xs text-zinc-500">{ROTULO_ORIGEM_PACIENTE[linha.paciente.origem as keyof typeof ROTULO_ORIGEM_PACIENTE] ?? linha.paciente.origem}</p>}
+                </div>
+                <p className={`shrink-0 text-sm font-semibold ${acima ? "text-red-700" : "text-brand-900"}`}>{linha.quantidade} vale(s)</p>
               </div>
-              <p className="shrink-0 text-sm font-medium text-zinc-700">{linha.quantidade}</p>
-            </div>
-            <dl className="mt-3 flex flex-col gap-2 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-xs text-zinc-500">Liberação</dt>
-                <dd className="font-medium text-brand-900">
-                  {linha.liberacao ? `${rotuloTipoLiberacao(linha.liberacao.tipo)} · ${linha.liberacao.quantidade}` : "—"}
-                </dd>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-xs text-zinc-500">Recepcionista</dt>
-                <dd className="font-medium text-brand-900">{linha.recepcionista?.nome ?? "—"}</dd>
-              </div>
-            </dl>
-          </li>
-        ))}
+              <dl className="mt-3 flex flex-col gap-2 text-sm">
+                <div className="flex items-center justify-between gap-3"><dt className="text-xs text-zinc-500">Previsto</dt><dd className="font-medium text-brand-900">{prevista ?? "—"}</dd></div>
+                <div className="flex items-center justify-between gap-3"><dt className="text-xs text-zinc-500">Situação</dt><dd className={`font-medium ${acima ? "text-red-700" : foraVig ? "text-orange-700" : "text-zinc-700"}`}>{foraVig ? "Fora da vigência" : acima ? "Acima da previsão" : "Normal"}</dd></div>
+                <div className="flex items-center justify-between gap-3"><dt className="text-xs text-zinc-500">Registrado por</dt><dd className="font-medium text-brand-900">{linha.recepcionista?.nome ?? "—"}</dd></div>
+              </dl>
+            </li>
+          );
+        })}
       </ul>
     </>
   );

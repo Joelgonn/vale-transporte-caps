@@ -74,12 +74,17 @@ export type LinhaRetiradaBruta = {
 };
 
 export function mapearLinhaRetiradas(linha: LinhaRetiradaBruta): LinhaRetiradas {
-  const paciente = mapearEmbutido<{ id: string; gestor_sus: string; nome: string }>(
+  const paciente = mapearEmbutido<{ id: string; gestor_sus: string; nome: string; origem?: string | null }>(
     linha.pacientes
   );
-  const liberacao = mapearEmbutido<{ id: string; tipo: string; quantidade: number }>(
-    linha.liberacoes
-  );
+  const liberacao = mapearEmbutido<{
+    id: string;
+    tipo: string;
+    quantidade: number;
+    data_inicio?: string;
+    data_fim?: string;
+    status?: string;
+  }>(linha.liberacoes);
   const recepcionista = mapearEmbutido<{ id: string; nome: string }>(linha.recepcionista);
   return {
     id: linha.id,

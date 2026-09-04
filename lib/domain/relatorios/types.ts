@@ -27,12 +27,13 @@ export type FiltrosRelatorio = {
   de?: string | null; // YYYY-MM-DD (início do período)
   ate?: string | null; // YYYY-MM-DD (fim do período — inclui o dia todo)
   busca?: string | null; // nome / Gestor SUS do paciente
-  tipoLiberacao?: string | null; // somente no relatório de liberações
+  tipoLiberacao?: string | null; // somente no relatório de liberações (e retiradas Sprint 55)
   paciente?: string | null; // id do paciente (somente histórico)
   status?: string | null; // status_liberacao (histórico e liberações Sprint 54)
   origem?: string | null; // "original" | "renovacao" (somente histórico)
   situacaoConsolidado?: string | null; // Sprint 53 — filtro do consolidado
   situacaoLiberacoes?: string | null; // Sprint 54 — filtro de liberações
+  situacaoRetiradas?: string | null; // Sprint 55 — filtro de retiradas (acima_previsao/fora_vigencia)
   pagina: number;
 };
 
@@ -56,11 +57,12 @@ export type LinhaLiberacoes = {
 };
 
 // Linha do relatório de RETIRADAS.
+// Sprint 55 — inclui origem do paciente e dados da liberação para situação operacional.
 export type LinhaRetiradas = {
   id: string;
   dataHora: string;
-  paciente: { id: string; gestor_sus: string; nome: string } | null;
-  liberacao: { id: string; tipo: string; quantidade: number } | null;
+  paciente: { id: string; gestor_sus: string; nome: string; origem?: string | null } | null;
+  liberacao: { id: string; tipo: string; quantidade: number; data_inicio?: string; data_fim?: string; status?: string } | null;
   quantidade: number;
   recepcionista: { id: string; nome: string } | null;
 };
@@ -161,6 +163,19 @@ export type ContadoresLiberacoes = {
   multiplasAtivasLiberacoes: number;
 };
 
+export type TotaisRetiradas = {
+  registros: number;
+  valesRetirados: number;
+  pacientesDistintos: number;
+  avulsas: number;
+  continuas: number;
+};
+
+export type ContadoresRetiradas = {
+  acimaPrevisao: number;
+  foraVigencia: number;
+};
+
 export type ResultadoListaRelatorio =
   | {
       tipo: "liberacoes";
@@ -178,6 +193,9 @@ export type ResultadoListaRelatorio =
       total: number;
       pagina: number;
       porPagina: number;
+      // Sprint 55 — totais e contadores sobre conjunto filtrado
+      totais: TotaisRetiradas;
+      contadores: ContadoresRetiradas;
     }
   | {
       tipo: "consolidado";

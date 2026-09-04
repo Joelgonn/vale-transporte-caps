@@ -198,7 +198,7 @@ export default async function RelatoriosPage({
   }
 
   // Fluxo padrão (liberacoes / retiradas / consolidado).
-  // Sprint 53/54 — situação filtra consolidado e liberações (mesmo param sit)
+  // Sprint 53/54/55 — situação filtra consolidado/liberações/retiradas (mesmo param sit)
   const filtros: FiltrosRelatorio = {
     tipo,
     de: somenteData(params.de),
@@ -209,6 +209,7 @@ export default async function RelatoriosPage({
     status: (params.status ?? "").trim() || null,
     situacaoConsolidado: (params.sit ?? "").trim() || null,
     situacaoLiberacoes: (params.sit ?? "").trim() || null,
+    situacaoRetiradas: (params.sit ?? "").trim() || null,
     pagina: Number(params.pagina) || 1,
   };
 
