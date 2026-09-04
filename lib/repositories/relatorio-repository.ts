@@ -380,10 +380,12 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
     const status = normalizarTermo(filtros.status);
     const origem = normalizarTermo(filtros.origem);
 
+    // Hotfix — remover self-join liberacoes→liberacoes (schema cache). Origem não é necessária;
+    // renovação é determinada por renovacao_de_id (ehRenovacao/ehOriginal).
     let query = this.client
       .from("liberacoes")
       .select(
-        `*, autorizador:usuarios!liberacoes_profissional_autorizador_id_fkey(id, nome), registrador:usuarios!liberacoes_registrado_por_id_fkey(id, nome), retiradas(data_hora, quantidade), origem:liberacoes!liberacoes_renovacao_de_id_fkey(id, data_inicio, tipo, quantidade)`,
+        `*, autorizador:usuarios!liberacoes_profissional_autorizador_id_fkey(id, nome), registrador:usuarios!liberacoes_registrado_por_id_fkey(id, nome), retiradas(data_hora, quantidade)`,
         { count: "exact" }
       )
       .eq("paciente_id", pacienteId);

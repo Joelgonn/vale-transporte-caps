@@ -274,7 +274,7 @@ function vPacienteResultado(): Resultado {
 }
 
 describe("listarHistorico", () => {
-  it("lista histórico com embeds de autorizador, registrador, retiradas e origem via FK", async () => {
+  it("lista histórico com embeds de autorizador, registrador e retiradas (sem self-join)", async () => {
     const { repo, registros } = makeRepo({
       liberacoesResultado: { data: [historicoLinhaBruta()], error: null },
       vPacientesResultado: vPacienteResultado(),
@@ -291,7 +291,8 @@ describe("listarHistorico", () => {
     expect(select).toContain("autorizador:usuarios!liberacoes_profissional_autorizador_id_fkey");
     expect(select).toContain("registrador:usuarios!liberacoes_registrado_por_id_fkey");
     expect(select).toContain("retiradas(data_hora, quantidade)");
-    expect(select).toContain("origem:liberacoes!liberacoes_renovacao_de_id_fkey");
+    expect(select).not.toContain("origem:liberacoes!liberacoes_renovacao_de_id_fkey");
+    // Hotfix: self-join removido — renovação via renovacao_de_id, não via origem
     expect(chamada.metodos).toContain("order:data_inicio");
     expect(chamada.metodos).toContain("range:0-19");
 
