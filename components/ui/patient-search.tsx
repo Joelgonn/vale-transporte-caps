@@ -17,7 +17,6 @@ type Props = {
   // Quando true, mostra "Cadastrar paciente esporádico" quando não encontra
   showCreate?: boolean;
   onSelect: (paciente: PacienteSemCpf) => void;
-  onCreateEsporadico?: () => void;
   // Para controle externo do valor (opcional)
   value?: string;
   onValueChange?: (v: string) => void;
@@ -33,9 +32,13 @@ export function PatientSearch({
   defaultValue = "",
   showCreate = false,
   onSelect,
+  value: valueProp,
+  onValueChange,
   onQueryChange,
 }: Props) {
-  const [query, setQuery] = useState(defaultValue);
+  const isControlled = valueProp !== undefined;
+  const [internalQuery, setInternalQuery] = useState(defaultValue);
+  const query = isControlled ? valueProp : internalQuery;
   const [resultados, setResultados] = useState<PacienteSemCpf[] | null>(null);
   const [buscando, setBuscando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -43,6 +46,14 @@ export function PatientSearch({
   const [ativo, setAtivo] = useState(-1);
   const lastIdRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  function setQuery(v: string) {
+    if (isControlled) {
+      onValueChange?.(v);
+    } else {
+      setInternalQuery(v);
+    }
+  }
 
   useEffect(() => {
     const termo = query.trim();

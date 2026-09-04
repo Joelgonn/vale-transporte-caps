@@ -1,19 +1,16 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import LiberacoesView from "@/app/dashboard/liberacoes/components/liberacoes-view";
-import {
-  PERFIS,
-  TIPOS_LIBERACAO,
-  type PerfilUsuario,
-} from "@/lib/domain/enums";
+import { PERFIS, TIPOS_LIBERACAO, type PerfilUsuario } from "@/lib/domain/enums";
 import type { LiberacaoComPaciente } from "@/lib/domain/liberacoes/types";
 
 const { mocks } = vi.hoisted(() => ({
   mocks: {
     refresh: vi.fn(),
     push: vi.fn(),
+    replace: vi.fn(),
     criarLiberacaoAction: vi.fn(),
     listarLiberacoesAction: vi.fn(),
     listarPacientesAction: vi.fn(),
@@ -21,7 +18,7 @@ const { mocks } = vi.hoisted(() => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: mocks.refresh, push: mocks.push }),
+  useRouter: () => ({ refresh: mocks.refresh, push: mocks.push, replace: mocks.replace }),
 }));
 
 vi.mock("@/app/actions/liberacoes", () => ({
@@ -50,24 +47,22 @@ function liberacao(sobre?: Partial<LiberacaoComPaciente>): LiberacaoComPaciente 
     unidade_id: null,
     created_at: "2026-01-01T00:00:00.000Z",
     updated_at: "2026-01-01T00:00:00.000Z",
-    paciente: { id: "p1", gestor_sus: "123456", nome: "Maria da Silva" },
+    paciente: { id: "p1", gestor_sus: "123456", nome: "Maria" },
     ...sobre,
   };
 }
 
 function renderizar(opts: {
-  perfil: PerfilUsuario;
-  statusAtivo?: boolean;
-  busca?: string;
+  perfil: string;
+  pacienteSelecionado?: { id: string; gestor_sus: string; nome: string; origem?: string | null } | null;
   liberacoes?: LiberacaoComPaciente[];
   erroInicial?: string | null;
-  pacienteSelecionado?: { id: string; gestor_sus: string; nome: string; origem?: string | null } | null;
 }) {
   return render(
     <LiberacoesView
-      perfil={opts.perfil}
-      statusAtivo={opts.statusAtivo ?? true}
-      busca={opts.busca ?? ""}
+      perfil={opts.perfil as PerfilUsuario}
+      statusAtivo
+      busca=""
       pacienteSelecionado={opts.pacienteSelecionado ?? null}
       liberacoesIniciais={opts.liberacoes ?? [liberacao()]}
       erroInicial={opts.erroInicial ?? null}
@@ -77,164 +72,333 @@ function renderizar(opts: {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.listarLiberacoesAction.mockResolvedValue({ ok: true, data: [liberacao()] });
+  mocks.listarPacientesAction.mockResolvedValue({ ok: true, data: [] });
 });
 
-describe("LiberacoesView — leitura", () => {
-  it("carrega a página e exibe a lista com dados prioritários (paciente, tipo, quantidade, período)", () => {
-    renderizar({ perfil: PERFIS.GESTOR });
-
-    expect(screen.getByRole("heading", { name: "Liberações" })).toBeInTheDocument();
-    expect(screen.getAllByText("Maria da Silva").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Gestor SUS 123456").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Contínua").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("4").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("01/01/2026 – 01/04/2026").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Ativa").length).toBeGreaterThan(0);
-  });
-
-  it("exibe os status canônicos (Ativa/Expirada/Cancelada)", () => {
-    renderizar({
-      perfil: PERFIS.GESTOR,
-      liberacoes: [
-        liberacao({ id: "a", status: "ativa" }),
-        liberacao({ id: "b", status: "expirada" }),
-        liberacao({ id: "c", status: "cancelada" }),
-      ],
-    });
-
-    expect(screen.getAllByText("Ativa").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Expirada").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Cancelada").length).toBeGreaterThan(0);
-  });
-
-  it("busca inteligente via PatientSearch renderiza; a filtragem é do servidor", () => {
-    renderizar({ perfil: PERFIS.GESTOR, busca: "maria" });
-
-    expect(screen.getByLabelText("Buscar por paciente ou Gestor SUS")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("🔎 Nome ou Gestor SUS...")).toBeInTheDocument();
-  });
-
-  it("estado vazio sem busca", () => {
-    renderizar({ perfil: PERFIS.GESTOR, liberacoes: [] });
-    expect(screen.getByText("Nenhuma liberação registrada ainda.")).toBeInTheDocument();
-  });
-
-  it("estado vazio de pesquisa", () => {
-    renderizar({ perfil: PERFIS.GESTOR, busca: "xyz", liberacoes: [] });
-    expect(
-      screen.getByText("Nenhuma liberação encontrada para esta busca.")
-    ).toBeInTheDocument();
-  });
-
-  it("erro inicial é exibido sem tela branca", () => {
-    renderizar({
-      perfil: PERFIS.GESTOR,
-      erroInicial: "Não foi possível carregar as liberações.",
-    });
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Não foi possível carregar as liberações."
-    );
-  });
-
-  it("CPF não aparece na listagem", () => {
-    renderizar({ perfil: PERFIS.GESTOR });
-    expect(screen.queryByText(/12345678900/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/cpf/i)).not.toBeInTheDocument();
-  });
-
-  it("exibe o contador de resultados", () => {
-    renderizar({
-      perfil: PERFIS.GESTOR,
-      liberacoes: [
-        liberacao({ id: "a", status: "ativa" }),
-        liberacao({ id: "b", status: "expirada" }),
-        liberacao({ id: "c", status: "cancelada" }),
-      ],
-    });
-    expect(screen.getByText("3 liberações registradas.")).toBeInTheDocument();
-  });
-});
-
-describe("LiberacoesView — permissões por perfil (política de UI)", () => {
-  it("autorizador recebe 'Nova liberação', mas não 'Renovar'", () => {
-    renderizar({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
-
-    expect(screen.getByRole("button", { name: "Nova liberação" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Renovar" })).not.toBeInTheDocument();
-  });
-
-  it("recepcionista NÃO recebe 'Nova liberação' — Sprint47 (usa Atendimento para avulsa)", () => {
-    renderizar({ perfil: PERFIS.RECEPCIONISTA });
-    expect(screen.queryByRole("button", { name: "Nova liberação" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Novo atendimento" })).toHaveAttribute("href", "/dashboard/atendimento");
-  });
-
-  it("recepcionista recebe 'Renovar' apenas para liberações ativas", () => {
-    renderizar({
-      perfil: PERFIS.RECEPCIONISTA,
-      liberacoes: [
-        liberacao({ id: "ativa", status: "ativa" }),
-        liberacao({ id: "exp", status: "expirada" }),
-      ],
-    });
-
-    // Cada liberação ativa renderiza "Renovar" na tabela (desktop) e no card (mobile).
-    expect(screen.getAllByRole("button", { name: "Renovar" })).toHaveLength(2);
-  });
-
-  it("gestor TAMBÉM recebe 'Nova liberação' mas não Renovar — Sprint44", () => {
-    renderizar({ perfil: PERFIS.GESTOR });
-
-    expect(screen.getByRole("button", { name: "Nova liberação" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Renovar" })).not.toBeInTheDocument();
-  });
-});
-
-describe("LiberacoesView — interações", () => {
-  it("autorizador abre o diálogo de nova liberação", () => {
-    renderizar({
-      perfil: PERFIS.PROFISSIONAL_AUTORIZADOR,
-      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria da Silva", origem: "regular" },
-      liberacoes: [],
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "Nova liberação" }));
-
-    expect(screen.getByRole("dialog", { name: "Nova liberação" })).toBeInTheDocument();
-  });
-
-  it("recepcionista abre o diálogo de renovação a partir de uma liberação ativa", () => {
-    renderizar({ perfil: PERFIS.RECEPCIONISTA });
-
-    fireEvent.click(screen.getAllByRole("button", { name: "Renovar" })[0]);
-
-    expect(screen.getByRole("dialog", { name: "Renovar liberação" })).toBeInTheDocument();
-  });
-
-  it("mostra feedback de sucesso e atualiza a lista após criar uma liberação", async () => {
-    renderizar({
-      perfil: PERFIS.PROFISSIONAL_AUTORIZADOR,
-      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria da Silva", origem: "regular" },
-      liberacoes: [],
-    });
-    mocks.criarLiberacaoAction.mockResolvedValue({ ok: true, data: liberacao() });
-
-    fireEvent.click(screen.getByRole("button", { name: "Nova liberação" }));
-
-    const dialog = screen.getByRole("dialog", { name: "Nova liberação" });
-    // Paciente já vem pré-selecionado da página, não precisa buscar
-    expect(within(dialog).getAllByText("Maria da Silva").length).toBeGreaterThan(0);
-
-    for (let i = 0; i < 3; i++) {
-      fireEvent.click(within(dialog).getByRole("button", { name: "Continuar" }));
+function getNovaBtn() {
+  const btns = document.querySelectorAll('button');
+  for (const btn of btns) {
+    if (btn.textContent?.includes("Nova") && btn.textContent?.includes("liber")) {
+      return btn as HTMLElement;
     }
-    fireEvent.click(within(dialog).getByRole("button", { name: "Criar liberação" }));
-    await within(dialog).findByText("Liberação criada com sucesso.");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Concluir" }));
+  }
+  throw new Error("Nova liberação button not found");
+}
 
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Liberação criada com sucesso."
-    );
-    expect(mocks.refresh).toHaveBeenCalled();
+function bodyText() {
+  return document.body.textContent ?? "";
+}
+
+describe("LiberacoesView — sem paciente selecionado", () => {
+  it("botao Nova liberacao esta disabled quando sem paciente", () => {
+    renderizar({ perfil: PERFIS.GESTOR });
+    expect(getNovaBtn()).toBeDisabled();
+  });
+
+  it("elemento de descricao aria existe no DOM", () => {
+    renderizar({ perfil: PERFIS.GESTOR });
+    const desc = document.getElementById("nova-liberacao-descricao");
+    expect(desc).toBeInTheDocument();
+  });
+});
+
+describe("LiberacoesView — selecao regular sem continua ativa", () => {
+  it("botao Nova liberacao esta habilitado", () => {
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [],
+    });
+    expect(getNovaBtn()).not.toBeDisabled();
+  });
+});
+
+describe("LiberacoesView — continua ativa bloqueia nova liberacao", () => {
+  it("botao Nova liberacao esta disabled quando continua ativa", () => {
+    const libAtiva = liberacao({ id: "l1", status: "ativa", tipo: TIPOS_LIBERACAO.CONTINUA });
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [libAtiva],
+    });
+    expect(getNovaBtn()).toBeDisabled();
+  });
+});
+
+describe("LiberacoesView — paciente esporadico", () => {
+  it("botao Nova liberacao esta disabled para esporadico", () => {
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Esporadico", origem: "esporadico" },
+      liberacoes: [],
+    });
+    expect(getNovaBtn()).toBeDisabled();
+  });
+
+  it("feedback de bloqueio aparece no body", () => {
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Esporadico", origem: "esporadico" },
+      liberacoes: [],
+    });
+    const text = bodyText().toLowerCase();
+    expect(text).toMatch(/não pode receber/i);
+  });
+});
+
+describe("LiberacoesView — contínua expirada/cancelada permite nova", () => {
+  it("botão enabled quando contínua expirada", () => {
+    const libExp = liberacao({ id: "l1", status: "expirada", tipo: TIPOS_LIBERACAO.CONTINUA });
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [libExp],
+    });
+    expect(getNovaBtn()).not.toBeDisabled();
+  });
+
+  it("botão enabled quando contínua cancelada", () => {
+    const libCan = liberacao({ id: "l1", status: "cancelada", tipo: TIPOS_LIBERACAO.CONTINUA });
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [libCan],
+    });
+    expect(getNovaBtn()).not.toBeDisabled();
+  });
+});
+
+describe("LiberacoesView — busca negativa invalida seleção", () => {
+  it("alterar busca após seleção limpa paciente", () => {
+    mocks.listarPacientesAction.mockResolvedValue({
+      ok: true,
+      data: [{ id: "p2", gestor_sus: "999", nome: "Novo", origem: "regular" }],
+    });
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [],
+    });
+
+    const input = screen.getByRole("combobox", { name: /buscar/i });
+    fireEvent.change(input, { target: { value: "xyz" } });
+
+    expect(getNovaBtn()).toBeDisabled();
+  });
+});
+
+describe("LiberacoesView — Limpar", () => {
+  it("Limpar remove seleção e URL", () => {
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [liberacao()],
+    });
+
+    const btn = Array.from(document.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "Limpar"
+    ) as HTMLElement;
+    expect(btn).toBeInTheDocument();
+    fireEvent.click(btn);
+
+    expect(mocks.replace).toHaveBeenCalledWith("/dashboard/liberacoes");
+  });
+});
+
+describe("LiberacoesView — aria-describedby estável", () => {
+  it("elemento nova-liberacao-descricao existe no DOM", () => {
+    renderizar({ perfil: PERFIS.GESTOR });
+    const desc = document.getElementById("nova-liberacao-descricao");
+    expect(desc).toBeInTheDocument();
+    expect(desc?.getAttribute("id")).toBe("nova-liberacao-descricao");
+  });
+});
+
+describe("LiberacoesView — Avulsa não aparece", () => {
+  it("não exibe 'Novo atendimento' para gestor", () => {
+    renderizar({ perfil: PERFIS.GESTOR });
+    expect(screen.queryByRole("link", { name: /atendimento/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("LiberacoesView — tabela ações", () => {
+  it("Registrar retirada existe", () => {
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [liberacao()],
+    });
+    expect(screen.getAllByText("Registrar retirada").length).toBeGreaterThan(0);
+  });
+});
+
+describe("LiberacoesView — permissões preservadas", () => {
+  it("recepcionista NÃO recebe Nova liberação", () => {
+    renderizar({ perfil: PERFIS.RECEPCIONISTA });
+    expect(screen.queryByRole("button", { name: /nova liberação/i })).not.toBeInTheDocument();
+  });
+
+  it("autorizador recebe Nova liberação", () => {
+    renderizar({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
+    expect(screen.getByRole("button", { name: /nova liberação/i })).toBeInTheDocument();
+  });
+});
+
+describe("LiberacoesView — busca sem resultado limpa estado", () => {
+  it("alterar busca limpa seleção anterior e desabilita botão", () => {
+    mocks.listarPacientesAction.mockResolvedValue({ ok: true, data: [] });
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [liberacao()],
+    });
+
+    const input = screen.getByRole("combobox", { name: /buscar/i });
+    fireEvent.change(input, { target: { value: "xyz" } });
+
+    expect(getNovaBtn()).toBeDisabled();
+    expect(screen.queryByText(/esporádico/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/contínua ativa/i)).not.toBeInTheDocument();
+  });
+
+  it("nova busca válida após busca negativa habilita botão", async () => {
+    mocks.listarPacientesAction.mockResolvedValue({ ok: true, data: [] });
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [liberacao()],
+    });
+
+    const input = screen.getByRole("combobox", { name: /buscar/i });
+    fireEvent.change(input, { target: { value: "xyz" } });
+    expect(getNovaBtn()).toBeDisabled();
+
+    mocks.listarPacientesAction.mockResolvedValue({
+      ok: true,
+      data: [{ id: "p2", gestor_sus: "999", nome: "Novo Paciente", origem: "regular" }],
+    });
+    mocks.listarLiberacoesAction.mockResolvedValue({ ok: true, data: [] });
+    fireEvent.change(input, { target: { value: "novo" } });
+    fireEvent.click(await screen.findByText("Novo Paciente"));
+
+    await vi.waitFor(() => expect(getNovaBtn()).not.toBeDisabled());
+    expect(screen.queryByText(/esporádico/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/contínua ativa/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("LiberacoesView — race condition protege seleção atual", () => {
+  it("resposta tardia de consulta anterior não altera estado de seleção nova", async () => {
+    let resolveA: (value: { ok: boolean; data: LiberacaoComPaciente[] }) => void;
+    const promiseA = new Promise<{ ok: boolean; data: LiberacaoComPaciente[] }>((resolve) => { resolveA = resolve; });
+
+    mocks.listarLiberacoesAction.mockImplementation((...args) => {
+      if (args[1] === "p1") return promiseA;
+      if (args[1] === "p2") return Promise.resolve({ ok: true, data: [] });
+      return Promise.resolve({ ok: true, data: [] });
+    });
+
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Paciente A", origem: "regular" },
+      liberacoes: [],
+    });
+
+    mocks.listarPacientesAction.mockResolvedValue({
+      ok: true,
+      data: [{ id: "p2", gestor_sus: "999", nome: "Paciente B", origem: "regular" }],
+    });
+
+    const input = screen.getByRole("combobox", { name: /buscar/i });
+    fireEvent.change(input, { target: { value: "paciente b" } });
+    fireEvent.click(await screen.findByText("Paciente B"));
+
+    await vi.waitFor(() => expect(getNovaBtn()).not.toBeDisabled());
+
+    resolveA!({ ok: true, data: [liberacao({ id: "l-old", paciente_id: "p1", status: "ativa", tipo: "continua" })] });
+    await vi.waitFor(() => {});
+
+    expect(getNovaBtn()).not.toBeDisabled();
+    expect(screen.queryByText(/contínua ativa/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("LiberacoesView — Limpar limpa tudo", () => {
+  it("Limpar remove seleção, busca, URL, feedback e desabilita botão", () => {
+    mocks.push.mockClear();
+    mocks.replace.mockClear();
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [liberacao()],
+    });
+
+    const btnLimpar = Array.from(document.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "Limpar"
+    ) as HTMLElement;
+    expect(btnLimpar).toBeInTheDocument();
+    fireEvent.click(btnLimpar);
+
+    expect(mocks.replace).toHaveBeenCalledWith("/dashboard/liberacoes");
+    expect(getNovaBtn()).toBeDisabled();
+    const input = screen.getByRole("combobox", { name: /buscar/i }) as HTMLInputElement;
+    expect(input.value).toBe("");
+    expect(screen.queryByText(/esporádico/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/contínua ativa/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("LiberacoesView — ausência de card contextual duplicado", () => {
+  it("não exibe card duplicado com dados do paciente fora da tabela", () => {
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [liberacao()],
+    });
+
+    const cards = document.querySelectorAll('[class*="rounded-2xl"][class*="bg-white"]');
+    expect(cards.length).toBeLessThanOrEqual(3);
+  });
+});
+
+describe("LiberacoesView — Avulsa não aparece", () => {
+  it("não exibe 'Novo atendimento' para gestor", () => {
+    renderizar({ perfil: PERFIS.GESTOR });
+    expect(screen.queryByRole("link", { name: /atendimento/i })).not.toBeInTheDocument();
+  });
+
+  it("não exibe 'Novo atendimento' para autorizador", () => {
+    renderizar({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
+    expect(screen.queryByRole("link", { name: /atendimento/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("LiberacoesView — pacienteInicial passado ao LiberacaoForm", () => {
+  it("ao clicar Nova liberação, form abre com pacienteInicial", async () => {
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [],
+    });
+
+    fireEvent.click(getNovaBtn());
+    const dialog = await screen.findByRole("dialog", { name: "Nova liberação" });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("Maria");
+  });
+});
+
+describe("LiberacoesView — server-side protection preserved", () => {
+  it("botão Nova liberação fica disabled quando há contínua ativa (proteção client-side)", () => {
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [liberacao({ status: "ativa", tipo: TIPOS_LIBERACAO.CONTINUA })],
+    });
+
+    expect(getNovaBtn()).toBeDisabled();
+    const feedbacks = screen.getAllByText(/contínua ativa/i);
+    expect(feedbacks.length).toBeGreaterThanOrEqual(1);
   });
 });

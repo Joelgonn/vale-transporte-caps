@@ -34,12 +34,18 @@ type LiberacaoFormProps =
       pacienteInicial?: { id: string; gestor_sus: string; nome: string; origem?: string | null } | null;
       onClose: () => void;
       onSalvo: () => void;
+      continuaAtiva?: LiberacaoComPaciente | null;
+      continuaAtivaLoading?: boolean;
+      continuaAtivaProvided?: boolean;
     }
   | {
       modo: "renovar";
       origem: LiberacaoComPaciente;
       onClose: () => void;
       onSalvo: () => void;
+      continuaAtiva?: LiberacaoComPaciente | null;
+      continuaAtivaLoading?: boolean;
+      continuaAtivaProvided?: boolean;
     };
 
 type FormState = {
@@ -90,14 +96,12 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
   const isRenovacao = props.modo === "renovar";
   const origem = isRenovacao ? props.origem : null;
 
-  // Paciente selecionado (somente no modo criar). Guarda o registro completo de
-  // v_pacientes para conhecer a ORIGEM e aplicar RN29 na UI.
-  // Sprint 73 — paciente pode vir pré-selecionado da página (Nova liberação depende de paciente)
   const pacienteInicial = (props as { pacienteInicial?: { id: string; gestor_sus: string; nome: string; origem?: string | null } | null }).pacienteInicial ?? null;
   const pacienteTravado = !!pacienteInicial;
   const [paciente, setPaciente] = useState<PacienteSemCpf | null>(pacienteInicial as unknown as PacienteSemCpf | null);
-  const [continuaAtiva, setContinuaAtiva] = useState<LiberacaoComPaciente | null>(null);
-  const [carregandoContinua, setCarregandoContinua] = useState(false);
+  const continuaAtivaProvided = "continuaAtivaProvided" in props ? props.continuaAtivaProvided : false;
+  const [continuaAtiva, setContinuaAtiva] = useState<LiberacaoComPaciente | null>(props.continuaAtiva ?? null);
+  const [carregandoContinua, setCarregandoContinua] = useState(props.continuaAtivaLoading ?? (!continuaAtivaProvided && !props.continuaAtiva));
   const [erroVerificacao, setErroVerificacao] = useState<string | null>(null);
   const verificaIdRef = useRef(0);
   const [tipo, setTipo] = useState<TipoLiberacao>(
@@ -145,12 +149,12 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
   }
 
   useEffect(() => {
-    if (pacienteInicial) {
+    if (pacienteInicial && !continuaAtivaProvided) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       verificarContinuaAtiva(pacienteInicial as unknown as PacienteSemCpf);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [continuaAtivaProvided]);
 
   // Sprint 73 — quando travado, garante tipo contínua (sem avulsa nessa página)
   useEffect(() => {
