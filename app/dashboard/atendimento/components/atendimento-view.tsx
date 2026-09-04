@@ -30,6 +30,12 @@ const PASSOS = [
   { id: 4, rotulo: "Concluído" },
 ];
 
+function textoQuantidadeDiaria(tipo: string, valesPorDia?: number | null): string {
+  if (tipo !== TIPOS_LIBERACAO.CONTINUA) return "";
+  if (valesPorDia != null && valesPorDia >= 1 && valesPorDia <= 10) return `${valesPorDia} vales/dia`;
+  return "Quantidade diária não informada";
+}
+
 export default function AtendimentoView(props: Props) {
   void props.perfil;
   const [passo, setPasso] = useState(1);
@@ -354,7 +360,7 @@ export default function AtendimentoView(props: Props) {
                             className={`flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3 ${liberacaoSelecionada?.id === lib.id ? "border-brand-600 bg-brand-50" : "border-zinc-200 hover:bg-zinc-50"}`}
                           >
                             <span>
-                              <span className="font-medium text-brand-900">Contínua · {diaria ? `${diaria}/dia` : `${lib.quantidade} previstos`}</span>
+                              <span className="font-medium text-brand-900">Contínua · {textoQuantidadeDiaria(lib.tipo, diaria)}</span>
                               <span className="ml-2 text-xs text-zinc-500">
                                 {lib.data_inicio.slice(0, 10)} → {lib.data_fim.slice(0, 10)} · Previsto {lib.quantidade}
                               </span>
@@ -400,6 +406,10 @@ export default function AtendimentoView(props: Props) {
                 <span className="font-medium text-brand-900">
                   {(liberacaoSelecionada ?? liberacaoCriada)?.tipo === TIPOS_LIBERACAO.AVULSA ? "Avulsa" : "Contínua"}
                 </span>{" "}
+                · {(() => {
+                  const lib = (liberacaoSelecionada ?? liberacaoCriada) as unknown as { tipo: string; vales_por_dia?: number | null } | null;
+                  return lib ? textoQuantidadeDiaria(lib.tipo, lib.vales_por_dia) : "";
+                })()}{" "}
                 · Previsto <span className="font-medium">{(liberacaoSelecionada ?? liberacaoCriada)?.quantidade}</span> vales · Paciente{" "}
                 <span className="font-medium">{paciente?.nome}</span>
               </p>
@@ -413,7 +423,13 @@ export default function AtendimentoView(props: Props) {
                 onChange={(e) => setQuantidadeRetirada(Math.max(1, Number(e.target.value) || 1))}
                 className={INPUT}
               />
-              <p className="text-xs text-zinc-500">Previsão não limita a retirada. Diferença pode ser negativa.</p>
+              {(() => {
+                const lib = (liberacaoSelecionada ?? liberacaoCriada) as unknown as { tipo: string; vales_por_dia?: number | null } | null;
+                if (!lib) return <p className="text-xs text-zinc-500">Previsão não limita a retirada. Diferença pode ser negativa.</p>;
+                if (lib.tipo !== TIPOS_LIBERACAO.CONTINUA) return <p className="text-xs text-zinc-500">Padrão avulsa: 2 vales — editável. Previsão não limita.</p>;
+                if (lib.vales_por_dia != null) return <p className="text-xs text-zinc-500">Quantidade diária configurada: {lib.vales_por_dia} vales/dia — editável antes de registrar.</p>;
+                return <p className="text-xs text-amber-700">Quantidade diária não informada — sugestão operacional: 2 vales. Confirme antes de registrar.</p>;
+              })()}
             </div>
             {erroRetirada && <FeedbackErro>{erroRetirada}</FeedbackErro>}
             <div className="flex justify-between">

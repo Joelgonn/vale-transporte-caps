@@ -618,11 +618,17 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
                           />
                           <span className="font-medium">
                             {ROTULO_TIPO_LIBERACAO[lib.tipo]} · {periodoTexto(lib)}{" "}
-                            {isContinua && diaria ? <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${selecionada ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-700"}`}>{diaria}/dia</span> : null}
+                            {isContinua ? (
+                              diaria ? (
+                                <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${selecionada ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-700"}`}>{diaria}/dia</span>
+                              ) : (
+                                <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${selecionada ? "bg-white/20 text-white" : "bg-amber-50 text-amber-700"}`}>Diária não informada</span>
+                              )
+                            ) : null}
                           </span>
                           <span className={selecionada ? "text-zinc-300" : "text-xs text-zinc-500"}>
                             Previsto: {previsto} · Retirado: {retirado}
-                            {isContinua && diaria ? ` · Diária: ${diaria}` : ""}
+                            {isContinua ? (diaria ? ` · Diária: ${diaria}` : ` · Diária: não informada`) : ""}
                           </span>
                         </label>
                       </li>
@@ -691,10 +697,13 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
                 className={INPUT}
               />
               <p id="ajuda-quantidade" className="text-xs text-zinc-500">
-                {liberacaoSelecionada?.tipo === "continua"
-                  ? `Diária da liberação: ${(liberacaoSelecionada as unknown as { vales_por_dia?: number | null }).vales_por_dia ?? 2} — editável antes de registrar.`
-                  : "Padrão avulsa: 2 vales — editável."}{" "}
-                Previsão não limita a retirada.
+                {(() => {
+                  if (!liberacaoSelecionada) return "Previsão não limita a retirada.";
+                  if (liberacaoSelecionada.tipo !== "continua") return "Padrão avulsa: 2 vales — editável. Previsão não limita.";
+                  const diaria = (liberacaoSelecionada as unknown as { vales_por_dia?: number | null }).vales_por_dia;
+                  if (diaria != null) return `Quantidade diária configurada: ${diaria} vales/dia — editável antes de registrar.`;
+                  return "Quantidade diária não informada — sugestão operacional: 2 vales. Confirme antes de registrar.";
+                })()}
               </p>
               {erroDe("quantidade") && (
                 <p id="erro-quantidade" className="text-sm text-red-600">
