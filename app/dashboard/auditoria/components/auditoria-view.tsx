@@ -20,6 +20,7 @@ import {
   CARTAO,
   CONTAINER,
 } from "@/components/ui/visual-tokens";
+import { StatusCard } from "@/components/ui/status-accent";
 import { PageHeader } from "@/components/ui/page-header";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
 import { FeedbackErro } from "@/components/ui/feedback";
@@ -90,126 +91,133 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
         {/* Resumo operacional — só quando há dados, respeitando filtros */}
         {!erroInicial && total > 0 && (
           <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className={`${CARTAO} p-4`}>
+            <StatusCard status="neutro" className="p-4">
               <dt className="text-xs uppercase tracking-wide text-zinc-500">Eventos no período</dt>
               <dd className="mt-1 text-2xl font-semibold text-brand-900">{total}</dd>
-            </div>
-            <div className={`${CARTAO} p-4`}>
+            </StatusCard>
+            <StatusCard status="neutro" className="p-4">
               <dt className="text-xs uppercase tracking-wide text-zinc-500">Responsáveis</dt>
               <dd className="mt-1 text-2xl font-semibold text-brand-900">{usuariosDistintos}</dd>
-            </div>
-            <div className={`${CARTAO} p-4`}>
+            </StatusCard>
+            <StatusCard status="neutro" className="p-4">
               <dt className="text-xs uppercase tracking-wide text-zinc-500">Tipos de entidade</dt>
               <dd className="mt-1 text-2xl font-semibold text-brand-900">{entidadesDistintas}</dd>
-            </div>
+            </StatusCard>
           </dl>
         )}
 
-        {/* Filtros — aplicados no servidor (GET). */}
+        {/* Filtros — aplicados no servidor (GET). Reorganizados em 2 linhas para respiro no desktop e coluna no mobile. */}
         <form
           method="get"
           action="/dashboard/auditoria"
           aria-label="Filtros de auditoria"
-          className={`flex flex-col gap-3 p-4 lg:flex-row lg:items-end ${CARTAO}`}
+          className={`flex flex-col gap-4 p-4 ${CARTAO}`}
         >
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="auditoria-filtro-acao" className="text-xs font-medium text-zinc-600">
-              Ação
-            </label>
-            <select
-              id="auditoria-filtro-acao"
-              name="acao"
-              defaultValue={filtros.acao ?? ""}
-              className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none"
-            >
-              <option value="">Todas</option>
-              {ACOES_AUDITORIA.map((acao) => (
-                <option key={acao} value={acao}>
-                  {ROTULO_ACAO_AUDITORIA[acao]}
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="auditoria-filtro-acao" className="text-xs font-medium text-zinc-600">
+                Ação
+              </label>
+              <select
+                id="auditoria-filtro-acao"
+                name="acao"
+                defaultValue={filtros.acao ?? ""}
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none"
+              >
+                <option value="">Todas</option>
+                {ACOES_AUDITORIA.map((acao) => (
+                  <option key={acao} value={acao}>
+                    {ROTULO_ACAO_AUDITORIA[acao]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="auditoria-filtro-entidade" className="text-xs font-medium text-zinc-600">
+                Entidade
+              </label>
+              <select
+                id="auditoria-filtro-entidade"
+                name="entidade"
+                defaultValue={filtros.entidadeTipo ?? ""}
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none"
+              >
+                <option value="">Todas</option>
+                {ENTIDADES_AUDITORIA.map((entidade) => (
+                  <option key={entidade} value={entidade}>
+                    {ROTULO_ENTIDADE_AUDITORIA[entidade]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="auditoria-filtro-usuario" className="text-xs font-medium text-zinc-600">
+                Responsável
+              </label>
+              <select
+                id="auditoria-filtro-usuario"
+                name="usuario"
+                defaultValue={filtros.usuarioId ?? ""}
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none"
+              >
+                <option value="">Todos</option>
+                {props.responsaveis.map((resp) => (
+                  <option key={resp.id} value={resp.id}>
+                    {resp.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="auditoria-filtro-entidade" className="text-xs font-medium text-zinc-600">
-              Entidade
-            </label>
-            <select
-              id="auditoria-filtro-entidade"
-              name="entidade"
-              defaultValue={filtros.entidadeTipo ?? ""}
-              className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none"
-            >
-              <option value="">Todas</option>
-              {ENTIDADES_AUDITORIA.map((entidade) => (
-                <option key={entidade} value={entidade}>
-                  {ROTULO_ENTIDADE_AUDITORIA[entidade]}
-                </option>
-              ))}
-            </select>
-          </div>
+          <div className="flex flex-col gap-3">
+            <p className="text-xs font-medium text-zinc-600">Período do evento</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="auditoria-filtro-de" className="text-xs font-medium text-zinc-600">
+                  De
+                </label>
+                <input
+                  id="auditoria-filtro-de"
+                  name="de"
+                  type="date"
+                  defaultValue={filtros.dataDe ?? ""}
+                  className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none"
+                />
+                <p className="text-[11px] text-zinc-500">Data do evento</p>
+              </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="auditoria-filtro-usuario" className="text-xs font-medium text-zinc-600">
-              Responsável
-            </label>
-            <select
-              id="auditoria-filtro-usuario"
-              name="usuario"
-              defaultValue={filtros.usuarioId ?? ""}
-              className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none"
-            >
-              <option value="">Todos</option>
-              {props.responsaveis.map((resp) => (
-                <option key={resp.id} value={resp.id}>
-                  {resp.nome}
-                </option>
-              ))}
-            </select>
-          </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="auditoria-filtro-ate" className="text-xs font-medium text-zinc-600">
+                  Até
+                </label>
+                <input
+                  id="auditoria-filtro-ate"
+                  name="ate"
+                  type="date"
+                  defaultValue={filtros.dataAte ?? ""}
+                  className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none"
+                />
+                <p className="text-[11px] text-zinc-500">Data do evento</p>
+              </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="auditoria-filtro-de" className="text-xs font-medium text-zinc-600">
-              De
-            </label>
-            <input
-              id="auditoria-filtro-de"
-              name="de"
-              type="date"
-              defaultValue={filtros.dataDe ?? ""}
-              className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none"
-            />
-            <p className="text-[11px] text-zinc-500">Data do evento</p>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="auditoria-filtro-ate" className="text-xs font-medium text-zinc-600">
-              Até
-            </label>
-            <input
-              id="auditoria-filtro-ate"
-              name="ate"
-              type="date"
-              defaultValue={filtros.dataAte ?? ""}
-              className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none"
-            />
-            <p className="text-[11px] text-zinc-500">Data do evento</p>
-          </div>
-
-          <div className="flex flex-col gap-1.5 lg:ml-1 lg:flex-row">
-            <button
-              type="submit"
-              className="inline-flex h-11 items-center justify-center rounded-md bg-green-600 px-5 text-sm font-medium text-white transition-colors hover:bg-green-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-            >
-              Filtrar
-            </button>
-            <Link
-              href={construirUrl(filtros, { acao: null, entidadeTipo: null, dataDe: null, dataAte: null, usuarioId: null, pagina: 1 })}
-              className={BOTAO_SECUNDARIO}
-            >
-              Limpar
-            </Link>
+              <div className="flex gap-2 sm:col-span-2 lg:col-span-1 lg:justify-end lg:items-end">
+                <button
+                  type="submit"
+                  className="inline-flex h-11 flex-1 items-center justify-center rounded-md bg-green-600 px-6 text-sm font-medium text-white transition-colors hover:bg-green-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:flex-none"
+                >
+                  Filtrar
+                </button>
+                <Link
+                  href={construirUrl(filtros, { acao: null, entidadeTipo: null, dataDe: null, dataAte: null, usuarioId: null, pagina: 1 })}
+                  className={`${BOTAO_SECUNDARIO} flex-1 sm:flex-none justify-center`}
+                >
+                  Limpar
+                </Link>
+              </div>
+            </div>
           </div>
         </form>
 
