@@ -9,7 +9,7 @@ import PacientesView from "./components/pacientes-view";
 export default async function PacientesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; novo?: "regular" | "esporadico" }>;
 }) {
   const supabase = await createClient();
   const {
@@ -42,7 +42,7 @@ export default async function PacientesPage({
     );
   }
 
-  const { q } = await searchParams;
+  const { q, novo } = await searchParams;
   const busca = normalizarBusca(q);
 
   const resultado = await listarPacientesAction(busca);
@@ -54,6 +54,7 @@ export default async function PacientesPage({
       busca={busca}
       pacientesIniciais={resultado.ok ? resultado.data : []}
       erroInicial={resultado.ok ? null : resultado.error}
+      novoInicial={novo ?? null}
     />
   );
 }

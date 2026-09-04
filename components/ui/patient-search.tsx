@@ -17,6 +17,8 @@ type Props = {
   // Quando true, mostra "Cadastrar paciente esporádico" quando não encontra
   showCreate?: boolean;
   onSelect: (paciente: PacienteSemCpf) => void;
+  // Callback quando usuário quer cadastrar paciente (recebe origem sugerida)
+  onCreatePatient?: (origem: "regular" | "esporadico") => void;
   // Para controle externo do valor (opcional)
   value?: string;
   onValueChange?: (v: string) => void;
@@ -32,6 +34,7 @@ export function PatientSearch({
   defaultValue = "",
   showCreate = false,
   onSelect,
+  onCreatePatient,
   value: valueProp,
   onValueChange,
   onQueryChange,
@@ -157,7 +160,24 @@ export function PatientSearch({
             ) : resultados && resultados.length === 0 ? (
               <li className="px-4 py-3">
                 <p className="text-sm font-medium text-zinc-700">Nenhum paciente encontrado</p>
-                {showCreate ? (
+                {onCreatePatient ? (
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onCreatePatient("regular")}
+                      className="inline-flex items-center justify-center rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
+                    >
+                      Cadastrar Regular
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onCreatePatient("esporadico")}
+                      className="inline-flex items-center justify-center rounded-full bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 ring-1 ring-zinc-900/10 transition-colors hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                    >
+                      Cadastrar Esporádico
+                    </button>
+                  </div>
+                ) : showCreate ? (
                   <p className="text-xs text-zinc-500">Cadastre como esporádico no fluxo de atendimento.</p>
                 ) : (
                   <p className="text-xs text-zinc-500">Verifique o nome ou Gestor SUS.</p>

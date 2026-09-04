@@ -40,6 +40,7 @@ type PacientesViewProps = {
   busca: string;
   pacientesIniciais: PacienteSemCpf[];
   erroInicial: string | null;
+  novoInicial?: "regular" | "esporadico" | null;
 };
 
 function formatarData(iso: string | null): string {
@@ -55,6 +56,15 @@ export default function PacientesView(props: PacientesViewProps) {
   const [erroStatus, setErroStatus] = useState<string | null>(null);
   const [feedbackStatus, setFeedbackStatus] = useState<string | null>(null);
   const [pendenteStatus, startStatus] = useTransition();
+
+  // Auto-abrir modal de novo paciente quando vier de ?novo=regular|esporadico
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- sync formAberto from URL on mount
+  useEffect(() => {
+    if (props.novoInicial) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFormAberto({ modo: "criar", origem: props.novoInicial });
+    }
+  }, [props.novoInicial]);
 
   // Feedback de sucesso transitório (5s) após inativar/reativar (Sprint 23).
   useEffect(() => {
