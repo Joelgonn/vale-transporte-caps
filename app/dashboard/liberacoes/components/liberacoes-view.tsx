@@ -61,6 +61,10 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
 
   const vazio = props.liberacoesIniciais.length === 0;
   const podeRenovar = permissoes.podeRenovar;
+  const continuaAtiva = props.pacienteSelecionado
+    ? props.liberacoesIniciais.find((l) => l.tipo === "continua" && l.status === "ativa")
+    : null;
+  const temContinuaAtiva = !!continuaAtiva;
 
   const descricao =
     props.perfil === "recepcionista"
@@ -111,6 +115,27 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
               placeholder="🔎 Nome ou Gestor SUS..."
               onSelect={(p) => router.push(`/dashboard/liberacoes?paciente=${p.id}`)}
             />
+          </div>
+        )}
+
+        {temContinuaAtiva && continuaAtiva && (
+          <div className={`${CARTAO} border-l-4 border-l-amber-400 p-4`}>
+            <p className="text-sm font-semibold text-amber-900">Este paciente já possui uma liberação contínua ativa.</p>
+            <p className="mt-1 text-xs text-zinc-600">
+              {ROTULO_TIPO_LIBERACAO[continuaAtiva.tipo]} · {periodoTexto(continuaAtiva)} · {continuaAtiva.quantidade} previstos
+              {(continuaAtiva as unknown as { vales_por_dia?: number | null }).vales_por_dia
+                ? ` · ${(continuaAtiva as unknown as { vales_por_dia?: number | null }).vales_por_dia} vales/dia`
+                : ""}{" "}
+              · {continuaAtiva.status}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link href={`/dashboard/liberacoes?paciente=${props.pacienteSelecionado?.id}#lib-${continuaAtiva.id}`} className={BOTAO_SECUNDARIO}>
+                Ver liberação
+              </Link>
+              <Link href="/dashboard/retiradas" className={BOTAO_SECUNDARIO}>
+                Registrar retirada
+              </Link>
+            </div>
           </div>
         )}
 

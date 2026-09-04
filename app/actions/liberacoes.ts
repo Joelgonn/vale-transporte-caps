@@ -168,6 +168,14 @@ export async function criarLiberacaoAction(
     const service = await LiberacaoService.create();
     const pacienteService = await PacienteService.create();
     const paciente = await pacienteService.buscarPaciente(dados.pacienteId);
+    // Bloqueio inteligente — contínua ativa impede nova contínua sobreposta
+    if (dados.tipo === TIPOS_LIBERACAO.CONTINUA) {
+      const existentes = await service.listarLiberacoes(undefined, dados.pacienteId);
+      const temContinuaAtiva = existentes.some((l) => l.tipo === TIPOS_LIBERACAO.CONTINUA && l.status === "ativa");
+      if (temContinuaAtiva) {
+        throw new AppError("VALIDACAO", "Este paciente já possui uma liberação contínua ativa.");
+      }
+    }
     // Recepcionista criando liberação para paciente regular precisa informar
     // o autorizador responsável. Se não informado via payload, a ação tenta
     // resolver: se a sessão é do autorizador/gestor, ele é o autorizador;
