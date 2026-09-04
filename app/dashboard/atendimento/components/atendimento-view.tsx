@@ -57,6 +57,8 @@ export default function AtendimentoView(props: Props) {
     if (props.pacienteInicial && !paciente) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setPaciente(props.pacienteInicial as unknown as PacienteSemCpf);
+      // Carregar liberações do paciente pré-selecionado
+      carregarLiberacoes(props.pacienteInicial as unknown as PacienteSemCpf);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.pacienteInicial]);
