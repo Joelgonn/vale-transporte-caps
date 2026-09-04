@@ -76,24 +76,10 @@ beforeEach(() => {
   mocks.listarPacientesAction.mockResolvedValue({ ok: true, data: [] });
 });
 
-function getNovaBtn() {
-  const btns = document.querySelectorAll('button');
-  for (const btn of btns) {
-    if (btn.textContent?.includes("Nova") && btn.textContent?.includes("liber")) {
-      return btn as HTMLElement;
-    }
-  }
-  throw new Error("Nova liberação button not found");
-}
-
-function bodyText() {
-  return document.body.textContent ?? "";
-}
-
 describe("LiberacoesView — sem paciente selecionado", () => {
-  it("botao Nova liberacao esta disabled quando sem paciente", () => {
+  it("não exibe botão Nova liberação quando sem paciente", () => {
     renderizar({ perfil: PERFIS.GESTOR });
-    expect(getNovaBtn()).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /nova liberação/i })).not.toBeInTheDocument();
   });
 
   it("elemento de descricao aria existe no DOM", () => {
@@ -101,71 +87,91 @@ describe("LiberacoesView — sem paciente selecionado", () => {
     const desc = document.getElementById("nova-liberacao-descricao");
     expect(desc).toBeInTheDocument();
   });
+
+  it("exibe mensagem de ajuda para buscar paciente (sr-only)", () => {
+    renderizar({ perfil: PERFIS.GESTOR });
+    const desc = document.getElementById("nova-liberacao-descricao");
+    expect(desc).toHaveTextContent(/pesquise e selecione um paciente/i);
+  });
 });
 
 describe("LiberacoesView — selecao regular sem continua ativa", () => {
-  it("botao Nova liberacao esta habilitado", () => {
+  it("exibe botão + Nova liberação contínua habilitado", () => {
     renderizar({
       perfil: PERFIS.GESTOR,
       pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
       liberacoes: [],
     });
-    expect(getNovaBtn()).not.toBeDisabled();
+    const btns = screen.getAllByRole("button", { name: /nova liberação contínua/i });
+    expect(btns.length).toBeGreaterThanOrEqual(1);
+    expect(btns[0]).not.toBeDisabled();
   });
 });
 
 describe("LiberacoesView — continua ativa bloqueia nova liberacao", () => {
-  it("botao Nova liberacao esta disabled quando continua ativa", () => {
+  it("não exibe botão Nova liberação quando há contínua ativa", () => {
     const libAtiva = liberacao({ id: "l1", status: "ativa", tipo: TIPOS_LIBERACAO.CONTINUA });
     renderizar({
       perfil: PERFIS.GESTOR,
       pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
       liberacoes: [libAtiva],
     });
-    expect(getNovaBtn()).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /nova liberação contínua/i })).not.toBeInTheDocument();
+  });
+
+  it("exibe aviso de contínua ativa no contexto do paciente", () => {
+    const libAtiva = liberacao({ id: "l1", status: "ativa", tipo: TIPOS_LIBERACAO.CONTINUA });
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [libAtiva],
+    });
+    expect(screen.getByText(/contínua ativa — nova liberação indisponível/i)).toBeInTheDocument();
   });
 });
 
 describe("LiberacoesView — paciente esporadico", () => {
-  it("botao Nova liberacao esta disabled para esporadico", () => {
+  it("não exibe botão Nova liberação para esporádico", () => {
     renderizar({
       perfil: PERFIS.GESTOR,
       pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Esporadico", origem: "esporadico" },
       liberacoes: [],
     });
-    expect(getNovaBtn()).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /nova liberação contínua/i })).not.toBeInTheDocument();
   });
 
-  it("feedback de bloqueio aparece no body", () => {
+  it("feedback de bloqueio aparece no contexto do paciente", () => {
     renderizar({
       perfil: PERFIS.GESTOR,
       pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Esporadico", origem: "esporadico" },
       liberacoes: [],
     });
-    const text = bodyText().toLowerCase();
-    expect(text).toMatch(/não pode receber/i);
+    const texts = screen.getAllByText(/paciente esporádico não pode receber liberação contínua/i);
+    expect(texts.length).toBeGreaterThanOrEqual(1);
   });
 });
 
 describe("LiberacoesView — contínua expirada/cancelada permite nova", () => {
-  it("botão enabled quando contínua expirada", () => {
+  it("exibe botão Nova liberação quando contínua expirada", () => {
     const libExp = liberacao({ id: "l1", status: "expirada", tipo: TIPOS_LIBERACAO.CONTINUA });
     renderizar({
       perfil: PERFIS.GESTOR,
       pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
       liberacoes: [libExp],
     });
-    expect(getNovaBtn()).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: /nova liberação contínua/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /nova liberação contínua/i })).not.toBeDisabled();
   });
 
-  it("botão enabled quando contínua cancelada", () => {
+  it("exibe botão Nova liberação quando contínua cancelada", () => {
     const libCan = liberacao({ id: "l1", status: "cancelada", tipo: TIPOS_LIBERACAO.CONTINUA });
     renderizar({
       perfil: PERFIS.GESTOR,
       pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
       liberacoes: [libCan],
     });
-    expect(getNovaBtn()).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: /nova liberação contínua/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /nova liberação contínua/i })).not.toBeDisabled();
   });
 });
 
@@ -184,7 +190,8 @@ describe("LiberacoesView — busca negativa invalida seleção", () => {
     const input = screen.getByRole("combobox", { name: /buscar/i });
     fireEvent.change(input, { target: { value: "xyz" } });
 
-    expect(getNovaBtn()).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /nova liberação contínua/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/maria/i)).not.toBeInTheDocument();
   });
 });
 
@@ -220,16 +227,30 @@ describe("LiberacoesView — Avulsa não aparece", () => {
     renderizar({ perfil: PERFIS.GESTOR });
     expect(screen.queryByRole("link", { name: /atendimento/i })).not.toBeInTheDocument();
   });
+
+  it("não exibe 'Novo atendimento' para autorizador", () => {
+    renderizar({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
+    expect(screen.queryByRole("link", { name: /atendimento/i })).not.toBeInTheDocument();
+  });
 });
 
-describe("LiberacoesView — tabela ações", () => {
-  it("Registrar retirada existe", () => {
+describe("LiberacoesView — ações das liberações (cards)", () => {
+  it("Registrar retirada existe nas liberações ativas", () => {
     renderizar({
       perfil: PERFIS.GESTOR,
       pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
       liberacoes: [liberacao()],
     });
     expect(screen.getAllByText("Registrar retirada").length).toBeGreaterThan(0);
+  });
+
+  it("Editar existe nas liberações", () => {
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [liberacao()],
+    });
+    expect(screen.getAllByText("Editar").length).toBeGreaterThan(0);
   });
 });
 
@@ -239,14 +260,25 @@ describe("LiberacoesView — permissões preservadas", () => {
     expect(screen.queryByRole("button", { name: /nova liberação/i })).not.toBeInTheDocument();
   });
 
-  it("autorizador recebe Nova liberação", () => {
+  it("autorizador vê busca mas não botão Nova liberação sem paciente", () => {
     renderizar({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
-    expect(screen.getByRole("button", { name: /nova liberação/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /nova liberação contínua/i })).not.toBeInTheDocument();
+  });
+
+  it("autorizador vê botão Nova liberação quando paciente selecionado", () => {
+    renderizar({
+      perfil: PERFIS.PROFISSIONAL_AUTORIZADOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [],
+    });
+    const btns = screen.getAllByRole("button", { name: /nova liberação contínua/i });
+    expect(btns.length).toBeGreaterThanOrEqual(1);
+    expect(btns[0]).not.toBeDisabled();
   });
 });
 
 describe("LiberacoesView — busca sem resultado limpa estado", () => {
-  it("alterar busca limpa seleção anterior e desabilita botão", () => {
+  it("alterar busca limpa seleção anterior e remove botão", () => {
     mocks.listarPacientesAction.mockResolvedValue({ ok: true, data: [] });
     renderizar({
       perfil: PERFIS.GESTOR,
@@ -257,7 +289,7 @@ describe("LiberacoesView — busca sem resultado limpa estado", () => {
     const input = screen.getByRole("combobox", { name: /buscar/i });
     fireEvent.change(input, { target: { value: "xyz" } });
 
-    expect(getNovaBtn()).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /nova liberação contínua/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/esporádico/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/contínua ativa/i)).not.toBeInTheDocument();
   });
@@ -272,7 +304,7 @@ describe("LiberacoesView — busca sem resultado limpa estado", () => {
 
     const input = screen.getByRole("combobox", { name: /buscar/i });
     fireEvent.change(input, { target: { value: "xyz" } });
-    expect(getNovaBtn()).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /nova liberação contínua/i })).not.toBeInTheDocument();
 
     mocks.listarPacientesAction.mockResolvedValue({
       ok: true,
@@ -282,7 +314,7 @@ describe("LiberacoesView — busca sem resultado limpa estado", () => {
     fireEvent.change(input, { target: { value: "novo" } });
     fireEvent.click(await screen.findByText("Novo Paciente"));
 
-    await vi.waitFor(() => expect(getNovaBtn()).not.toBeDisabled());
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: /nova liberação contínua/i })).toBeInTheDocument());
     expect(screen.queryByText(/esporádico/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/contínua ativa/i)).not.toBeInTheDocument();
   });
@@ -314,18 +346,22 @@ describe("LiberacoesView — race condition protege seleção atual", () => {
     fireEvent.change(input, { target: { value: "paciente b" } });
     fireEvent.click(await screen.findByText("Paciente B"));
 
-    await vi.waitFor(() => expect(getNovaBtn()).not.toBeDisabled());
+    await vi.waitFor(() => {
+      const btns = screen.getAllByRole("button", { name: /nova liberação contínua/i });
+      expect(btns.length).toBeGreaterThanOrEqual(1);
+    });
 
     resolveA!({ ok: true, data: [liberacao({ id: "l-old", paciente_id: "p1", status: "ativa", tipo: "continua" })] });
     await vi.waitFor(() => {});
 
-    expect(getNovaBtn()).not.toBeDisabled();
+    const btns = screen.getAllByRole("button", { name: /nova liberação contínua/i });
+    expect(btns.length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText(/contínua ativa/i)).not.toBeInTheDocument();
   });
 });
 
 describe("LiberacoesView — Limpar limpa tudo", () => {
-  it("Limpar remove seleção, busca, URL, feedback e desabilita botão", () => {
+  it("Limpar remove seleção, busca, URL, feedback e remove botão Nova liberação", () => {
     mocks.push.mockClear();
     mocks.replace.mockClear();
     renderizar({
@@ -341,7 +377,7 @@ describe("LiberacoesView — Limpar limpa tudo", () => {
     fireEvent.click(btnLimpar);
 
     expect(mocks.replace).toHaveBeenCalledWith("/dashboard/liberacoes");
-    expect(getNovaBtn()).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /nova liberação contínua/i })).not.toBeInTheDocument();
     const input = screen.getByRole("combobox", { name: /buscar/i }) as HTMLInputElement;
     expect(input.value).toBe("");
     expect(screen.queryByText(/esporádico/i)).not.toBeInTheDocument();
@@ -350,7 +386,7 @@ describe("LiberacoesView — Limpar limpa tudo", () => {
 });
 
 describe("LiberacoesView — ausência de card contextual duplicado", () => {
-  it("não exibe card duplicado com dados do paciente fora da tabela", () => {
+  it("não exibe card duplicado com dados do paciente fora dos cards de liberação", () => {
     renderizar({
       perfil: PERFIS.GESTOR,
       pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
@@ -358,7 +394,7 @@ describe("LiberacoesView — ausência de card contextual duplicado", () => {
     });
 
     const cards = document.querySelectorAll('[class*="rounded-2xl"][class*="bg-white"]');
-    expect(cards.length).toBeLessThanOrEqual(3);
+    expect(cards.length).toBeLessThanOrEqual(4);
   });
 });
 
@@ -375,14 +411,16 @@ describe("LiberacoesView — Avulsa não aparece", () => {
 });
 
 describe("LiberacoesView — pacienteInicial passado ao LiberacaoForm", () => {
-  it("ao clicar Nova liberação, form abre com pacienteInicial", async () => {
+  it("ao clicar + Nova liberação contínua, form abre com pacienteInicial", async () => {
     renderizar({
       perfil: PERFIS.GESTOR,
       pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
       liberacoes: [],
     });
 
-    fireEvent.click(getNovaBtn());
+    const btns = screen.getAllByRole("button", { name: /nova liberação contínua/i });
+    expect(btns.length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(btns[0]);
     const dialog = await screen.findByRole("dialog", { name: "Nova liberação" });
     expect(dialog).toBeInTheDocument();
     expect(dialog).toHaveTextContent("Maria");
@@ -390,14 +428,14 @@ describe("LiberacoesView — pacienteInicial passado ao LiberacaoForm", () => {
 });
 
 describe("LiberacoesView — server-side protection preserved", () => {
-  it("botão Nova liberação fica disabled quando há contínua ativa (proteção client-side)", () => {
+  it("não exibe botão Nova liberação quando há contínua ativa (proteção client-side)", () => {
     renderizar({
       perfil: PERFIS.GESTOR,
       pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
       liberacoes: [liberacao({ status: "ativa", tipo: TIPOS_LIBERACAO.CONTINUA })],
     });
 
-    expect(getNovaBtn()).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /nova liberação contínua/i })).not.toBeInTheDocument();
     const feedbacks = screen.getAllByText(/contínua ativa/i);
     expect(feedbacks.length).toBeGreaterThanOrEqual(1);
   });
