@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { criarLiberacaoAction, listarLiberacoesAction } from "@/app/actions/liberacoes";
 import { PatientSearch } from "@/components/ui/patient-search";
 import {
@@ -28,7 +28,13 @@ import { FeedbackErro, FeedbackSucesso } from "@/components/ui/feedback";
 import { mensagemUsuario } from "@/components/ui/mensagens";
 
 type LiberacaoFormProps =
-  | { modo: "criar"; perfil?: string | null; onClose: () => void; onSalvo: () => void }
+  | {
+      modo: "criar";
+      perfil?: string | null;
+      pacienteInicial?: { id: string; gestor_sus: string; nome: string; origem?: string | null } | null;
+      onClose: () => void;
+      onSalvo: () => void;
+    }
   | {
       modo: "renovar";
       origem: LiberacaoComPaciente;
@@ -86,11 +92,16 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
 
   // Paciente selecionado (somente no modo criar). Guarda o registro completo de
   // v_pacientes para conhecer a ORIGEM e aplicar RN29 na UI.
-  const [paciente, setPaciente] = useState<PacienteSemCpf | null>(null);
+  // Sprint 73 — paciente pode vir pré-selecionado da página (Nova liberação depende de paciente)
+  const pacienteInicial = (props as { pacienteInicial?: { id: string; gestor_sus: string; nome: string; origem?: string | null } | null }).pacienteInicial ?? null;
+  const pacienteTravado = !!pacienteInicial;
+  const [paciente, setPaciente] = useState<PacienteSemCpf | null>(pacienteInicial as unknown as PacienteSemCpf | null);
   const [continuaAtiva, setContinuaAtiva] = useState<LiberacaoComPaciente | null>(null);
   const [carregandoContinua, setCarregandoContinua] = useState(false);
+  const [erroVerificacao, setErroVerificacao] = useState<string | null>(null);
+  const verificaIdRef = useRef(0);
   const [tipo, setTipo] = useState<TipoLiberacao>(
-    (origem?.tipo as TipoLiberacao | undefined) ?? TIPOS_LIBERACAO.CONTINUA
+    pacienteTravado ? TIPOS_LIBERACAO.CONTINUA : ((origem?.tipo as TipoLiberacao | undefined) ?? TIPOS_LIBERACAO.CONTINUA)
   );
   const [quantidadeManual, setQuantidadeManual] = useState<number | null>(null);
   const [periodoMeses, setPeriodoMeses] = useState<PeriodoLiberacao>(
@@ -112,15 +123,45 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
   const [passo, setPasso] = useState(1);
 
   async function verificarContinuaAtiva(p: PacienteSemCpf) {
+    const myId = ++verificaIdRef.current;
     setCarregandoContinua(true);
     setContinuaAtiva(null);
-    const r = await listarLiberacoesAction(undefined, p.id);
-    setCarregandoContinua(false);
-    if (r.ok) {
+    setErroVerificacao(null);
+    try {
+      const r = await listarLiberacoesAction(undefined, p.id);
+      if (myId !== verificaIdRef.current) return;
+      setCarregandoContinua(false);
+      if (!r || !r.ok) {
+        if (r && !r.ok) setErroVerificacao(r.error);
+        return;
+      }
       const encontrada = r.data.find((l) => l.tipo === TIPOS_LIBERACAO.CONTINUA && l.status === "ativa");
       setContinuaAtiva(encontrada ?? null);
+    } catch {
+      if (myId !== verificaIdRef.current) return;
+      setCarregandoContinua(false);
+      setErroVerificacao("Não foi possível verificar a situação do paciente.");
     }
   }
+
+  useEffect(() => {
+    if (pacienteInicial) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      verificarContinuaAtiva(pacienteInicial as unknown as PacienteSemCpf);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sprint 73 — quando travado, garante tipo contínua (sem avulsa nessa página)
+  useEffect(() => {
+    if (pacienteTravado && tipo !== TIPOS_LIBERACAO.CONTINUA) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTipo(TIPOS_LIBERACAO.CONTINUA);
+    }
+  }, [pacienteTravado, tipo]);
+
+  const isEsporadicoPaciente = paciente?.origem === ORIGENS_PACIENTE.ESPORADICO;
+
   const [errosPasso, setErrosPasso] = useState<ErroCampo[]>([]);
 
   // Validação local de cada etapa (mesmas regras do servidor) — impede avançar
@@ -129,6 +170,10 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
   function errosDoPasso(p: number): ErroCampo[] {
     if (p === 1) {
       if (!paciente) return [{ campo: "paciente", mensagem: "Selecione o paciente." }];
+      if (erroVerificacao) return [{ campo: "paciente", mensagem: erroVerificacao }];
+      // Sprint 73 — página exclusiva contínua: esporádico bloqueia aqui (não abre modal)
+      // No fluxo genérico (sem pacienteTravado) RN29 permite avulsa, então não bloqueia passo1
+      if (pacienteTravado && isEsporadicoPaciente) return [{ campo: "paciente", mensagem: "Paciente esporádico não pode receber liberação contínua." }];
       if (continuaAtiva) return [{ campo: "paciente", mensagem: "Este paciente já possui uma liberação contínua ativa." }];
       return [];
     }
@@ -383,7 +428,7 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
               </ol>
             </div>
 
-            {/* Passo 1 — Paciente */}
+            {/* Passo 1 — Paciente — Sprint 73: quando pacienteTravado (fluxo /liberacoes) não pede paciente novamente */}
             <div className={passo === 1 ? "flex flex-col gap-2" : "hidden"}>
               <span className={ROTULO}>Paciente</span>
               {paciente ? (
@@ -392,21 +437,26 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
                     <p className="truncate text-sm font-medium text-brand-900">
                       {paciente.nome}
                     </p>
-                    <p className="text-xs text-zinc-500">Gestor SUS {paciente.gestor_sus}</p>
+                    <p className="text-xs text-zinc-500">Gestor SUS {paciente.gestor_sus}{paciente.origem ? ` · ${paciente.origem === ORIGENS_PACIENTE.ESPORADICO ? "Esporádico" : "Regular"}` : ""}</p>
                   </div>
-                  <button
-                    type="button"
-                    disabled={bloq}
-                    onClick={() => {
-                      setPaciente(null);
-                      setContinuaAtiva(null);
-                      limparErro("paciente");
-                    }}
-                    className="h-9 shrink-0 rounded-md border border-zinc-300 px-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-50"
-                  >
-                    Trocar
-                  </button>
+                  {!pacienteTravado && (
+                    <button
+                      type="button"
+                      disabled={bloq}
+                      onClick={() => {
+                        setPaciente(null);
+                        setContinuaAtiva(null);
+                        setErroVerificacao(null);
+                        limparErro("paciente");
+                      }}
+                      className="h-9 shrink-0 rounded-md border border-zinc-300 px-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-50"
+                    >
+                      Trocar
+                    </button>
+                  )}
                 </div>
+              ) : pacienteTravado ? (
+                <p className="text-sm text-zinc-500">Paciente selecionado na página.</p>
               ) : (
                 <PatientSearch
                   id="liberacao-paciente"
@@ -415,6 +465,7 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
                   onSelect={(p) => {
                     setPaciente(p as unknown as PacienteSemCpf);
                     setContinuaAtiva(null);
+                    setErroVerificacao(null);
                     limparErro("paciente");
                     verificarContinuaAtiva(p as unknown as PacienteSemCpf);
                     // RN29 — paciente esporádico só recebe liberação avulsa:
@@ -430,7 +481,25 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
                 />
               )}
               {carregandoContinua && <p className="text-sm text-zinc-500">Verificando liberações ativas...</p>}
-              {paciente && continuaAtiva && (
+              {erroVerificacao && (
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm text-red-600">{erroVerificacao}</p>
+                  <button
+                    type="button"
+                    onClick={() => paciente && verificarContinuaAtiva(paciente)}
+                    className={BOTAO_SECUNDARIO}
+                  >
+                    Tentar novamente
+                  </button>
+                </div>
+              )}
+              {paciente && isEsporadicoPaciente && pacienteTravado && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm font-semibold text-amber-900">Paciente esporádico não pode receber liberação contínua.</p>
+                  <p className="mt-1 text-xs text-amber-800">Use o fluxo de atendimento para liberação avulsa (RN29).</p>
+                </div>
+              )}
+              {paciente && continuaAtiva && !isEsporadicoPaciente && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <p className="text-sm font-semibold text-amber-900">Este paciente já possui uma liberação contínua ativa.</p>
                   <p className="mt-1 text-xs text-amber-800">
@@ -457,18 +526,23 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
               )}
             </div>
 
-            {/* Passo 2 — Tipo e quantidade */}
+            {/* Passo 2 — Tipo e quantidade — Sprint 73: quando travado, apenas contínua (página exclusiva) */}
             <div className={passo === 2 ? "flex flex-col gap-2" : "hidden"}>
               <fieldset>
                 <legend className={ROTULO}>Tipo de liberação</legend>
-                {paciente?.origem === ORIGENS_PACIENTE.ESPORADICO && (
+                {pacienteTravado ? (
+                  <p className="mt-2 text-xs text-zinc-500">Liberação contínua — única opção nesta página.</p>
+                ) : paciente?.origem === ORIGENS_PACIENTE.ESPORADICO ? (
                   <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                     Paciente esporádico: somente liberação avulsa (RN29).
                   </p>
-                )}
+                ) : null}
                 <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                  {Object.values(TIPOS_LIBERACAO).map((valor) => {
+                  {Object.values(TIPOS_LIBERACAO)
+                    .filter((valor) => (pacienteTravado ? valor === TIPOS_LIBERACAO.CONTINUA : true))
+                    .map((valor) => {
                     const bloqueado =
+                      !pacienteTravado &&
                       paciente?.origem === ORIGENS_PACIENTE.ESPORADICO &&
                       valor !== TIPOS_LIBERACAO.AVULSA;
                     return (

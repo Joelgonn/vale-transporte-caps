@@ -9,12 +9,14 @@ import type { LiberacaoComPaciente } from "@/lib/domain/liberacoes/types";
 const { mocks } = vi.hoisted(() => ({
   mocks: {
     criarLiberacaoAction: vi.fn(),
+    listarLiberacoesAction: vi.fn(),
     listarPacientesAction: vi.fn(),
   },
 }));
 
 vi.mock("@/app/actions/liberacoes", () => ({
   criarLiberacaoAction: (...args: unknown[]) => mocks.criarLiberacaoAction(...args),
+  listarLiberacoesAction: (...args: unknown[]) => mocks.listarLiberacoesAction(...args),
 }));
 
 vi.mock("@/app/actions/pacientes", () => ({

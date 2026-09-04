@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { ROTULO_TIPO_LIBERACAO, type PerfilUsuario } from "@/lib/domain/enums";
+import { useEffect, useRef, useState } from "react";
+import { ORIGENS_PACIENTE, ROTULO_TIPO_LIBERACAO, type PerfilUsuario } from "@/lib/domain/enums";
 import { permissoesLiberacoes } from "@/lib/domain/regras";
 import type { LiberacaoComPaciente } from "@/lib/domain/liberacoes/types";
+import type { PacienteSemCpf } from "@/lib/domain/pacientes/types";
+import { listarLiberacoesAction } from "@/app/actions/liberacoes";
 import {
   BOTAO_AVISO,
   BOTAO_PRIMARIO,
@@ -22,7 +24,7 @@ import LiberacaoForm from "./liberacao-form";
 import LiberacaoEditForm from "./liberacao-edit-form";
 
 type FormAberto =
-  | { modo: "criar" }
+  | { modo: "criar"; pacienteInicial?: { id: string; gestor_sus: string; nome: string; origem?: string | null } | null }
   | { modo: "renovar"; origem: LiberacaoComPaciente }
   | { modo: "editar"; liberacao: LiberacaoComPaciente }
   | null;
@@ -52,6 +54,70 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
   const [formAberto, setFormAberto] = useState<FormAberto>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
+  // Sprint 73 — fluxo cognitivo: o paciente selecionado pode vir do servidor (query ?paciente=)
+  // ou de seleção client-side via PatientSearch. Mantém sincronizado com props e permite
+  // verificação reativa da situação.
+  const [selecionado, setSelecionado] = useState(props.pacienteSelecionado ?? null);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelecionado(props.pacienteSelecionado ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.pacienteSelecionado?.id, props.pacienteSelecionado?.gestor_sus]);
+
+  // Sprint 73 — verificação da situação (tipo=continua status=ativa) com loading/erro/race
+  const requestIdRef = useRef(0);
+  const [fetchState, setFetchState] = useState<{ loading: boolean; error: string | null; continua: LiberacaoComPaciente | null }>({
+    loading: false,
+    error: null,
+    continua: null,
+  });
+  const [retryTick, setRetryTick] = useState(0);
+
+  const isClientSelection = !!selecionado && selecionado.id !== props.pacienteSelecionado?.id;
+
+  useEffect(() => {
+    if (!selecionado) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFetchState({ loading: false, error: null, continua: null });
+      return;
+    }
+    // Quando o selecionado coincide com o prop do servidor, a situação já vem de
+    // liberacoesIniciais / erroInicial — não refetch imediato (evita flicker nos testes).
+    if (!isClientSelection && retryTick === 0) {
+      // Sincroniza estado de fetch com dados do servidor para consistência de error
+      if (props.erroInicial) {
+        setFetchState({ loading: false, error: props.erroInicial, continua: null });
+      } else {
+        setFetchState({ loading: false, error: null, continua: null });
+      }
+      return;
+    }
+    const myId = ++requestIdRef.current;
+    setFetchState({ loading: true, error: null, continua: null });
+    listarLiberacoesAction(undefined, selecionado.id)
+      .then((r) => {
+        if (myId !== requestIdRef.current) return;
+        if (!r) {
+          setFetchState({ loading: false, error: null, continua: null });
+          return;
+        }
+        if (!r.ok) {
+          setFetchState({ loading: false, error: r.error, continua: null });
+        } else {
+          const encontrada = r.data.find((l) => l.tipo === "continua" && l.status === "ativa") ?? null;
+          setFetchState({ loading: false, error: null, continua: encontrada });
+        }
+      })
+      .catch(() => {
+        if (myId !== requestIdRef.current) return;
+        setFetchState({ loading: false, error: "Não foi possível verificar a situação.", continua: null });
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selecionado?.id, isClientSelection, retryTick, props.erroInicial]);
+
+  // Efeito para sincronizar erro do servidor quando há retryTick ou quando isClientSelection false
+  // (garante fail-closed mesmo sem client fetch)
+
   // Feedback pós-salvar (Sprint 19): banner transitório após criar/renovar.
   useEffect(() => {
     if (!feedback) return;
@@ -61,28 +127,92 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
 
   const vazio = props.liberacoesIniciais.length === 0;
   const podeRenovar = permissoes.podeRenovar;
-  const continuaAtiva = props.pacienteSelecionado
-    ? props.liberacoesIniciais.find((l) => l.tipo === "continua" && l.status === "ativa")
-    : null;
+
+  // Situação efetiva: se seleção client-side pendente, usa fetchState; senão usa dados do servidor
+  const continuaAtivaServer = selecionado ? props.liberacoesIniciais.find((l) => l.tipo === "continua" && l.status === "ativa") ?? null : null;
+  // Quando há divergência (client selection) ou erro server capturado via fetchState, prioriza fetchState
+  const continuaAtiva = isClientSelection ? fetchState.continua : continuaAtivaServer;
   const temContinuaAtiva = !!continuaAtiva;
+  const isEsporadico = selecionado?.origem === ORIGENS_PACIENTE.ESPORADICO;
+  const loadingSituacao = isClientSelection ? fetchState.loading : false;
+  // erro da situação: client fetch error OU erroInicial do servidor quando há paciente selecionado
+  const erroSituacao = isClientSelection ? fetchState.error : props.erroInicial && selecionado ? props.erroInicial : fetchState.error;
 
   const descricao =
     props.perfil === "recepcionista"
       ? "Liberações ativas do vale-transporte — apenas as liberações vigentes."
       : "Liberações registradas no CAPS — busque por paciente ou Gestor SUS.";
 
+  const novaLiberacaoDesabilitada =
+    !selecionado || loadingSituacao || !!erroSituacao || isEsporadico || temContinuaAtiva;
+
+  let motivoDesabilitado: string | undefined;
+  if (!selecionado) {
+    motivoDesabilitado = "Pesquise e selecione um paciente para iniciar uma nova liberação.";
+  } else if (loadingSituacao) {
+    motivoDesabilitado = "Verificando situação do paciente...";
+  } else if (erroSituacao) {
+    motivoDesabilitado = erroSituacao;
+  } else if (isEsporadico) {
+    motivoDesabilitado = "Paciente esporádico não pode receber liberação contínua.";
+  } else if (temContinuaAtiva) {
+    motivoDesabilitado = "Este paciente já possui uma liberação contínua ativa.";
+  }
+
+  function handleSelect(p: PacienteSemCpf) {
+    setSelecionado({ id: p.id, gestor_sus: p.gestor_sus, nome: p.nome, origem: (p as unknown as { origem?: string | null }).origem ?? null });
+    router.push(`/dashboard/liberacoes?paciente=${p.id}`);
+  }
+
+  function handleRetry() {
+    setRetryTick((n) => n + 1);
+  }
+
   return (
     <div className="flex flex-1 flex-col py-6">
       <div className={`${CONTAINER} flex flex-col gap-6`}>
-        <PageHeader
-          titulo="Liberações"
-          descricao={descricao}
-          acao={
-            permissoes.podeCriarContinua ? (
+        <PageHeader titulo="Liberações" descricao={descricao} />
+
+        {/* Sprint 73 — UX cognitiva: PESQUISAR PACIENTE → SELECIONAR → VERIFICAR → NOVA LIBERAÇÃO
+            PatientSearch ANTES do botão, no mesmo nível visual ou acima. */}
+        <div className={`${CARTAO} p-4`}>
+          <PatientSearch
+            id="busca-liberacoes"
+            label="Buscar por paciente ou Gestor SUS"
+            placeholder="🔎 Nome ou Gestor SUS..."
+            onSelect={handleSelect}
+          />
+        </div>
+
+        {selecionado ? (
+          <div className={`${CARTAO} flex items-center justify-between gap-3 p-4`}>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-brand-900">{selecionado.nome}</p>
+              <p className="text-xs text-zinc-500">
+                Gestor SUS {selecionado.gestor_sus}
+                {selecionado.origem === "esporadico" ? " · Esporádico" : selecionado.origem === "regular" ? " · Regular" : ""}
+              </p>
+            </div>
+            <button type="button" onClick={() => router.push("/dashboard/liberacoes")} className={BOTAO_SECUNDARIO}>
+              Limpar
+            </button>
+          </div>
+        ) : null}
+
+        {/* Botão no mesmo nível visual da busca ou abaixo — nunca isolado acima */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+            {permissoes.podeCriarContinua ? (
               <button
                 type="button"
-                onClick={() => setFormAberto({ modo: "criar" })}
-                className={BOTAO_PRIMARIO}
+                disabled={novaLiberacaoDesabilitada}
+                title={motivoDesabilitado}
+                aria-describedby={novaLiberacaoDesabilitada ? "nova-liberacao-ajuda" : undefined}
+                onClick={() => {
+                  if (novaLiberacaoDesabilitada) return;
+                  setFormAberto({ modo: "criar", pacienteInicial: selecionado! });
+                }}
+                className={`${BOTAO_PRIMARIO} disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 Nova liberação
               </button>
@@ -90,35 +220,34 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
               <Link href="/dashboard/atendimento" className={BOTAO_PRIMARIO}>
                 Novo atendimento
               </Link>
-            ) : undefined
-          }
-        />
-
-        {props.pacienteSelecionado ? (
-          <div className={`${CARTAO} flex items-center justify-between gap-3 p-4`}>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-brand-900">{props.pacienteSelecionado.nome}</p>
-              <p className="text-xs text-zinc-500">
-                Gestor SUS {props.pacienteSelecionado.gestor_sus}
-                {props.pacienteSelecionado.origem === "esporadico" ? " · Esporádico" : props.pacienteSelecionado.origem === "regular" ? " · Regular" : ""}
-              </p>
-            </div>
-            <button type="button" onClick={() => router.push("/dashboard/liberacoes")} className={BOTAO_SECUNDARIO}>
-              Limpar
-            </button>
+            ) : null}
+            {loadingSituacao && <span className="text-sm text-zinc-500">Verificando situação...</span>}
           </div>
-        ) : (
-          <div className={`${CARTAO} p-4`}>
-            <PatientSearch
-              id="busca-liberacoes"
-              label="Buscar por paciente ou Gestor SUS"
-              placeholder="🔎 Nome ou Gestor SUS..."
-              onSelect={(p) => router.push(`/dashboard/liberacoes?paciente=${p.id}`)}
-            />
+          {novaLiberacaoDesabilitada && motivoDesabilitado && !erroSituacao && (
+            <p id="nova-liberacao-ajuda" className="text-sm text-zinc-500">
+              {motivoDesabilitado}
+            </p>
+          )}
+          {erroSituacao && (
+            <div className="flex flex-col gap-2">
+              <p id="nova-liberacao-ajuda" role="alert" className="text-sm text-red-600">
+                {erroSituacao}
+              </p>
+              <button type="button" onClick={handleRetry} className={BOTAO_SECUNDARIO}>
+                Tentar novamente
+              </button>
+            </div>
+          )}
+        </div>
+
+        {isEsporadico && (
+          <div className={`${CARTAO} border-l-4 border-l-amber-400 p-4`}>
+            <p className="text-sm font-semibold text-amber-900">Paciente esporádico não pode receber liberação contínua.</p>
+            <p className="mt-1 text-xs text-zinc-600">Liberação contínua é exclusiva para pacientes com acompanhamento regular (RN29).</p>
           </div>
         )}
 
-        {temContinuaAtiva && continuaAtiva && (
+        {temContinuaAtiva && continuaAtiva && !isEsporadico && !erroSituacao && (
           <div className={`${CARTAO} border-l-4 border-l-amber-400 p-4`}>
             <p className="text-sm font-semibold text-amber-900">Este paciente já possui uma liberação contínua ativa.</p>
             <p className="mt-1 text-xs text-zinc-600">
@@ -129,7 +258,7 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
               · {continuaAtiva.status}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Link href={`/dashboard/liberacoes?paciente=${props.pacienteSelecionado?.id}#lib-${continuaAtiva.id}`} className={BOTAO_SECUNDARIO}>
+              <Link href={`/dashboard/liberacoes?paciente=${selecionado?.id}#lib-${continuaAtiva.id}`} className={BOTAO_SECUNDARIO}>
                 Ver liberação
               </Link>
               <Link href="/dashboard/retiradas" className={BOTAO_SECUNDARIO}>
@@ -139,7 +268,7 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
           </div>
         )}
 
-        {props.erroInicial && <FeedbackErro>{props.erroInicial}</FeedbackErro>}
+        {props.erroInicial && !selecionado && <FeedbackErro>{props.erroInicial}</FeedbackErro>}
 
         {feedback && <FeedbackSucesso>{feedback}</FeedbackSucesso>}
 
@@ -147,7 +276,7 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
           <p className="text-sm text-zinc-500" aria-live="polite">
             {props.liberacoesIniciais.length}{" "}
             {props.liberacoesIniciais.length === 1 ? "liberação" : "liberações"}
-            {props.pacienteSelecionado || props.busca
+            {selecionado || props.busca
               ? " para esta busca."
               : props.liberacoesIniciais.length === 1
                 ? " registrada."
@@ -158,7 +287,7 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
         {vazio ? (
           <EstadoVazio
             mensagem={
-              props.pacienteSelecionado || props.busca
+              selecionado || props.busca
                 ? "Nenhuma liberação encontrada para esta busca."
                 : props.perfil === "recepcionista"
                   ? "Nenhuma liberação ativa no momento."
@@ -186,6 +315,7 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
                   {props.liberacoesIniciais.map((lib) => (
                     <tr
                       key={lib.id}
+                      id={`lib-${lib.id}`}
                       className="transition-colors duration-150 hover:bg-brand-50/40 motion-reduce:transition-none"
                     >
                       <td className="px-4 py-3">
@@ -239,6 +369,7 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
               {props.liberacoesIniciais.map((lib) => (
                 <li
                   key={lib.id}
+                  id={`lib-${lib.id}`}
                   className={`${CARTAO} p-4`}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -302,7 +433,10 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
         {formAberto && formAberto.modo !== "editar" && (
           <LiberacaoForm
             {...(formAberto.modo === "criar"
-              ? { modo: "criar" as const }
+              ? {
+                  modo: "criar" as const,
+                  pacienteInicial: (formAberto as { pacienteInicial?: { id: string; gestor_sus: string; nome: string; origem?: string | null } | null }).pacienteInicial ?? null,
+                }
               : { modo: "renovar" as const, origem: formAberto.origem })}
             onClose={() => setFormAberto(null)}
             onSalvo={() => {

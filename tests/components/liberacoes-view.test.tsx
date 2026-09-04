@@ -15,6 +15,7 @@ const { mocks } = vi.hoisted(() => ({
     refresh: vi.fn(),
     push: vi.fn(),
     criarLiberacaoAction: vi.fn(),
+    listarLiberacoesAction: vi.fn(),
     listarPacientesAction: vi.fn(),
   },
 }));
@@ -25,6 +26,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/app/actions/liberacoes", () => ({
   criarLiberacaoAction: (...args: unknown[]) => mocks.criarLiberacaoAction(...args),
+  listarLiberacoesAction: (...args: unknown[]) => mocks.listarLiberacoesAction(...args),
 }));
 
 vi.mock("@/app/actions/pacientes", () => ({
@@ -59,12 +61,14 @@ function renderizar(opts: {
   busca?: string;
   liberacoes?: LiberacaoComPaciente[];
   erroInicial?: string | null;
+  pacienteSelecionado?: { id: string; gestor_sus: string; nome: string; origem?: string | null } | null;
 }) {
   return render(
     <LiberacoesView
       perfil={opts.perfil}
       statusAtivo={opts.statusAtivo ?? true}
       busca={opts.busca ?? ""}
+      pacienteSelecionado={opts.pacienteSelecionado ?? null}
       liberacoesIniciais={opts.liberacoes ?? [liberacao()]}
       erroInicial={opts.erroInicial ?? null}
     />
@@ -188,7 +192,11 @@ describe("LiberacoesView — permissões por perfil (política de UI)", () => {
 
 describe("LiberacoesView — interações", () => {
   it("autorizador abre o diálogo de nova liberação", () => {
-    renderizar({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
+    renderizar({
+      perfil: PERFIS.PROFISSIONAL_AUTORIZADOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria da Silva", origem: "regular" },
+      liberacoes: [],
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Nova liberação" }));
 
@@ -204,22 +212,18 @@ describe("LiberacoesView — interações", () => {
   });
 
   it("mostra feedback de sucesso e atualiza a lista após criar uma liberação", async () => {
-    renderizar({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR });
+    renderizar({
+      perfil: PERFIS.PROFISSIONAL_AUTORIZADOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria da Silva", origem: "regular" },
+      liberacoes: [],
+    });
     mocks.criarLiberacaoAction.mockResolvedValue({ ok: true, data: liberacao() });
 
     fireEvent.click(screen.getByRole("button", { name: "Nova liberação" }));
 
     const dialog = screen.getByRole("dialog", { name: "Nova liberação" });
-    mocks.listarPacientesAction.mockResolvedValue({
-      ok: true,
-      data: [
-        { id: "p1", gestor_sus: "123456", nome: "Maria da Silva", status: "ativo" },
-      ],
-    });
-    fireEvent.change(within(dialog).getByRole("combobox", { name: "Paciente" }), {
-      target: { value: "maria" },
-    });
-    fireEvent.click(await within(dialog).findByText("Maria da Silva"));
+    // Paciente já vem pré-selecionado da página, não precisa buscar
+    expect(within(dialog).getAllByText("Maria da Silva").length).toBeGreaterThan(0);
 
     for (let i = 0; i < 3; i++) {
       fireEvent.click(within(dialog).getByRole("button", { name: "Continuar" }));
