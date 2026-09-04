@@ -162,70 +162,140 @@ export default function AtendimentoView(props: Props) {
   return (
     <div className="flex flex-1 flex-col py-8">
       <div className={`${CONTAINER} flex flex-col gap-6`}>
-        <PageHeader titulo="Atendimento" descricao="Recepção — localizar ou cadastrar paciente esporádico, criar liberação avulsa e registrar retirada em fluxo único." />
+        <PageHeader titulo="Atendimento" descricao="Registre o atendimento, a liberação e a retirada de vales." />
 
-        {/* Stepper */}
-        <div className={`${CARTAO} p-3`}>
-          <ol className="flex flex-wrap gap-2">
-            {PASSOS.map((p) => {
+        {/* Stepper — indica onde estou, o que já concluí e o que falta */}
+        <div className={`${CARTAO} p-4`}>
+          <ol className="flex items-center gap-1 overflow-x-auto sm:gap-2">
+            {PASSOS.map((p, idx) => {
               const ativo = p.id === passo;
               const concluido = p.id < passo;
               return (
-                <li key={p.id} className="flex items-center gap-2 text-sm">
-                  <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${concluido ? "bg-green-100 text-green-800" : ativo ? "bg-brand-600 text-white" : "bg-zinc-200 text-zinc-600"}`}>{concluido ? "✓" : p.id}</span>
-                  <span className={ativo ? "font-medium text-brand-900" : "text-zinc-500"}>{p.rotulo}</span>
+                <li key={p.id} className="flex flex-1 items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      aria-current={ativo ? "step" : undefined}
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ring-1 ${concluido ? "bg-green-600 text-white ring-green-600" : ativo ? "bg-brand-900 text-white ring-brand-900 shadow-sm" : "bg-white text-zinc-500 ring-zinc-200"}`}
+                    >
+                      {concluido ? "✓" : String(p.id).padStart(2, "0")}
+                    </span>
+                    <span className={`truncate text-sm ${ativo ? "font-semibold text-brand-900" : concluido ? "font-medium text-zinc-600" : "text-zinc-500"}`}>{p.rotulo}</span>
+                  </div>
+                  {idx < PASSOS.length - 1 && <span aria-hidden className={`hidden h-px flex-1 sm:block ${concluido ? "bg-green-200" : "bg-zinc-200"}`} />}
                 </li>
               );
             })}
           </ol>
+          <p className="mt-3 text-xs text-zinc-500">
+            Etapa {String(passo).padStart(2, "0")} de {String(PASSOS.length).padStart(2, "0")} — {PASSOS[passo - 1]?.rotulo}
+          </p>
         </div>
 
         {/* Passo 1 — Paciente */}
         {passo === 1 && (
-          <div className={`${CARTAO} p-4 flex flex-col gap-4`}>
-            <h3 className="font-semibold text-brand-900">1. Paciente — localizar ou cadastrar</h3>
+          <div className={`${CARTAO} p-5 flex flex-col gap-4`}>
+            <div>
+              <h3 className="text-base font-semibold text-brand-900">1. Paciente</h3>
+              <p className="text-sm text-zinc-500">Localize o paciente pelo nome ou Gestor SUS.</p>
+            </div>
             {paciente ? (
-              <div className="flex items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
-                <div>
-                  <p className="font-medium text-brand-900">{paciente.nome}</p>
-                  <p className="text-xs text-zinc-500">SUS {paciente.gestor_sus} · {paciente.origem === ORIGENS_PACIENTE.ESPORADICO ? "Esporádico" : "Regular"}</p>
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Paciente selecionado</p>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-brand-900">{paciente.nome}</p>
+                    <p className="text-xs text-zinc-500">
+                      SUS {paciente.gestor_sus} ·{" "}
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${paciente.origem === ORIGENS_PACIENTE.ESPORADICO ? "bg-amber-100 text-amber-800" : "bg-zinc-100 text-zinc-700"}`}
+                      >
+                        {paciente.origem === ORIGENS_PACIENTE.ESPORADICO ? "Esporádico" : "Regular"}
+                      </span>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaciente(null);
+                      setLiberacoes([]);
+                      setLiberacaoSelecionada(null);
+                    }}
+                    className={BOTAO_SECUNDARIO}
+                  >
+                    Trocar
+                  </button>
                 </div>
-                <button type="button" onClick={() => { setPaciente(null); setLiberacoes([]); setLiberacaoSelecionada(null); }} className={BOTAO_SECUNDARIO}>Trocar</button>
               </div>
             ) : (
               <>
                 <PatientSearch
                   showCreate={true}
                   id="atendimento-paciente"
-                  label="Paciente"
-                  placeholder="🔎 Nome ou Gestor SUS..."
+                  label="Localize o paciente"
+                  placeholder="Nome ou Gestor SUS..."
                   onSelect={selecionarPaciente}
                 />
+                <p className="text-xs text-zinc-500">Digite ao menos 2 caracteres. O paciente será reutilizado quando localizado.</p>
 
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                  <h4 className="text-sm font-semibold text-amber-900">Paciente não encontrado? Cadastrar como esporádico</h4>
-                  <p className="text-xs text-amber-700">Origem: <strong>Esporádico</strong> — somente liberação avulsa. Paciente será reutilizado nos próximos atendimentos.</p>
+                  <h4 className="text-sm font-semibold text-amber-900">Paciente não encontrado?</h4>
+                  <p className="mt-1 text-xs leading-relaxed text-amber-800">
+                    Cadastre como <strong>esporádico</strong> — somente liberação avulsa. Será reutilizado nos próximos atendimentos.
+                  </p>
                   <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div><label className={ROTULO}>Gestor SUS</label><input value={novoSUS} onChange={(e) => setNovoSUS(e.target.value.toUpperCase())} placeholder="Ex.: 123456" className={`${INPUT} uppercase`} /></div>
-                    <div><label className={ROTULO}>Nome</label><input value={novoNome} onChange={(e) => setNovoNome(e.target.value.toUpperCase())} placeholder="Nome completo" className={`${INPUT} uppercase`} /></div>
+                    <div>
+                      <label className={ROTULO}>Gestor SUS</label>
+                      <input
+                        value={novoSUS}
+                        onChange={(e) => setNovoSUS(e.target.value.toUpperCase())}
+                        placeholder="Ex.: 123456"
+                        className={`${INPUT} uppercase`}
+                      />
+                    </div>
+                    <div>
+                      <label className={ROTULO}>Nome</label>
+                      <input
+                        value={novoNome}
+                        onChange={(e) => setNovoNome(e.target.value.toUpperCase())}
+                        placeholder="Nome completo"
+                        className={`${INPUT} uppercase`}
+                      />
+                    </div>
                   </div>
                   {erroCriarPaciente && <FeedbackErro>{erroCriarPaciente}</FeedbackErro>}
-                  <button type="button" disabled={criandoPaciente} onClick={criarPacienteEsporadico} className={`${BOTAO_PRIMARIO} mt-3`}>{criandoPaciente ? "Salvando..." : "Cadastrar paciente esporádico"}</button>
+                  <button type="button" disabled={criandoPaciente} onClick={criarPacienteEsporadico} className={`${BOTAO_PRIMARIO} mt-3`}>
+                    {criandoPaciente ? "Salvando..." : "Cadastrar paciente esporádico"}
+                  </button>
                 </div>
               </>
             )}
             <div className="flex justify-end">
-              <button type="button" disabled={!podeAvancar1()} onClick={() => setPasso(2)} className={BOTAO_PRIMARIO}>Continuar</button>
+              <button type="button" disabled={!podeAvancar1()} onClick={() => setPasso(2)} className={BOTAO_PRIMARIO}>
+                Continuar →
+              </button>
             </div>
           </div>
         )}
 
         {/* Passo 2 — Liberação */}
         {passo === 2 && paciente && (
-          <div className={`${CARTAO} p-4 flex flex-col gap-4`}>
-            <h3 className="font-semibold text-brand-900">2. Liberação — {paciente.origem === ORIGENS_PACIENTE.ESPORADICO ? "somente avulsa (RN29)" : "avulsa ou operar contínua existente"}</h3>
+          <div className={`${CARTAO} p-5 flex flex-col gap-4`}>
+            <div>
+              <h3 className="text-base font-semibold text-brand-900">2. Liberação</h3>
+              <p className="text-sm text-zinc-500">
+                {paciente.origem === ORIGENS_PACIENTE.ESPORADICO
+                  ? "Paciente esporádico — somente liberação avulsa."
+                  : "Paciente regular — atendimento avulso. Para contínua, opere uma autorização existente."}
+              </p>
+            </div>
             <div className="rounded-xl bg-zinc-50 px-4 py-3 text-sm">
-              <p><span className="text-zinc-500">Paciente:</span> <span className="font-medium text-brand-900">{paciente.nome}</span> <span className="text-xs text-zinc-500">· {paciente.origem === ORIGENS_PACIENTE.ESPORADICO ? "Esporádico" : "Regular"}</span></p>
+              <p>
+                <span className="text-zinc-500">Paciente:</span> <span className="font-medium text-brand-900">{paciente.nome}</span>{" "}
+                <span className="inline-flex items-center rounded-full bg-white px-2.5 py-0.5 text-xs font-medium text-zinc-700 ring-1 ring-zinc-200">
+                  SUS {paciente.gestor_sus} · {paciente.origem === ORIGENS_PACIENTE.ESPORADICO ? "Esporádico" : "Regular"}
+                </span>{" "}
+                <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Avulsa</span>
+              </p>
             </div>
 
             {/* Escolha do modo */}
@@ -274,15 +344,31 @@ export default function AtendimentoView(props: Props) {
 
         {/* Passo 3 — Retirada */}
         {passo === 3 && (
-          <div className={`${CARTAO} p-4 flex flex-col gap-4`}>
-            <h3 className="font-semibold text-brand-900">3. Retirada — quantidade a entregar</h3>
-            <div className="rounded-xl bg-zinc-50 px-4 py-3 text-sm">
-              <p>Paciente: <span className="font-medium">{paciente?.nome}</span> · Liberação: <span className="font-medium">{(liberacaoSelecionada ?? liberacaoCriada)?.tipo === TIPOS_LIBERACAO.AVULSA ? "Avulsa" : "Contínua"}</span> · Previsto: <span className="font-medium">{(liberacaoSelecionada ?? liberacaoCriada)?.quantidade}</span></p>
+          <div className={`${CARTAO} p-5 flex flex-col gap-4`}>
+            <div>
+              <h3 className="text-base font-semibold text-brand-900">3. Retirada</h3>
+              <p className="text-sm text-zinc-500">Registre o que foi efetivamente entregue — separado da liberação.</p>
+            </div>
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Liberação</p>
+              <p className="mt-1">
+                <span className="font-medium text-brand-900">
+                  {(liberacaoSelecionada ?? liberacaoCriada)?.tipo === TIPOS_LIBERACAO.AVULSA ? "Avulsa" : "Contínua"}
+                </span>{" "}
+                · Previsto <span className="font-medium">{(liberacaoSelecionada ?? liberacaoCriada)?.quantidade}</span> vales · Paciente{" "}
+                <span className="font-medium">{paciente?.nome}</span>
+              </p>
             </div>
             <div>
-              <label className={ROTULO}>Quantidade a retirar</label>
-              <input type="number" min={1} value={quantidadeRetirada} onChange={(e) => setQuantidadeRetirada(Math.max(1, Number(e.target.value) || 1))} className={INPUT} />
-              <p className="text-xs text-zinc-500">Diferença = Previsto − Retirado (pode ser negativa, sem bloqueio).</p>
+              <label className={ROTULO}>Quantidade retirada</label>
+              <input
+                type="number"
+                min={1}
+                value={quantidadeRetirada}
+                onChange={(e) => setQuantidadeRetirada(Math.max(1, Number(e.target.value) || 1))}
+                className={INPUT}
+              />
+              <p className="text-xs text-zinc-500">Previsão não limita a retirada. Diferença pode ser negativa.</p>
             </div>
             {erroRetirada && <FeedbackErro>{erroRetirada}</FeedbackErro>}
             <div className="flex justify-between">
@@ -294,13 +380,43 @@ export default function AtendimentoView(props: Props) {
 
         {/* Passo 4 — Concluído */}
         {passo === 4 && retiradaOk && retiradaDetalhe && (
-          <div className={`${CARTAO} p-6 text-center`}>
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-700">✓</div>
-            <h3 className="mt-3 text-lg font-semibold text-brand-900">Retirada registrada</h3>
-            <p className="mt-1 text-sm text-zinc-500">Paciente <span className="font-medium text-brand-900">{retiradaDetalhe.paciente}</span> · {retiradaDetalhe.quantidade} vale(s) · {retiradaDetalhe.tipo === TIPOS_LIBERACAO.AVULSA ? "Avulsa" : "Contínua"}</p>
-            <div className="mt-6 flex justify-center gap-2">
-              <Link href="/dashboard/retiradas" className={BOTAO_SECUNDARIO}>Ver retiradas</Link>
-              <button type="button" onClick={() => { setPasso(1); setPaciente(null); setLiberacoes([]); setLiberacaoSelecionada(null); setLiberacaoCriada(null); setRetiradaOk(false); setQuantidadeRetirada(2); }} className={BOTAO_PRIMARIO}>Novo atendimento</button>
+          <div className={`${CARTAO} p-6`}>
+            <div className="flex flex-col items-center text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-700">✓</div>
+              <h3 className="mt-3 text-lg font-semibold text-brand-900">Atendimento concluído</h3>
+              <p className="mt-1 text-sm text-zinc-500">Liberação avulsa criada e retirada registrada.</p>
+            </div>
+            <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm">
+              <p>
+                <span className="text-zinc-500">Paciente:</span> <span className="font-medium text-brand-900">{retiradaDetalhe.paciente}</span>
+              </p>
+              <p>
+                <span className="text-zinc-500">Liberação:</span>{" "}
+                <span className="font-medium">{retiradaDetalhe.tipo === TIPOS_LIBERACAO.AVULSA ? "Avulsa" : "Contínua"}</span>
+              </p>
+              <p>
+                <span className="text-zinc-500">Retirada:</span> <span className="font-medium">{retiradaDetalhe.quantidade} vale(s)</span>
+              </p>
+            </div>
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+              <Link href="/dashboard/retiradas" className={BOTAO_SECUNDARIO}>
+                Ver retiradas
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setPasso(1);
+                  setPaciente(null);
+                  setLiberacoes([]);
+                  setLiberacaoSelecionada(null);
+                  setLiberacaoCriada(null);
+                  setRetiradaOk(false);
+                  setQuantidadeRetirada(2);
+                }}
+                className={BOTAO_PRIMARIO}
+              >
+                Novo atendimento
+              </button>
             </div>
           </div>
         )}
