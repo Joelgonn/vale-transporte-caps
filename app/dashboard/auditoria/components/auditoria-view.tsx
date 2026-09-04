@@ -15,6 +15,7 @@ import type {
   FiltrosAuditoria,
 } from "@/lib/domain/auditoria/types";
 import {
+  BADGE_NEUTRO,
   BOTAO_SECUNDARIO,
   CARTAO,
   CONTAINER,
@@ -75,15 +76,34 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
     setDetalhe(evento);
   }
 
+  // Resumo operacional derivado dos eventos já filtrados (sem nova query)
+  const usuariosDistintos = new Set(eventos.map((e) => e.usuarioId)).size;
+  const entidadesDistintas = new Set(eventos.map((e) => e.entidadeTipo)).size;
+
   return (
     <div className="flex flex-1 flex-col py-6">
       <div className={`${CONTAINER} flex flex-col gap-6`}>
-        <PageHeader
-          titulo="Auditoria"
-          descricao="Trilha de leitura das operações no CAPS — exclusiva do Gestor."
-        />
+        <PageHeader titulo="Auditoria" descricao="Consulte as ações registradas no sistema." />
 
         {erroInicial && <FeedbackErro>{erroInicial}</FeedbackErro>}
+
+        {/* Resumo operacional — só quando há dados, respeitando filtros */}
+        {!erroInicial && total > 0 && (
+          <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className={`${CARTAO} p-4`}>
+              <dt className="text-xs uppercase tracking-wide text-zinc-500">Eventos no período</dt>
+              <dd className="mt-1 text-2xl font-semibold text-brand-900">{total}</dd>
+            </div>
+            <div className={`${CARTAO} p-4`}>
+              <dt className="text-xs uppercase tracking-wide text-zinc-500">Responsáveis</dt>
+              <dd className="mt-1 text-2xl font-semibold text-brand-900">{usuariosDistintos}</dd>
+            </div>
+            <div className={`${CARTAO} p-4`}>
+              <dt className="text-xs uppercase tracking-wide text-zinc-500">Tipos de entidade</dt>
+              <dd className="mt-1 text-2xl font-semibold text-brand-900">{entidadesDistintas}</dd>
+            </div>
+          </dl>
+        )}
 
         {/* Filtros — aplicados no servidor (GET). */}
         <form
@@ -160,6 +180,7 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
               defaultValue={filtros.dataDe ?? ""}
               className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none"
             />
+            <p className="text-[11px] text-zinc-500">Data do evento</p>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -173,6 +194,7 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
               defaultValue={filtros.dataAte ?? ""}
               className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none"
             />
+            <p className="text-[11px] text-zinc-500">Data do evento</p>
           </div>
 
           <div className="flex flex-col gap-1.5 lg:ml-1 lg:flex-row">
@@ -230,13 +252,11 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
                       className="transition-colors duration-150 hover:bg-brand-50/40 motion-reduce:transition-none"
                     >
                       <td className="px-4 py-3">
-                        <p className="font-medium text-brand-900">
-                          {rotuloAcaoAuditoria(evento.acao)}
-                        </p>
-                        <p className="text-xs text-zinc-500">#{evento.id}</p>
+                        <span className={BADGE_NEUTRO}>{rotuloAcaoAuditoria(evento.acao)}</span>
+                        <p className="mt-1 text-xs text-zinc-500">#{evento.id}</p>
                       </td>
-                      <td className="px-4 py-3 text-zinc-700">
-                        {rotuloEntidadeAuditoria(evento.entidadeTipo)}
+                      <td className="px-4 py-3">
+                        <span className={BADGE_NEUTRO}>{rotuloEntidadeAuditoria(evento.entidadeTipo)}</span>
                       </td>
                       <td className="px-4 py-3 text-zinc-600">
                         {formatarDataHora(evento.dataHora)}
@@ -248,6 +268,7 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
                         <button
                           type="button"
                           onClick={(e) => abrirDetalhe(evento, e)}
+                          title="Exibe os dados registrados antes e depois da ação"
                           className="group inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-accent-700 underline underline-offset-2 transition-colors duration-150 hover:text-accent-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-reduce:transition-none"
                         >
                           Detalhes
@@ -269,16 +290,14 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
             <ul className="flex flex-col gap-3 md:hidden">
               {eventos.map((evento) => (
                 <li key={evento.id} className={`${CARTAO} p-4`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-base font-semibold text-brand-900">
-                        {rotuloAcaoAuditoria(evento.acao)}
-                      </p>
-                      <p className="text-xs text-zinc-500">
-                        {rotuloEntidadeAuditoria(evento.entidadeTipo)} ·{" "}
-                        {formatarDataHora(evento.dataHora)}
-                      </p>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={BADGE_NEUTRO}>{rotuloAcaoAuditoria(evento.acao)}</span>
+                      <span className={BADGE_NEUTRO}>{rotuloEntidadeAuditoria(evento.entidadeTipo)}</span>
                     </div>
+                    <p className="text-xs text-zinc-500">
+                      {formatarDataHora(evento.dataHora)} · #{evento.id}
+                    </p>
                   </div>
                   <dl className="mt-3 flex flex-col gap-2 text-sm">
                     <div className="flex items-center justify-between gap-3">
@@ -291,6 +310,7 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
                   <button
                     type="button"
                     onClick={(e) => abrirDetalhe(evento, e)}
+                    title="Exibe os dados registrados antes e depois da ação"
                     className="group mt-3 inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-accent-700 underline underline-offset-2 transition-colors duration-150 hover:text-accent-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-reduce:transition-none"
                   >
                     Ver detalhes
