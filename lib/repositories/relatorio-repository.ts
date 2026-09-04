@@ -333,9 +333,6 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
   }
 
   async listarHistorico(filtros: FiltrosRelatorio): Promise<ResultadoListaRelatorio> {
-    const porPagina = POR_PAGINA_RELATORIO;
-    const offset = (filtros.pagina - 1) * porPagina;
-
     const pacienteId = normalizarTermo(filtros.paciente);
     if (!pacienteId) {
       return {
@@ -344,7 +341,7 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
         linhas: [],
         total: 0,
         pagina: filtros.pagina,
-        porPagina,
+        porPagina: POR_PAGINA_RELATORIO,
       };
     }
 
@@ -370,7 +367,7 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
         linhas: [],
         total: 0,
         pagina: filtros.pagina,
-        porPagina,
+        porPagina: POR_PAGINA_RELATORIO,
       };
     }
 
@@ -380,40 +377,50 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
     const status = normalizarTermo(filtros.status);
     const origem = normalizarTermo(filtros.origem);
 
-    // Hotfix — remover self-join liberacoes→liberacoes (schema cache). Origem não é necessária;
-    // renovação é determinada por renovacao_de_id (ehRenovacao/ehOriginal).
-    let query = this.client
-      .from("liberacoes")
-      .select(
-        `*, autorizador:usuarios!liberacoes_profissional_autorizador_id_fkey(id, nome), registrador:usuarios!liberacoes_registrado_por_id_fkey(id, nome), retiradas(data_hora, quantidade)`,
-        { count: "exact" }
-      )
-      .eq("paciente_id", pacienteId);
-
-    if (de) query = query.gte("data_inicio", de);
-    if (ate) query = query.lte("data_inicio", ate);
-    if (tipoLiberacao) query = query.eq("tipo", tipoLiberacao);
-    if (status) query = query.eq("status", status);
-    if (origem === "original") query = query.is("renovacao_de_id", null);
-    if (origem === "renovacao") {
-      query = query.not("renovacao_de_id", "is", null);
+    // Sprint 58 — Histórico deve representar TODA a trajetória do paciente.
+    // Paginação fragmentava a timeline (liberações paginadas, retiradas perdidas).
+    // Agora buscamos o conjunto completo (chunked 1000) ordenado por created_at.
+    // Hotfix — self-join liberacoes→liberacoes removido; renovação via renovacao_de_id.
+    const tamanhoPagina = 1000;
+    let offsetHist = 0;
+    const todasBrutasHist: unknown[] = [];
+    while (true) {
+      let query = this.client
+        .from("liberacoes")
+        .select(
+          `*, autorizador:usuarios!liberacoes_profissional_autorizador_id_fkey(id, nome), registrador:usuarios!liberacoes_registrado_por_id_fkey(id, nome), retiradas(data_hora, quantidade)`
+        )
+        .eq("paciente_id", pacienteId);
+      if (de) query = query.gte("data_inicio", de);
+      if (ate) query = query.lte("data_inicio", ate);
+      if (tipoLiberacao) query = query.eq("tipo", tipoLiberacao);
+      if (status) query = query.eq("status", status);
+      if (origem === "original") query = query.is("renovacao_de_id", null);
+      if (origem === "renovacao") {
+        query = query.not("renovacao_de_id", "is", null);
+      }
+      const { data, error } = await query
+        .order("created_at", { ascending: false })
+        .range(offsetHist, offsetHist + tamanhoPagina - 1);
+      if (error) throw mapSupabaseError(error);
+      const pagina = (data ?? []) as unknown[];
+      todasBrutasHist.push(...pagina);
+      if (pagina.length < tamanhoPagina) break;
+      offsetHist += tamanhoPagina;
     }
 
-    const { data, error, count } = await query
-      .order("data_inicio", { ascending: true })
-      .range(offset, offset + porPagina - 1);
+    const todasLinhas = todasBrutasHist.map((linha) => mapearItemHistorico(linha as LinhaHistoricoBruta));
 
-    if (error) throw mapSupabaseError(error);
-
+    // Sem paginação fragmentada: retorna timeline completa. Por compatibilidade, porPagina = total.
+    const totalHist = todasLinhas.length;
+    const porPaginaHist = Math.max(totalHist, 1);
     return {
       tipo: "historico",
       paciente: pacienteResolvido,
-      linhas: (data ?? []).map((linha) =>
-        mapearItemHistorico(linha as LinhaHistoricoBruta)
-      ),
-      total: count ?? 0,
-      pagina: filtros.pagina,
-      porPagina,
+      linhas: todasLinhas,
+      total: totalHist,
+      pagina: 1,
+      porPagina: porPaginaHist,
     };
   }
 

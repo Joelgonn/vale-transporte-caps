@@ -292,9 +292,9 @@ describe("listarHistorico", () => {
     expect(select).toContain("registrador:usuarios!liberacoes_registrado_por_id_fkey");
     expect(select).toContain("retiradas(data_hora, quantidade)");
     expect(select).not.toContain("origem:liberacoes!liberacoes_renovacao_de_id_fkey");
-    // Hotfix: self-join removido — renovação via renovacao_de_id, não via origem
-    expect(chamada.metodos).toContain("order:data_inicio");
-    expect(chamada.metodos).toContain("range:0-19");
+    // Sprint 58 — Histórico timeline completa, ordenada por created_at (não paginada)
+    expect(chamada.metodos).toContain("order:created_at");
+    expect(chamada.metodos.some((m) => m.startsWith("range:"))).toBe(true);
 
     expect(resultado.tipo).toBe("historico");
     if (resultado.tipo !== "historico") return;
@@ -389,10 +389,13 @@ describe("listarHistorico", () => {
     expect(resultadoRenovacao.linhas.length).toBeGreaterThan(0);
   });
 
-  it("listarHistorico ordena dados por data_inicio de forma crescente", async () => {
+  it("listarHistorico ordena dados por created_at (timeline real) e retorna conjunto completo", async () => {
     const { repo } = makeRepo({
       liberacoesResultado: {
-        data: [historicoLinhaBruta(), historicoLinhaBruta({ data_inicio: "2025-07-01T00:00:00.000Z" })],
+        data: [
+          historicoLinhaBruta({ id: "l1", created_at: "2026-02-01T10:00:00.000Z" }),
+          historicoLinhaBruta({ id: "l2", created_at: "2025-07-01T10:00:00.000Z", data_inicio: "2025-07-01T00:00:00.000Z" }),
+        ],
         error: null,
       },
       vPacientesResultado: vPacienteResultado(),
@@ -405,8 +408,12 @@ describe("listarHistorico", () => {
     });
 
     if (resultado.tipo !== "historico") return;
-    expect(resultado.linhas[0].dataInicio).toBe("2026-01-01T00:00:00.000Z");
-    expect(resultado.linhas[1].dataInicio).toBe("2025-07-01T00:00:00.000Z");
+    // Sprint 58 — timeline completa, sem paginação fragmentada
+    expect(resultado.total).toBe(2);
+    expect(resultado.linhas).toHaveLength(2);
+    // Ordenação por created_at desc (mais recente primeiro) é feita na view; repositório já ordena por created_at
+    expect(resultado.linhas[0].id).toBe("l1");
+    expect(resultado.linhas[1].id).toBe("l2");
   });
 
   it("listarHistorico sem paciente retorna vazio sem consultar a tabela principal", async () => {
