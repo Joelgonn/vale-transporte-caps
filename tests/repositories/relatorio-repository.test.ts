@@ -131,17 +131,21 @@ describe("RelatorioRepositoryPostgres", () => {
 
     const chamada = registros.calls.find((c) => c.tabela === "liberacoes")!;
     const select = chamada.metodos.find((m) => m.startsWith("select:"))!;
-    expect(select).toContain("pacientes(id, gestor_sus, nome)");
+    expect(select).toContain("pacientes(id, gestor_sus, nome, origem)");
     expect(select).toContain("autorizador:usuarios!liberacoes_profissional_autorizador_id_fkey");
     expect(select).toContain("retiradas(quantidade)");
+    expect(select).toContain("renovacao_de_id");
     expect(select).not.toContain("cpf");
     expect(chamada.metodos).toContain("order:data_inicio");
-    expect(chamada.metodos).toContain("range:0-19");
+    // chunked fetch usa range 0-999 (Sprint 54)
+    expect(chamada.metodos.some((m) => m.startsWith("range:"))).toBe(true);
 
     expect(resultado.tipo).toBe("liberacoes");
     if (resultado.tipo !== "liberacoes") return;
     expect(resultado.linhas[0].totalRetirado).toBe(3);
     expect(resultado.linhas[0].autorizador?.nome).toBe("Dr. João");
+    expect(resultado.totais.total).toBe(1);
+    expect(resultado.contadores).toBeDefined();
   });
 
   it("listarLiberacoes aplica filtros de período e tipo no PostgREST", async () => {

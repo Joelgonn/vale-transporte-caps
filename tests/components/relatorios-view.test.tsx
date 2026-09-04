@@ -49,11 +49,14 @@ function resultadoLiberacoes(sobre?: Partial<Extract<ResultadoListaRelatorio, { 
         status: "ativa",
         autorizador: { id: "u1", nome: "Dr. João" },
         totalRetirado: 3,
+        renovacaoDeId: null,
       },
     ],
     total: 1,
     pagina: 1,
     porPagina: 20,
+    totais: { total: 1, ativas: 1, continuas: 1, avulsas: 0, proximasVencimento: 0, semRetirada: 0 },
+    contadores: { proximasVencimento: 0, semRetirada: 0, expiradaSemUso: 0, multiplasAtivas: 0, multiplasAtivasLiberacoes: 0 },
     ...sobre,
   };
 }
@@ -78,7 +81,8 @@ describe("RelatoriosView — leitura", () => {
   it("exibe título, descrição e contador de registros", () => {
     renderizar();
     expect(screen.getByRole("heading", { name: "Relatórios" })).toBeInTheDocument();
-    expect(screen.getByText("1 registro encontrado.")).toBeInTheDocument();
+    // Liberações operacionais exibe "1 liberação encontrada" (Sprint 54)
+    expect(screen.getByText(/1 liberação encontrada/)).toBeInTheDocument();
   });
 
   it("oferece os três tipos de relatório como abas", () => {
@@ -106,16 +110,35 @@ describe("RelatoriosView — leitura", () => {
   });
 
   it("exibe placeholder quando não há registros", () => {
-    renderizar({ resultado: { tipo: "liberacoes", linhas: [], total: 0, pagina: 1, porPagina: 20 } });
-    expect(screen.getByText("Nenhum registro encontrado ainda.")).toBeInTheDocument();
+    renderizar({
+      resultado: {
+        tipo: "liberacoes",
+        linhas: [],
+        total: 0,
+        pagina: 1,
+        porPagina: 20,
+        totais: { total: 0, ativas: 0, continuas: 0, avulsas: 0, proximasVencimento: 0, semRetirada: 0 },
+        contadores: { proximasVencimento: 0, semRetirada: 0, expiradaSemUso: 0, multiplasAtivas: 0, multiplasAtivasLiberacoes: 0 },
+      },
+    });
+    // Liberações operacionais: mensagem específica
+    expect(screen.getByText("Não há liberações para os filtros selecionados.")).toBeInTheDocument();
   });
 
   it("com filtros ativos e sem resultado, mensagem contextual", () => {
     renderizar({
       filtros: filtros({ de: "2026-01-01" }),
-      resultado: { tipo: "liberacoes", linhas: [], total: 0, pagina: 1, porPagina: 20 },
+      resultado: {
+        tipo: "liberacoes",
+        linhas: [],
+        total: 0,
+        pagina: 1,
+        porPagina: 20,
+        totais: { total: 0, ativas: 0, continuas: 0, avulsas: 0, proximasVencimento: 0, semRetirada: 0 },
+        contadores: { proximasVencimento: 0, semRetirada: 0, expiradaSemUso: 0, multiplasAtivas: 0, multiplasAtivasLiberacoes: 0 },
+      },
     });
-    expect(screen.getByText("Nenhum registro encontrado para os filtros.")).toBeInTheDocument();
+    expect(screen.getByText("Não há liberações para os filtros selecionados.")).toBeInTheDocument();
   });
 
   it("erro inicial é exibido sem tela branca", () => {
@@ -241,7 +264,15 @@ describe("RelatoriosView — paginação", () => {
 
   it("sem paginação quando não há total", () => {
     renderizar({
-      resultado: { tipo: "liberacoes", linhas: [], total: 0, pagina: 1, porPagina: 20 },
+      resultado: {
+        tipo: "liberacoes",
+        linhas: [],
+        total: 0,
+        pagina: 1,
+        porPagina: 20,
+        totais: { total: 0, ativas: 0, continuas: 0, avulsas: 0, proximasVencimento: 0, semRetirada: 0 },
+        contadores: { proximasVencimento: 0, semRetirada: 0, expiradaSemUso: 0, multiplasAtivas: 0, multiplasAtivasLiberacoes: 0 },
+      },
     });
     expect(screen.queryByRole("link", { name: "Próxima" })).toBeNull();
   });

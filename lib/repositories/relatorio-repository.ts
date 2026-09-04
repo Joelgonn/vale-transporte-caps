@@ -30,6 +30,11 @@ import {
   calcularTotaisPorTipo,
   filtrarPorSituacao,
 } from "@/lib/domain/relatorios/consolidado";
+import {
+  calcularContadoresLiberacoes,
+  calcularTotaisLiberacoes,
+  filtrarPorSituacaoLiberacoes,
+} from "@/lib/domain/relatorios/liberacoes";
 
 // Contrato usado pelos services (permite injeção de fakes nos testes).
 export interface RelatorioRepository {
@@ -43,6 +48,7 @@ export interface RelatorioRepository {
 // Colunas do paciente embutidas nos relatórios (nunca CPF — o contrato de
 // relatório não exige; pacientes_com_cpf continua restrito ao Gestor).
 const COLUNAS_PACIENTE = "id, gestor_sus, nome";
+const COLUNAS_PACIENTE_LIBERACOES = "id, gestor_sus, nome, origem";
 
 // Normaliza termos de filtro: remove bordas e limita tamanho. Como os filtros
 // vão como parâmetros do PostgREST (eq/gte/lte), nunca há interpolação de SQL.
@@ -87,53 +93,83 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
     return ids;
   }
 
+  // Sprint 54 — Liberações operacionais: busca chunked do conjunto base para
+  // totais/contadores corretos (não apenas página). Filtro de situação em memória.
   async listarLiberacoes(filtros: FiltrosRelatorio): Promise<ResultadoListaRelatorio> {
     const porPagina = POR_PAGINA_RELATORIO;
-    const offset = (filtros.pagina - 1) * porPagina;
 
     const de = normalizarTermo(filtros.de);
     const ate = normalizarDataAte(filtros.ate);
     const tipoLiberacao = normalizarTermo(filtros.tipoLiberacao);
+    const statusFiltro = normalizarTermo(filtros.status);
+    const situacao = normalizarTermo(filtros.situacaoLiberacoes);
     const pacienteId = normalizarTermo(filtros.paciente);
     const ids = pacienteId ? null : await this.resolverIdsPacientes(normalizarTermo(filtros.busca));
 
     if (ids && ids.length === 0) {
+      const vaziaTotais = calcularTotaisLiberacoes([]);
       return {
         tipo: "liberacoes",
         linhas: [],
         total: 0,
         pagina: filtros.pagina,
         porPagina,
+        totais: vaziaTotais,
+        contadores: calcularContadoresLiberacoes([]),
       };
     }
 
-    let query = this.client
-      .from("liberacoes")
-      .select(
-        `*, pacientes(${COLUNAS_PACIENTE}), autorizador:usuarios!liberacoes_profissional_autorizador_id_fkey(id, nome), retiradas(quantidade)`,
-        { count: "exact" }
-      );
+    // Busca chunked do conjunto base (filtros de período/tipo/status/paciente)
+    const tamanhoPagina = 1000;
+    let offset = 0;
+    const todasBrutas: unknown[] = [];
+    while (true) {
+      let query = this.client
+        .from("liberacoes")
+        .select(
+          `id, paciente_id, tipo, quantidade, periodo_meses, data_inicio, data_fim, status, profissional_autorizador_id, renovacao_de_id, pacientes(${COLUNAS_PACIENTE_LIBERACOES}), autorizador:usuarios!liberacoes_profissional_autorizador_id_fkey(id, nome), retiradas(quantidade)`
+        );
+      if (de) query = query.gte("data_inicio", de);
+      if (ate) query = query.lte("data_inicio", ate);
+      if (tipoLiberacao) query = query.eq("tipo", tipoLiberacao);
+      if (statusFiltro) query = query.eq("status", statusFiltro);
+      if (pacienteId) query = query.eq("paciente_id", pacienteId);
+      else if (ids) query = query.in("paciente_id", ids);
+      const { data, error } = await query
+        .order("data_inicio", { ascending: false })
+        .range(offset, offset + tamanhoPagina - 1);
+      if (error) throw mapSupabaseError(error);
+      const pagina = (data ?? []) as unknown[];
+      todasBrutas.push(...pagina);
+      if (pagina.length < tamanhoPagina) break;
+      offset += tamanhoPagina;
+    }
 
-    if (de) query = query.gte("data_inicio", de);
-    if (ate) query = query.lte("data_inicio", ate);
-    if (tipoLiberacao) query = query.eq("tipo", tipoLiberacao);
-    if (pacienteId) query = query.eq("paciente_id", pacienteId);
-    else if (ids) query = query.in("paciente_id", ids);
+    const todasLinhas = todasBrutas.map((linha) => mapearLinhaLiberacoes(linha as LinhaLiberacaoBruta));
 
-    const { data, error, count } = await query
-      .order("data_inicio", { ascending: false })
-      .range(offset, offset + porPagina - 1);
+    const totaisBase = calcularTotaisLiberacoes(todasLinhas);
+    const contadores = calcularContadoresLiberacoes(todasLinhas);
+    // Totais refletem base (conjunto filtrado por período/tipo/status/paciente) — mesmo que contadores
+    // Para situacao, filtramos e recalculamos totais sobre filtrado? Spec: indicadores devem refletir conjunto atual dos filtros (inclui status etc, mas não situação até clicar)
+    // Quando situação ativa, tabela mostra filtrado, mas cards devem continuar do base? Sprint 53 fez cards do filtrado. Para Liberações, spec §4: indicadores devem representar conjunto atual dos filtros (inclui situação? diz se selecionar paciente período tipo status). Vamos manter totais como base, e quando situação ativa, tabela usa filtrado. Contadores sempre base.
+    const filtradas = filtrarPorSituacaoLiberacoes(todasLinhas, situacao);
+    const total = filtradas.length;
+    const inicio = (filtros.pagina - 1) * porPagina;
+    const linhasPaginadas = filtradas.slice(inicio, inicio + porPagina);
 
-    if (error) throw mapSupabaseError(error);
+    // Se há filtro de situação, totais da camada de cards devem refletir filtrado ou base?
+    // Spec §4: se selecionar paciente/status, indicadores refletem aquele paciente. Implica totais devem recalcular conforme filtros incluindo situação? Para consistência com Consolidado (totais sobre filtrado), se situação ativa, mostramos filtrado.
+    // Vamos usar: se situação ativa, totais = calcular sobre filtrado; senão base.
+    const totais = situacao ? calcularTotaisLiberacoes(filtradas) : totaisBase;
 
     return {
       tipo: "liberacoes",
-      linhas: (data ?? []).map((linha) =>
-        mapearLinhaLiberacoes(linha as LinhaLiberacaoBruta)
-      ),
-      total: count ?? 0,
+      linhas: linhasPaginadas,
+      total,
       pagina: filtros.pagina,
       porPagina,
+      totais,
+      contadores,
     };
   }
 

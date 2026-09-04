@@ -35,13 +35,14 @@ export type LinhaLiberacaoBruta = {
   data_fim: string;
   status: string;
   profissional_autorizador_id: string;
+  renovacao_de_id?: string | null;
   pacientes?: unknown;
   autorizador?: unknown;
   retiradas?: unknown;
 };
 
 export function mapearLinhaLiberacoes(linha: LinhaLiberacaoBruta): LinhaLiberacoes {
-  const paciente = mapearEmbutido<{ id: string; gestor_sus: string; nome: string }>(
+  const paciente = mapearEmbutido<{ id: string; gestor_sus: string; nome: string; origem?: string | null }>(
     linha.pacientes
   );
   const autorizador = mapearEmbutido<{ id: string; nome: string }>(linha.autorizador);
@@ -56,6 +57,7 @@ export function mapearLinhaLiberacoes(linha: LinhaLiberacaoBruta): LinhaLiberaco
     status: linha.status,
     autorizador: autorizador?.id ? { ...autorizador } : null,
     totalRetirado: somarQuantidades(linha.retiradas),
+    renovacaoDeId: (linha as { renovacao_de_id?: string | null }).renovacao_de_id ?? null,
   };
 }
 

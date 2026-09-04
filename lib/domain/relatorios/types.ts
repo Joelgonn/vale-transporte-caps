@@ -21,6 +21,7 @@ export type TipoRelatorio = (typeof TIPOS_RELATORIO)[number];
 // seleciona o paciente do histórico (id de v_pacientes).
 // Sprint 53 — `situacaoConsolidado` é filtro de visualização do consolidado
 // (estouro/sem_retirada/proximo_vencimento/expirada_sem_uso).
+// Sprint 54 — `situacaoLiberacoes` e `status` também para liberações.
 export type FiltrosRelatorio = {
   tipo: TipoRelatorio;
   de?: string | null; // YYYY-MM-DD (início do período)
@@ -28,9 +29,10 @@ export type FiltrosRelatorio = {
   busca?: string | null; // nome / Gestor SUS do paciente
   tipoLiberacao?: string | null; // somente no relatório de liberações
   paciente?: string | null; // id do paciente (somente histórico)
-  status?: string | null; // status_liberacao (somente histórico)
+  status?: string | null; // status_liberacao (histórico e liberações Sprint 54)
   origem?: string | null; // "original" | "renovacao" (somente histórico)
   situacaoConsolidado?: string | null; // Sprint 53 — filtro do consolidado
+  situacaoLiberacoes?: string | null; // Sprint 54 — filtro de liberações
   pagina: number;
 };
 
@@ -38,9 +40,10 @@ export const POR_PAGINA_RELATORIO = 20;
 
 // Linha do relatório de LIBERAÇÕES. `totalRetirado` é somado no repositório a
 // partir do embed retiradas(quantidade) — mesma derivação do saldo de retiradas.
+// Sprint 54 — inclui origem do paciente e renovacaoDeId para renovação.
 export type LinhaLiberacoes = {
   id: string;
-  paciente: { id: string; gestor_sus: string; nome: string } | null;
+  paciente: { id: string; gestor_sus: string; nome: string; origem?: string | null } | null;
   tipo: string;
   quantidade: number;
   periodoMeses: number | null;
@@ -49,6 +52,7 @@ export type LinhaLiberacoes = {
   status: string;
   autorizador: { id: string; nome: string } | null;
   totalRetirado: number;
+  renovacaoDeId: string | null;
 };
 
 // Linha do relatório de RETIRADAS.
@@ -140,6 +144,23 @@ export type AgregadoPacienteConsolidado = {
   liberacoes: number;
 };
 
+export type TotaisLiberacoes = {
+  total: number;
+  ativas: number;
+  continuas: number;
+  avulsas: number;
+  proximasVencimento: number;
+  semRetirada: number;
+};
+
+export type ContadoresLiberacoes = {
+  proximasVencimento: number;
+  semRetirada: number;
+  expiradaSemUso: number;
+  multiplasAtivas: number;
+  multiplasAtivasLiberacoes: number;
+};
+
 export type ResultadoListaRelatorio =
   | {
       tipo: "liberacoes";
@@ -147,6 +168,9 @@ export type ResultadoListaRelatorio =
       total: number;
       pagina: number;
       porPagina: number;
+      // Sprint 54 — totais e contadores sobre conjunto filtrado
+      totais: TotaisLiberacoes;
+      contadores: ContadoresLiberacoes;
     }
   | {
       tipo: "retiradas";

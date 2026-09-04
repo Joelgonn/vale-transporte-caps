@@ -53,6 +53,8 @@ const resultado: ResultadoListaRelatorio = {
   total: 0,
   pagina: 1,
   porPagina: 20,
+  totais: { total: 0, ativas: 0, continuas: 0, avulsas: 0, proximasVencimento: 0, semRetirada: 0 },
+  contadores: { proximasVencimento: 0, semRetirada: 0, expiradaSemUso: 0, multiplasAtivas: 0, multiplasAtivasLiberacoes: 0 },
 };
 
 const filtros: FiltrosRelatorio = { tipo: "liberacoes", pagina: 1 };
