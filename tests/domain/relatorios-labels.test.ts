@@ -88,6 +88,10 @@ describe("mapeamento dos relatórios (funções puras)", () => {
       paciente_id: "p1",
       tipo: TIPOS_LIBERACAO.AVULSA,
       quantidade: 4,
+      data_inicio: "2026-01-01T00:00:00.000Z",
+      data_fim: "2026-01-02T00:00:00.000Z",
+      status: "ativa",
+      periodo_meses: null,
       pacientes: { id: "p1", gestor_sus: "123456", nome: "Maria da Silva" },
       retiradas: [{ quantidade: 1 }, { quantidade: 2 }],
     };
@@ -103,6 +107,10 @@ describe("mapeamento dos relatórios (funções puras)", () => {
       paciente_id: "p1",
       tipo: TIPOS_LIBERACAO.AVULSA,
       quantidade: 1,
+      data_inicio: "2026-01-01T00:00:00.000Z",
+      data_fim: "2026-01-02T00:00:00.000Z",
+      status: "ativa",
+      periodo_meses: null,
       pacientes: null,
       retiradas: [{ quantidade: 3 }],
     };

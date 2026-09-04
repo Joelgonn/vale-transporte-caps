@@ -19,6 +19,7 @@ type RelatoriosSearchParams = {
   paciente?: string;
   status?: string;
   origem?: string;
+  sit?: string;
 };
 
 function somenteData(valor?: string): string | null {
@@ -197,6 +198,7 @@ export default async function RelatoriosPage({
   }
 
   // Fluxo padrão (liberacoes / retiradas / consolidado).
+  // Sprint 53 — consolidado suporta filtro de situação (estouro/sem_retirada/...)
   const filtros: FiltrosRelatorio = {
     tipo,
     de: somenteData(params.de),
@@ -204,6 +206,7 @@ export default async function RelatoriosPage({
     busca: params.busca?.trim() || null,
     paciente: params.paciente?.trim() || null,
     tipoLiberacao: params.tl?.trim() || null,
+    situacaoConsolidado: (params.sit ?? "").trim() || null,
     pagina: Number(params.pagina) || 1,
   };
 

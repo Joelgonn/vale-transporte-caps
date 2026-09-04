@@ -23,6 +23,13 @@ import {
   type LiberacaoResumoBruta,
   type RetiradaResumoBruta,
 } from "@/lib/domain/relatorios/resumo";
+import {
+  agruparPorPaciente as agruparPorPacienteConsolidado,
+  calcularContadores,
+  calcularTotais,
+  calcularTotaisPorTipo,
+  filtrarPorSituacao,
+} from "@/lib/domain/relatorios/consolidado";
 
 // Contrato usado pelos services (permite injeção de fakes nos testes).
 export interface RelatorioRepository {
@@ -180,52 +187,85 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
 
   // Consolidado por liberação: autorizado (quantidade) vs. entregue (Σ
   // retiradas), com saldo derivado no servidor. Somente leitura via RLS.
+  // Sprint 53 — busca o CONJUNTO COMPLETO (chunk 1000) para calcular
+  // contadores/totais de forma correta (não apenas a página). Filtro de
+  // situação (estouro/sem_retirada/...) é aplicado em memória sobre o conjunto
+  // base; paginação incide sobre o conjunto já filtrado por situação.
   async listarConsolidado(filtros: FiltrosRelatorio): Promise<ResultadoListaRelatorio> {
     const porPagina = POR_PAGINA_RELATORIO;
-    const offset = (filtros.pagina - 1) * porPagina;
 
     const de = normalizarTermo(filtros.de);
     const ate = normalizarDataAte(filtros.ate);
     const tipoLiberacao = normalizarTermo(filtros.tipoLiberacao);
     const pacienteId = normalizarTermo(filtros.paciente);
+    const situacao = normalizarTermo(filtros.situacaoConsolidado);
     const ids = pacienteId ? null : await this.resolverIdsPacientes(normalizarTermo(filtros.busca));
 
     if (ids && ids.length === 0) {
+      const vazio = calcularTotais([]);
       return {
         tipo: "consolidado",
         linhas: [],
         total: 0,
         pagina: filtros.pagina,
         porPagina,
+        totais: vazio,
+        porTipo: calcularTotaisPorTipo([]),
+        porPaciente: [],
+        contadores: calcularContadores([]),
       };
     }
 
-    let query = this.client
-      .from("liberacoes")
-      .select(`*, pacientes(${COLUNAS_PACIENTE}), retiradas(quantidade)`, {
-        count: "exact",
-      });
+    // Busca chunked do conjunto base (sem paginação) para agregações corretas.
+    const tamanhoPagina = 1000;
+    let offset = 0;
+    const todasBrutas: unknown[] = [];
+    while (true) {
+      let query = this.client
+        .from("liberacoes")
+        .select(
+          `id, paciente_id, tipo, quantidade, data_inicio, data_fim, status, periodo_meses, pacientes(${COLUNAS_PACIENTE}), retiradas(quantidade)`
+        );
+      if (de) query = query.gte("data_inicio", de);
+      if (ate) query = query.lte("data_inicio", ate);
+      if (tipoLiberacao) query = query.eq("tipo", tipoLiberacao);
+      if (pacienteId) query = query.eq("paciente_id", pacienteId);
+      else if (ids) query = query.in("paciente_id", ids);
+      const { data, error } = await query
+        .order("data_inicio", { ascending: false })
+        .range(offset, offset + tamanhoPagina - 1);
+      if (error) throw mapSupabaseError(error);
+      const pagina = (data ?? []) as unknown[];
+      todasBrutas.push(...pagina);
+      if (pagina.length < tamanhoPagina) break;
+      offset += tamanhoPagina;
+    }
 
-    if (de) query = query.gte("data_inicio", de);
-    if (ate) query = query.lte("data_inicio", ate);
-    if (tipoLiberacao) query = query.eq("tipo", tipoLiberacao);
-    if (pacienteId) query = query.eq("paciente_id", pacienteId);
-    else if (ids) query = query.in("paciente_id", ids);
+    const todasLinhas = todasBrutas.map((linha) =>
+      mapearLinhaConsolidado(linha as LinhaConsolidadoBruta)
+    );
 
-    const { data, error, count } = await query
-      .order("data_inicio", { ascending: false })
-      .range(offset, offset + porPagina - 1);
+    const contadores = calcularContadores(todasLinhas);
+    const filtradas = filtrarPorSituacao(todasLinhas, situacao);
+    const totais = calcularTotais(filtradas);
+    const porTipo = calcularTotaisPorTipo(filtradas);
+    const porPaciente = agruparPorPacienteConsolidado(filtradas);
 
-    if (error) throw mapSupabaseError(error);
+    // Paginação sobre o conjunto filtrado por situação
+    const total = filtradas.length;
+    const inicio = (filtros.pagina - 1) * porPagina;
+    const linhasPaginadas = filtradas.slice(inicio, inicio + porPagina);
 
     return {
       tipo: "consolidado",
-      linhas: (data ?? []).map((linha) =>
-        mapearLinhaConsolidado(linha as LinhaConsolidadoBruta)
-      ),
-      total: count ?? 0,
+      linhas: linhasPaginadas,
+      total,
       pagina: filtros.pagina,
       porPagina,
+      totais,
+      porTipo,
+      porPaciente,
+      contadores,
     };
   }
 

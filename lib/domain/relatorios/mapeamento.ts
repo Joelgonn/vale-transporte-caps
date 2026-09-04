@@ -94,6 +94,10 @@ export type LinhaConsolidadoBruta = {
   paciente_id: string;
   tipo: string;
   quantidade: number;
+  data_inicio: string;
+  data_fim: string;
+  status: string;
+  periodo_meses: number | null;
   pacientes?: unknown;
   retiradas?: unknown;
 };
@@ -110,5 +114,9 @@ export function mapearLinhaConsolidado(linha: LinhaConsolidadoBruta): LinhaConso
     quantidadeAutorizada: linha.quantidade,
     quantidadeRetirada: retirada,
     saldo: linha.quantidade - retirada,
+    dataInicio: (linha as unknown as { data_inicio: string }).data_inicio ?? "",
+    dataFim: (linha as unknown as { data_fim: string }).data_fim ?? "",
+    status: (linha as unknown as { status: string }).status ?? "",
+    periodoMeses: (linha as unknown as { periodo_meses: number | null }).periodo_meses ?? null,
   };
 }

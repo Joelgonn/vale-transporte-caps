@@ -30,11 +30,12 @@ import { EstadoVazio } from "@/components/ui/estado-vazio";
 import { FeedbackErro } from "@/components/ui/feedback";
 
 import {
-  
-  
-  
   ItemHistorico,
 } from "@/lib/domain/relatorios/types";
+import {
+  textoVencimento,
+  isProximoVencimento,
+} from "@/lib/domain/relatorios/consolidado";
 
 type RelatoriosViewProps = {
   filtros: FiltrosRelatorio;
@@ -60,6 +61,7 @@ function construirUrl(filtros: FiltrosRelatorio, ajustes: Partial<FiltrosRelator
   if (uniao.paciente) params.set("paciente", uniao.paciente);
   if (uniao.status) params.set("status", uniao.status);
   if (uniao.origem) params.set("origem", uniao.origem);
+  if (uniao.situacaoConsolidado) params.set("sit", uniao.situacaoConsolidado);
   if (uniao.pagina > 1) params.set("pagina", String(uniao.pagina));
   return `/dashboard/relatorios?${params.toString()}`;
 }
@@ -607,7 +609,424 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
   }
 
   // ---------------------------------------------------------------
-  // Fluxo PADRÃO (liberacoes / retiradas / consolidado)
+  // Fluxo CONSOLIDADO OPERACIONAL (Sprint 53) — ferramenta de conferência
+  // ---------------------------------------------------------------
+  if (filtros.tipo === "consolidado") {
+    const consolidado =
+      resultado && resultado.tipo === "consolidado"
+        ? (resultado as Extract<ResultadoListaRelatorio, { tipo: "consolidado" }>)
+        : null;
+    const situacao = filtros.situacaoConsolidado ?? null;
+    const temConsolidado = !!consolidado;
+    const totalConsolidado = consolidado?.total ?? 0;
+    const porPaginaConsolidado = consolidado?.porPagina ?? 20;
+    const totalPaginasConsolidado = Math.max(1, Math.ceil(totalConsolidado / porPaginaConsolidado));
+    const totais = consolidado?.totais ?? { previsto: 0, retirado: 0, diferenca: 0, liberacoes: 0 };
+    const porTipo = consolidado?.porTipo ?? {
+      continua: { previsto: 0, retirado: 0, diferenca: 0, liberacoes: 0 },
+      avulsa: { previsto: 0, retirado: 0, diferenca: 0, liberacoes: 0 },
+    };
+    const porPaciente = consolidado?.porPaciente ?? [];
+    const contadores = consolidado?.contadores ?? {
+      estouros: 0,
+      semRetirada: 0,
+      proximoVencimento: 0,
+      expiradaSemUso: 0,
+    };
+    const semFiltrosConsolidado =
+      !filtros.de && !filtros.ate && !filtros.busca && !filtros.paciente && !filtros.tipoLiberacao && !situacao;
+
+    return (
+      <div className="flex flex-1 flex-col py-6">
+        <div className={`${CONTAINER} flex flex-col gap-6`}>
+          <PageHeader
+            titulo="Relatórios"
+            descricao="Consultas de liberações, retiradas e consolidado — exclusivas do Gestor."
+          />
+
+          {erroInicial && <FeedbackErro>{erroInicial}</FeedbackErro>}
+
+          {/* Seletor de tipo */}
+          <nav aria-label="Tipo de relatório" className="flex flex-wrap gap-2">
+            {TIPOS_RELATORIO.map((tipo) => {
+              const ativo = filtros.tipo === tipo;
+              return (
+                <Link
+                  key={tipo}
+                  href={construirUrl(filtros, {
+                    tipo,
+                    pagina: 1,
+                    paciente: null,
+                    status: null,
+                    origem: null,
+                    situacaoConsolidado: null,
+                  })}
+                  aria-current={ativo ? "page" : undefined}
+                  className={
+                    ativo
+                      ? "inline-flex h-10 items-center rounded-md bg-brand-900 px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                      : "inline-flex h-10 items-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:border-brand-300 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-reduce:transition-none"
+                  }
+                >
+                  {ROTULO_TIPO_RELATORIO[tipo]}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {pacienteSelecionado ? (
+            <div className={`${CARTAO} flex items-center justify-between gap-3 p-4`}>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-brand-900">{pacienteSelecionado.nome}</p>
+                <p className="text-xs text-zinc-500">SUS {pacienteSelecionado.gestor_sus}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => router.push(construirUrl(filtros, { paciente: null, pagina: 1 }))}
+                className={BOTAO_SECUNDARIO}
+              >
+                Limpar
+              </button>
+            </div>
+          ) : (
+            <div className={`${CARTAO} p-4`}>
+              <PatientSearch
+                id="relatorios-patient"
+                label="Paciente (nome ou Gestor SUS)"
+                placeholder="🔎 Nome ou Gestor SUS..."
+                onSelect={(p) => router.push(construirUrl(filtros, { paciente: p.id, busca: null, pagina: 1 }))}
+              />
+            </div>
+          )}
+
+          {/* Filtros — aplicados no servidor (GET). */}
+          <form
+            method="get"
+            action="/dashboard/relatorios"
+            aria-label="Filtros de relatórios"
+            className={`flex flex-col gap-3 p-4 lg:flex-row lg:items-end ${CARTAO}`}
+          >
+            <input type="hidden" name="tipo" value={filtros.tipo} />
+            {filtros.paciente && <input type="hidden" name="paciente" value={filtros.paciente} />}
+            {situacao && <input type="hidden" name="sit" value={situacao} />}
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="relatorios-filtro-tipo" className="text-xs font-medium text-zinc-600">
+                Tipo de liberação
+              </label>
+              <select
+                id="relatorios-filtro-tipo"
+                name="tl"
+                defaultValue={filtros.tipoLiberacao ?? ""}
+                className={INPUT}
+              >
+                <option value="">Todos</option>
+                {Object.values(TIPOS_LIBERACAO).map((tipo) => (
+                  <option key={tipo} value={tipo}>
+                    {rotuloTipoLiberacao(tipo)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="relatorios-filtro-de" className="text-xs font-medium text-zinc-600">
+                De
+              </label>
+              <input
+                id="relatorios-filtro-de"
+                name="de"
+                type="date"
+                defaultValue={filtros.de ?? ""}
+                className={INPUT}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="relatorios-filtro-ate" className="text-xs font-medium text-zinc-500">
+                Até
+              </label>
+              <input
+                id="relatorios-filtro-ate"
+                name="ate"
+                type="date"
+                defaultValue={filtros.ate ?? ""}
+                className={INPUT}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5 lg:ml-1 lg:flex-row">
+              <button
+                type="submit"
+                className="inline-flex h-11 items-center justify-center rounded-md bg-green-600 px-5 text-sm font-medium text-white transition-colors hover:bg-green-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+              >
+                Filtrar
+              </button>
+              <Link
+                href={construirUrl(filtros, {
+                  de: null,
+                  ate: null,
+                  busca: null,
+                  tipoLiberacao: null,
+                  pagina: 1,
+                  paciente: null,
+                  status: null,
+                  origem: null,
+                  situacaoConsolidado: null,
+                })}
+                className={BOTAO_SECUNDARIO}
+              >
+                Limpar
+              </Link>
+            </div>
+          </form>
+
+          {/* Glossário curto */}
+          <div className={`${CARTAO} p-4`}>
+            <p className="text-xs leading-relaxed text-zinc-600">
+              <span className="font-medium text-zinc-700">Previsto</span> = quantidade autorizada na liberação.{" "}
+              <span className="font-medium text-zinc-700">Retirado</span> = quantidade efetivamente registrada nas
+              retiradas. <span className="font-medium text-zinc-700">Diferença</span> = previsto − retirado. Valor
+              negativo indica retirada acima da previsão — isso é permitido e não bloqueia novas retiradas (RN31).
+            </p>
+          </div>
+
+          {!erroInicial && !temConsolidado && (
+            <p className="text-sm text-zinc-500" aria-live="polite">
+              Carregando consolidado...
+            </p>
+          )}
+
+          {!erroInicial && temConsolidado && totalConsolidado === 0 && !semFiltrosConsolidado && situacao && (
+            <EstadoVazio mensagem="Não há liberações nesta situação." />
+          )}
+
+          {!erroInicial && temConsolidado && totalConsolidado === 0 && (!situacao || semFiltrosConsolidado) && (
+            <EstadoVazio
+              mensagem={
+                semFiltrosConsolidado
+                  ? "Não há liberações para os filtros selecionados."
+                  : "Não há liberações para os filtros selecionados."
+              }
+            />
+          )}
+
+          {!erroInicial && temConsolidado && totalConsolidado > 0 && (
+            <>
+              {/* NÍVEL 1 — RESUMO OPERACIONAL */}
+              <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <div className={`${CARTAO} p-4`}>
+                  <dt className="text-xs uppercase tracking-wide text-zinc-500">Previsto</dt>
+                  <dd className="mt-1 text-2xl font-semibold text-brand-900">{totais.previsto}</dd>
+                </div>
+                <div className={`${CARTAO} p-4`}>
+                  <dt className="text-xs uppercase tracking-wide text-zinc-500">Retirado</dt>
+                  <dd className="mt-1 text-2xl font-semibold text-brand-900">{totais.retirado}</dd>
+                </div>
+                <div className={`${CARTAO} p-4`}>
+                  <dt className="text-xs uppercase tracking-wide text-zinc-500">Diferença</dt>
+                  <dd className={`mt-1 text-2xl font-semibold ${totais.diferenca < 0 ? "text-red-700" : "text-brand-900"}`}>
+                    {totais.diferenca > 0 ? `+${totais.diferenca}` : `${totais.diferenca}`}
+                  </dd>
+                </div>
+                <div className={`${CARTAO} p-4`}>
+                  <dt className="text-xs uppercase tracking-wide text-zinc-500">Liberações</dt>
+                  <dd className="mt-1 text-2xl font-semibold text-brand-900">{totais.liberacoes}</dd>
+                </div>
+              </dl>
+
+              {/* Contadores secundários quando aplicável */}
+              {(contadores.estouros > 0 ||
+                contadores.semRetirada > 0 ||
+                contadores.proximoVencimento > 0 ||
+                contadores.expiradaSemUso > 0) && (
+                <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  {contadores.estouros > 0 && (
+                    <div className={`${CARTAO} border-l-4 border-l-red-500 p-4`}>
+                      <dt className="text-xs uppercase tracking-wide text-zinc-500">Estouros</dt>
+                      <dd className="mt-1 text-xl font-semibold text-red-700">{contadores.estouros}</dd>
+                    </div>
+                  )}
+                  {contadores.semRetirada > 0 && (
+                    <div className={`${CARTAO} border-l-4 border-l-amber-400 p-4`}>
+                      <dt className="text-xs uppercase tracking-wide text-zinc-500">Sem uso</dt>
+                      <dd className="mt-1 text-xl font-semibold text-amber-700">{contadores.semRetirada}</dd>
+                    </div>
+                  )}
+                  {contadores.proximoVencimento > 0 && (
+                    <div className={`${CARTAO} border-l-4 border-l-orange-400 p-4`}>
+                      <dt className="text-xs uppercase tracking-wide text-zinc-500">Próximas do vencimento</dt>
+                      <dd className="mt-1 text-xl font-semibold text-orange-700">{contadores.proximoVencimento}</dd>
+                    </div>
+                  )}
+                  {contadores.expiradaSemUso > 0 && (
+                    <div className={`${CARTAO} border-l-4 border-l-zinc-400 p-4`}>
+                      <dt className="text-xs uppercase tracking-wide text-zinc-500">Expiradas sem uso</dt>
+                      <dd className="mt-1 text-xl font-semibold text-zinc-700">{contadores.expiradaSemUso}</dd>
+                    </div>
+                  )}
+                </dl>
+              )}
+
+              {/* NÍVEL 2 — SITUAÇÕES QUE MERECEM ATENÇÃO */}
+              <div className={`${CARTAO} p-4`}>
+                <h3 className="text-sm font-semibold text-brand-900">Situações que merecem atenção</h3>
+                <p className="mt-1 text-xs text-zinc-500">Alertas operacionais — não indicam erro automático.</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link
+                    href={construirUrl(filtros, { situacaoConsolidado: null, pagina: 1 })}
+                    className={
+                      !situacao
+                        ? "inline-flex h-8 items-center rounded-full bg-brand-900 px-3.5 text-xs font-medium text-white"
+                        : "inline-flex h-8 items-center rounded-full border border-zinc-300 bg-white px-3.5 text-xs font-medium text-zinc-700 hover:border-zinc-400"
+                    }
+                  >
+                    Todos {totais.liberacoes > 0 ? `· ${totais.liberacoes}` : ""}
+                  </Link>
+                  <Link
+                    href={construirUrl(filtros, { situacaoConsolidado: "estouro", pagina: 1 })}
+                    className={
+                      situacao === "estouro"
+                        ? "inline-flex h-8 items-center rounded-full bg-red-600 px-3.5 text-xs font-medium text-white"
+                        : "inline-flex h-8 items-center rounded-full border border-red-200 bg-red-50 px-3.5 text-xs font-medium text-red-700 hover:bg-red-100"
+                    }
+                  >
+                    🔴 Estouro · {contadores.estouros}
+                  </Link>
+                  <Link
+                    href={construirUrl(filtros, { situacaoConsolidado: "sem_retirada", pagina: 1 })}
+                    className={
+                      situacao === "sem_retirada"
+                        ? "inline-flex h-8 items-center rounded-full bg-amber-500 px-3.5 text-xs font-medium text-white"
+                        : "inline-flex h-8 items-center rounded-full border border-amber-200 bg-amber-50 px-3.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                    }
+                  >
+                    🟡 Sem retirada · {contadores.semRetirada}
+                  </Link>
+                  <Link
+                    href={construirUrl(filtros, { situacaoConsolidado: "proximo_vencimento", pagina: 1 })}
+                    className={
+                      situacao === "proximo_vencimento"
+                        ? "inline-flex h-8 items-center rounded-full bg-orange-500 px-3.5 text-xs font-medium text-white"
+                        : "inline-flex h-8 items-center rounded-full border border-orange-200 bg-orange-50 px-3.5 text-xs font-medium text-orange-700 hover:bg-orange-100"
+                    }
+                  >
+                    🟠 Próximo do vencimento · {contadores.proximoVencimento}
+                  </Link>
+                  <Link
+                    href={construirUrl(filtros, { situacaoConsolidado: "expirada_sem_uso", pagina: 1 })}
+                    className={
+                      situacao === "expirada_sem_uso"
+                        ? "inline-flex h-8 items-center rounded-full bg-zinc-700 px-3.5 text-xs font-medium text-white"
+                        : "inline-flex h-8 items-center rounded-full border border-zinc-300 bg-zinc-50 px-3.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                    }
+                  >
+                    ⚪ Expirada sem uso · {contadores.expiradaSemUso}
+                  </Link>
+                </div>
+              </div>
+
+              {/* Total por tipo */}
+              <div className={`${CARTAO} p-4`}>
+                <h3 className="text-sm font-semibold text-brand-900">Total por tipo</h3>
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-zinc-200 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Contínuas</p>
+                    <p className="mt-1 text-sm text-zinc-700">
+                      Previsto <span className="font-semibold text-brand-900">{porTipo.continua.previsto}</span> · Retirado{" "}
+                      <span className="font-semibold text-brand-900">{porTipo.continua.retirado}</span> · Diferença{" "}
+                      <span className={`font-semibold ${porTipo.continua.diferenca < 0 ? "text-red-700" : "text-brand-900"}`}>
+                        {porTipo.continua.diferenca > 0 ? `+${porTipo.continua.diferenca}` : porTipo.continua.diferenca}
+                      </span>{" "}
+                      <span className="text-xs text-zinc-500">({porTipo.continua.liberacoes} liberações)</span>
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-zinc-200 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Avulsas</p>
+                    <p className="mt-1 text-sm text-zinc-700">
+                      Previsto <span className="font-semibold text-brand-900">{porTipo.avulsa.previsto}</span> · Retirado{" "}
+                      <span className="font-semibold text-brand-900">{porTipo.avulsa.retirado}</span> · Diferença{" "}
+                      <span className={`font-semibold ${porTipo.avulsa.diferenca < 0 ? "text-red-700" : "text-brand-900"}`}>
+                        {porTipo.avulsa.diferenca > 0 ? `+${porTipo.avulsa.diferenca}` : porTipo.avulsa.diferenca}
+                      </span>{" "}
+                      <span className="text-xs text-zinc-500">({porTipo.avulsa.liberacoes} liberações)</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Total por paciente (agrupado) */}
+              {porPaciente.length > 0 && (
+                <div className={`${CARTAO} p-4`}>
+                  <h3 className="text-sm font-semibold text-brand-900">Total por paciente</h3>
+                  <p className="mt-1 text-xs text-zinc-500">Acumulado das liberações selecionadas.</p>
+                  <ul className="mt-3 flex flex-col gap-2">
+                    {porPaciente.slice(0, 20).map((p) => (
+                      <li key={p.pacienteId} className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 px-3 py-2.5">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-brand-900">{p.nome}</p>
+                          <p className="text-xs text-zinc-500">SUS {p.gestorSus} · {p.liberacoes} liberação{p.liberacoes !== 1 ? "ões" : ""}</p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-xs text-zinc-500">Previsto {p.previsto} · Retirado {p.retirado}</p>
+                          <p className={`text-sm font-semibold ${p.diferenca < 0 ? "text-red-700" : "text-brand-900"}`}>
+                            Dif. {p.diferenca > 0 ? `+${p.diferenca}` : p.diferenca}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  {porPaciente.length > 20 && (
+                    <p className="mt-2 text-xs text-zinc-500">Mostrando 20 de {porPaciente.length} pacientes.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Tabela */}
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-zinc-500" aria-live="polite">
+                  {totalConsolidado} {totalConsolidado === 1 ? "liberação" : "liberações"} encontrada
+                  {totalConsolidado === 1 ? "" : "s"}
+                  {situacao ? ` — filtro: ${situacao}` : ""}.
+                </p>
+                <TabelaConsolidado linhas={consolidado.linhas} filtros={filtros} />
+              </div>
+
+              {/* Paginação */}
+              {totalConsolidado > 0 && (
+                <nav aria-label="Paginação" className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-zinc-500">
+                    Página {filtros.pagina} de {totalPaginasConsolidado}
+                  </p>
+                  <div className="flex gap-2">
+                    {filtros.pagina > 1 && (
+                      <Link
+                        href={construirUrl(filtros, { pagina: filtros.pagina - 1 })}
+                        className={BOTAO_SECUNDARIO}
+                      >
+                        Anterior
+                      </Link>
+                    )}
+                    {filtros.pagina < totalPaginasConsolidado && (
+                      <Link
+                        href={construirUrl(filtros, { pagina: filtros.pagina + 1 })}
+                        className={BOTAO_SECUNDARIO}
+                      >
+                        Próxima
+                      </Link>
+                    )}
+                  </div>
+                </nav>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------
+  // Fluxo PADRÃO (liberacoes / retiradas) — consolidado já tratado acima
   // ---------------------------------------------------------------
   return (
     <div className="flex flex-1 flex-col py-6">
@@ -632,6 +1051,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                   paciente: null,
                   status: null,
                   origem: null,
+                  situacaoConsolidado: null,
                 })}
                 aria-current={ativo ? "page" : undefined}
                 className={
@@ -741,6 +1161,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                 paciente: null,
                 status: null,
                 origem: null,
+                situacaoConsolidado: null,
               })}
               className={BOTAO_SECUNDARIO}
             >
@@ -1136,65 +1557,112 @@ function TabelaConsolidado({
       <div className={`${CARTAO} hidden overflow-x-auto md:block`}>
         <table className="w-full text-left text-sm">
           <CabecalhoTabela
-            colunas={["Paciente", "Tipo", "Previsto", "Retirado", "Diferença"]}
+            colunas={["Paciente", "Tipo", "Previsto", "Retirado", "Diferença", "Período", "Status"]}
           />
           <tbody className="divide-y divide-zinc-100">
-            {linhas.map((linha) => (
-              <tr key={linha.liberacaoId} className="transition-colors duration-150 hover:bg-brand-50/40 motion-reduce:transition-none">
-                <td className="px-4 py-3">
-                  <p className="font-medium text-brand-900">{linha.paciente?.nome ?? "—"}</p>
-                  <p className="text-xs text-zinc-500">SUS {linha.paciente?.gestor_sus ?? "—"}</p>
-                </td>
-                <td className="px-4 py-3 text-zinc-700">{rotuloTipoLiberacao(linha.tipo)}</td>
-                <td className="px-4 py-3 text-zinc-700">{linha.quantidadeAutorizada}</td>
-                <td className="px-4 py-3 text-zinc-700">{linha.quantidadeRetirada}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={
-                      linha.saldo < 0
-                        ? "font-semibold text-red-700"
-                        : "font-semibold text-brand-900"
-                    }
-                  >
-                    {linha.saldo}
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {linhas.map((linha) => {
+              const ehEstouro = linha.saldo < 0;
+              const ehSemRetirada = linha.quantidadeRetirada === 0;
+              const vencimento = textoVencimento(linha.dataFim);
+              const proximo = isProximoVencimento(linha);
+              return (
+                <tr
+                  key={linha.liberacaoId}
+                  className={`transition-colors duration-150 motion-reduce:transition-none ${
+                    ehEstouro
+                      ? "bg-red-50/40 hover:bg-red-50/60"
+                      : ehSemRetirada
+                        ? "bg-amber-50/30 hover:bg-amber-50/50"
+                        : proximo
+                          ? "bg-orange-50/30 hover:bg-orange-50/50"
+                          : "hover:bg-brand-50/40"
+                  }`}
+                >
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-brand-900">{linha.paciente?.nome ?? "—"}</p>
+                    <p className="text-xs text-zinc-500">SUS {linha.paciente?.gestor_sus ?? "—"}</p>
+                  </td>
+                  <td className="px-4 py-3 text-zinc-700">{rotuloTipoLiberacao(linha.tipo)}</td>
+                  <td className="px-4 py-3 text-zinc-700">{linha.quantidadeAutorizada}</td>
+                  <td className="px-4 py-3 text-zinc-700">{linha.quantidadeRetirada}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={
+                        ehEstouro ? "font-semibold text-red-700" : "font-semibold text-brand-900"
+                      }
+                    >
+                      {ehEstouro ? `${linha.saldo} · ESTOURO` : linha.saldo > 0 ? `+${linha.saldo}` : `${linha.saldo}`}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-zinc-600">
+                    <span>{descreverPeriodo({ tipo: linha.tipo, dataInicio: linha.dataInicio, dataFim: linha.dataFim })}</span>
+                    {vencimento && <span className="ml-1 text-xs font-medium text-orange-700">· {vencimento}</span>}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-700">
+                    <span className="inline-flex items-center gap-1.5">
+                      {rotuloStatusLiberacao(linha.status)}
+                      {ehSemRetirada && <span className="h-2 w-2 rounded-full bg-amber-400" aria-hidden />}
+                      {ehEstouro && <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden />}
+                      {proximo && <span className="h-2 w-2 rounded-full bg-orange-400" aria-hidden />}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       <ul className="flex flex-col gap-3 md:hidden">
-        {linhas.map((linha) => (
-          <li key={linha.liberacaoId} className={`${CARTAO} p-4`}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-base font-semibold text-brand-900">
-                  {linha.paciente?.nome ?? "—"}
+        {linhas.map((linha) => {
+          const ehEstouro = linha.saldo < 0;
+          const ehSemRetirada = linha.quantidadeRetirada === 0;
+          const vencimento = textoVencimento(linha.dataFim);
+          return (
+            <li key={linha.liberacaoId} className={`${CARTAO} p-4`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold text-brand-900">
+                    {linha.paciente?.nome ?? "—"}
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    {rotuloTipoLiberacao(linha.tipo)} · {rotuloStatusLiberacao(linha.status)}
+                  </p>
+                </div>
+                <p
+                  className={`shrink-0 text-sm font-semibold ${ehEstouro ? "text-red-700" : "text-brand-900"}`}
+                >
+                  {ehEstouro ? `${linha.saldo} ESTOURO` : linha.saldo > 0 ? `+${linha.saldo}` : `${linha.saldo}`}
                 </p>
-                <p className="text-xs text-zinc-500">{rotuloTipoLiberacao(linha.tipo)}</p>
               </div>
-              <p
-                className={`shrink-0 text-sm font-semibold ${
-                  linha.saldo < 0 ? "text-red-700" : "text-brand-900"
-                }`}
-              >
-                Diferença {linha.saldo}
-              </p>
-            </div>
-            <dl className="mt-3 flex flex-col gap-2 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-xs text-zinc-500">Previsto</dt>
-                <dd className="font-medium text-brand-900">{linha.quantidadeAutorizada}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-xs text-zinc-500">Retirado</dt>
-                <dd className="font-medium text-brand-900">{linha.quantidadeRetirada}</dd>
-              </div>
-            </dl>
-          </li>
-        ))}
+              <dl className="mt-3 flex flex-col gap-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-xs text-zinc-500">Previsto</dt>
+                  <dd className="font-medium text-brand-900">{linha.quantidadeAutorizada}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-xs text-zinc-500">Retirado</dt>
+                  <dd className="font-medium text-brand-900">{linha.quantidadeRetirada}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-xs text-zinc-500">Período</dt>
+                  <dd className="font-medium text-brand-900">
+                    {descreverPeriodo({ tipo: linha.tipo, dataInicio: linha.dataInicio, dataFim: linha.dataFim })}
+                  </dd>
+                </div>
+                {vencimento && (
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-xs text-zinc-500">Vencimento</dt>
+                    <dd className="font-medium text-orange-700">{vencimento}</dd>
+                  </div>
+                )}
+                {ehSemRetirada && (
+                  <p className="text-xs font-medium text-amber-700">Sem retirada</p>
+                )}
+              </dl>
+            </li>
+          );
+        })}
       </ul>
     </>
   );

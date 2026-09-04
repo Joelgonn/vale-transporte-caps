@@ -213,7 +213,7 @@ describe("RelatorioRepositoryPostgres", () => {
   });
 
   it("listarConsolidado deriva saldo por liberação e aplica filtros", async () => {
-    const { repo } = makeRepo({
+    const { repo, registros } = makeRepo({
       liberacoesResultado: {
         data: [linhaLiberacao(), linhaLiberacao({ id: "l2", quantidade: 1, retiradas: [{ quantidade: 3 }] })],
         error: null,
@@ -227,6 +227,17 @@ describe("RelatorioRepositoryPostgres", () => {
     expect(resultado.linhas[0].quantidadeRetirada).toBe(3);
     expect(resultado.linhas[0].saldo).toBe(1);
     expect(resultado.linhas[1].saldo).toBe(-2);
+    // Sprint 53 — verifica colunas do consolidado e agregações
+    const chamada = registros.calls.find((c) => c.tabela === "liberacoes")!;
+    const select = chamada.metodos.find((m) => m.startsWith("select:"))!;
+    expect(select).toContain("data_inicio");
+    expect(select).toContain("data_fim");
+    expect(select).toContain("status");
+    expect(resultado.totais.previsto).toBe(5);
+    expect(resultado.totais.retirado).toBe(6);
+    expect(resultado.totais.diferenca).toBe(-1);
+    expect(resultado.contadores.estouros).toBe(1);
+    expect(resultado.porPaciente.length).toBe(1);
   });
 });
 

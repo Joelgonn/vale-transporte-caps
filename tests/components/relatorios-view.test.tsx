@@ -190,15 +190,37 @@ describe("RelatoriosView — consolidado", () => {
             quantidadeAutorizada: 1,
             quantidadeRetirada: 3,
             saldo: -2,
+            dataInicio: "2026-01-01T00:00:00.000Z",
+            dataFim: "2026-01-02T00:00:00.000Z",
+            status: "ativa",
+            periodoMeses: null,
           },
         ],
         total: 1,
         pagina: 1,
         porPagina: 20,
+        totais: { previsto: 1, retirado: 3, diferenca: -2, liberacoes: 1 },
+        porTipo: {
+          continua: { previsto: 0, retirado: 0, diferenca: 0, liberacoes: 0 },
+          avulsa: { previsto: 1, retirado: 3, diferenca: -2, liberacoes: 1 },
+        },
+        porPaciente: [
+          {
+            pacienteId: "p1",
+            nome: "Maria da Silva",
+            gestorSus: "123456",
+            previsto: 1,
+            retirado: 3,
+            diferenca: -2,
+            liberacoes: 1,
+          },
+        ],
+        contadores: { estouros: 1, semRetirada: 0, proximoVencimento: 0, expiradaSemUso: 0 },
       },
     });
     expect(screen.getAllByText("Maria da Silva").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("-2").length).toBeGreaterThan(0);
+    // Saldo -2 aparece como "-2 · ESTOURO" no desktop
+    expect(screen.getAllByText(/-2/).length).toBeGreaterThan(0);
   });
 });
 

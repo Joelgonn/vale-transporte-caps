@@ -19,6 +19,8 @@ export type TipoRelatorio = (typeof TIPOS_RELATORIO)[number];
 // eq/gte/lte + range) — nunca filtramos no navegador sobre dados incompletos.
 // `status` e `origem` existem somente no histórico por paciente; `paciente`
 // seleciona o paciente do histórico (id de v_pacientes).
+// Sprint 53 — `situacaoConsolidado` é filtro de visualização do consolidado
+// (estouro/sem_retirada/proximo_vencimento/expirada_sem_uso).
 export type FiltrosRelatorio = {
   tipo: TipoRelatorio;
   de?: string | null; // YYYY-MM-DD (início do período)
@@ -28,6 +30,7 @@ export type FiltrosRelatorio = {
   paciente?: string | null; // id do paciente (somente histórico)
   status?: string | null; // status_liberacao (somente histórico)
   origem?: string | null; // "original" | "renovacao" (somente histórico)
+  situacaoConsolidado?: string | null; // Sprint 53 — filtro do consolidado
   pagina: number;
 };
 
@@ -60,6 +63,7 @@ export type LinhaRetiradas = {
 
 // Linha do relatório CONSOLIDADO (autorizado vs. entregue por liberação).
 // `saldo` é derivado no servidor: quantidade autorizada − total retirado.
+// Sprint 53 — inclui período/status para alertas (próximo vencimento, expirada sem uso).
 export type LinhaConsolidado = {
   liberacaoId: string;
   paciente: { id: string; gestor_sus: string; nome: string } | null;
@@ -67,6 +71,10 @@ export type LinhaConsolidado = {
   quantidadeAutorizada: number;
   quantidadeRetirada: number;
   saldo: number;
+  dataInicio: string;
+  dataFim: string;
+  status: string;
+  periodoMeses: number | null;
 };
 
 // Origem de uma renovação: a liberação anterior da cadeia (via renovacao_de_id).
@@ -103,6 +111,35 @@ export type ItemHistorico = {
   retiradas?: { dataHora: string; quantidade: number }[];
 };
 
+export type TotaisConsolidado = {
+  previsto: number;
+  retirado: number;
+  diferenca: number;
+  liberacoes: number;
+};
+
+export type TotaisPorTipoConsolidado = {
+  continua: TotaisConsolidado;
+  avulsa: TotaisConsolidado;
+};
+
+export type ContadoresConsolidado = {
+  estouros: number;
+  semRetirada: number;
+  proximoVencimento: number;
+  expiradaSemUso: number;
+};
+
+export type AgregadoPacienteConsolidado = {
+  pacienteId: string;
+  nome: string;
+  gestorSus: string;
+  previsto: number;
+  retirado: number;
+  diferenca: number;
+  liberacoes: number;
+};
+
 export type ResultadoListaRelatorio =
   | {
       tipo: "liberacoes";
@@ -124,6 +161,12 @@ export type ResultadoListaRelatorio =
       total: number;
       pagina: number;
       porPagina: number;
+      // Sprint 53 — agregações sobre o conjunto filtrado (para totais) e
+      // contadores sobre o conjunto base (para alertas).
+      totais: TotaisConsolidado;
+      porTipo: TotaisPorTipoConsolidado;
+      porPaciente: AgregadoPacienteConsolidado[];
+      contadores: ContadoresConsolidado;
     }
   | {
       tipo: "historico";
