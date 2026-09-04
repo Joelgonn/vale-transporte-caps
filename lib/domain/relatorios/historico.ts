@@ -12,6 +12,7 @@ import {
 // Linha bruta retornada pelo PostgREST para o histórico. `origem` é o embed
 // to-one via FK self-referencial liberacoes_renovacao_de_id_fkey (a liberação
 // anterior da cadeia); `retiradas` é o to-many (data_hora, quantidade).
+// Sprint 56 — inclui created_at para ordenação fiel.
 export type LinhaHistoricoBruta = {
   id: string;
   data_inicio: string;
@@ -21,6 +22,7 @@ export type LinhaHistoricoBruta = {
   periodo_meses: number | null;
   status: string;
   renovacao_de_id: string | null;
+  created_at?: string | null;
   autorizador?: unknown;
   registrador?: unknown;
   retiradas?: unknown;
@@ -40,14 +42,16 @@ function ultimaRetiradaDe(retiradas: unknown): string | null {
   return ultima;
 }
 
-function mapearRetiradas(retiradas: unknown): { dataHora: string; quantidade: number }[] {
+function mapearRetiradas(retiradas: unknown): { dataHora: string; quantidade: number; recepcionistaNome?: string | null }[] {
   if (!Array.isArray(retiradas)) return [];
-  const lista: { dataHora: string; quantidade: number }[] = [];
+  const lista: { dataHora: string; quantidade: number; recepcionistaNome?: string | null }[] = [];
   for (const r of retiradas) {
     const dataHora = (r as { data_hora?: unknown })?.data_hora;
     const quantidade = (r as { quantidade?: unknown })?.quantidade;
     if (typeof dataHora === "string" && typeof quantidade === "number") {
-      lista.push({ dataHora, quantidade });
+      const rec = (r as { recepcionista?: unknown })?.recepcionista;
+      const nome = Array.isArray(rec) ? (rec[0] as { nome?: string })?.nome : (rec as { nome?: string } | null)?.nome ?? null;
+      lista.push({ dataHora, quantidade, recepcionistaNome: nome ?? null });
     }
   }
   // ordena cronologicamente
@@ -82,6 +86,7 @@ export function mapearItemHistorico(linha: LinhaHistoricoBruta): ItemHistorico {
     ultimaRetirada: ultimaRetiradaDe(linha.retiradas),
     saldo: linha.quantidade - quantidadeRetirada,
     retiradas: mapearRetiradas(linha.retiradas),
+    createdAt: (linha as { created_at?: string | null }).created_at ?? null,
   };
 }
 

@@ -43,6 +43,15 @@ import {
 } from "@/lib/domain/relatorios/liberacoes";
 import { ROTULO_ORIGEM_PACIENTE } from "@/lib/domain/enums";
 
+// Sprint 56 — tooltips curtos para cada aba
+const TOOLTIP_TIPO_RELATORIO: Record<string, string> = {
+  resumo: "Visão geral dos principais indicadores de vales autorizados e retirados no período.",
+  liberacoes: "Consulte as liberações autorizadas, seus períodos, tipos, status e situações que merecem atenção.",
+  retiradas: "Consulte as retiradas realmente realizadas, quando ocorreram, quanto foi retirado e a qual liberação pertencem.",
+  consolidado: "Compare o previsto com o realizado e identifique liberações sem retirada, próximas do vencimento ou acima da previsão.",
+  historico: "Consulte a trajetória de um paciente e acompanhe liberações e retiradas em ordem cronológica.",
+};
+
 type RelatoriosViewProps = {
   filtros: FiltrosRelatorio;
   resultado: ResultadoListaRelatorio | null;
@@ -113,6 +122,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
               return (
                 <Link
                   key={tipo}
+                  title={TOOLTIP_TIPO_RELATORIO[tipo] ?? ""}
                   href={construirUrl(filtros, {
                     tipo,
                     pagina: 1,
@@ -338,7 +348,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
               <EstadoVazio
                 mensagem={
                   !erroInicial
-                    ? "Busque um paciente pelo nome ou Gestor SUS para visualizar o histórico."
+                    ? "Selecione um paciente para consultar o histórico."
                     : erroInicial
                 }
               />
@@ -349,7 +359,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                 <PatientSearch
                   id="relatorios-historico-patient"
                   label="Paciente (nome ou Gestor SUS)"
-                  placeholder="🔎 Nome ou Gestor SUS..."
+                  placeholder="Nome ou Gestor SUS..."
                   onSelect={(p) => router.push(construirUrl({ ...filtros, tipo: "historico", pagina: 1 }, { paciente: p.id, busca: null }))}
                 />
                 <div className="mt-3">
@@ -398,7 +408,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
 
     // Histórico com itens — renderizar linha do tempo.
     if (ehHistorico && resultado && resultado.linhas.length > 0) {
-      const paciente = ((resultado as { paciente?: { id: string; gestor_sus: string; nome: string } | null }).paciente!);
+      const paciente = ((resultado as { paciente?: { id: string; gestor_sus: string; nome: string; origem?: string | null; created_at?: string | null } | null }).paciente!);
       const total = resultado.total;
       const porPagina = resultado.porPagina;
       const totalPaginas = Math.max(1, Math.ceil(total / porPagina));
@@ -420,7 +430,9 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
             <div className="flex items-center gap-4">
               <div>
                 <p className="font-medium text-brand-900">{paciente.nome}</p>
-                <p className="text-xs text-zinc-500">SUS {paciente.gestor_sus}</p>
+                <p className="text-xs text-zinc-500">
+                  SUS {paciente.gestor_sus} {paciente.origem ? `· ${ROTULO_ORIGEM_PACIENTE[paciente.origem as keyof typeof ROTULO_ORIGEM_PACIENTE] ?? paciente.origem}` : ""}
+                </p>
               </div>
               <Link
                 href={construirUrl(filtros, { paciente: null, busca: null, status: null, origem: null, tipoLiberacao: null, de: null, ate: null, pagina: 1 })}
@@ -520,7 +532,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
             )}
 
             {/* Linha do tempo funcional — eventos reais ordenados cronologicamente (mais recente primeiro) */}
-            <HistoricoTimeline linhas={resultado.linhas} />
+            <HistoricoTimeline linhas={resultado.linhas} paciente={paciente} />
 
             {/* Paginação preservando paciente e filtros */}
             {total > 0 && (
@@ -593,22 +605,22 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                 Trocar paciente
               </Link>
             </div>
-            <EstadoVazio mensagem="Este paciente ainda não possui eventos registrados." />
-          </div>
-        </div>
-      );
-    }
+            <EstadoVazio mensagem="Não há movimentações históricas registradas para este paciente." />
+           </div>
+         </div>
+       );
+     }
 
-    // Fallback caso resultado exista mas linhas tenham sido removidas inesperadamente.
-    if (resultado && resultado.linhas.length === 0) {
-      return (
-        <div className="flex flex-1 flex-col py-6">
-          <div className={`${CONTAINER} flex flex-col gap-6`}>
-            <PageHeader
-              titulo="Relatórios"
-              descricao="Consultas de liberações, retiradas e consolidado — exclusivas do Gestor."
-            />
-            <EstadoVazio mensagem="Este paciente ainda não possui eventos registrados." />
+     // Fallback caso resultado exista mas linhas tenham sido removidas inesperadamente.
+     if (resultado && resultado.linhas.length === 0) {
+       return (
+         <div className="flex flex-1 flex-col py-6">
+           <div className={`${CONTAINER} flex flex-col gap-6`}>
+             <PageHeader
+               titulo="Relatórios"
+               descricao="Consultas de liberações, retiradas e consolidado — exclusivas do Gestor."
+             />
+             <EstadoVazio mensagem="Não há movimentações históricas registradas para este paciente." />
           </div>
         </div>
       );
@@ -660,6 +672,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
               return (
                 <Link
                   key={tipo}
+                  title={TOOLTIP_TIPO_RELATORIO[tipo] ?? ""}
                   href={construirUrl(filtros, {
                     tipo,
                     pagina: 1,
@@ -1079,6 +1092,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
               return (
                 <Link
                   key={tipo}
+                  title={TOOLTIP_TIPO_RELATORIO[tipo] ?? ""}
                   href={construirUrl(filtros, {
                     tipo,
                     pagina: 1,
@@ -1365,6 +1379,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
               return (
                 <Link
                   key={tipo}
+                  title={TOOLTIP_TIPO_RELATORIO[tipo] ?? ""}
                   href={construirUrl(filtros, { tipo, pagina: 1, paciente: null, status: null, origem: null, situacaoConsolidado: null, situacaoLiberacoes: null, situacaoRetiradas: null })}
                   aria-current={ativo ? "page" : undefined}
                   className={ativo ? "inline-flex h-10 items-center rounded-md bg-brand-900 px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600" : "inline-flex h-10 items-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:border-brand-300 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-reduce:transition-none"}
@@ -1478,8 +1493,9 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
             const ativo = filtros.tipo === tipo;
             return (
               <Link
-                key={tipo}
-                href={construirUrl(filtros, {
+                  key={tipo}
+                  title={TOOLTIP_TIPO_RELATORIO[tipo] ?? ""}
+                  href={construirUrl(filtros, {
                   tipo,
                   pagina: 1,
                   paciente: null,
@@ -2017,70 +2033,132 @@ function TabelaRetiradas({
   );
 }
 
-function HistoricoTimeline({ linhas }: { linhas: ItemHistorico[] }) {
+function HistoricoTimeline({
+  linhas,
+  paciente,
+}: {
+  linhas: ItemHistorico[];
+  paciente?: { id: string; gestor_sus: string; nome: string; origem?: string | null; created_at?: string | null } | null;
+}) {
   type Evento =
     | { id: string; dataHora: string; tipo: "liberacao"; liberacao: ItemHistorico }
-    | { id: string; dataHora: string; tipo: "retirada"; retirada: { dataHora: string; quantidade: number }; liberacao: ItemHistorico };
+    | { id: string; dataHora: string; tipo: "retirada"; retirada: { dataHora: string; quantidade: number; recepcionistaNome?: string | null }; liberacao: ItemHistorico }
+    | { id: string; dataHora: string; tipo: "paciente"; paciente: { nome: string; created_at: string } };
 
   const eventos: Evento[] = [];
+  if (paciente?.created_at) {
+    eventos.push({ id: `pac-${paciente.id}`, dataHora: paciente.created_at, tipo: "paciente", paciente: { nome: paciente.nome, created_at: paciente.created_at } });
+  }
   for (const lib of linhas) {
-    // Liberação criada — data/hora real é dataInicio (timestamptz). Se não houver hora, mostrar só data.
-    eventos.push({ id: `lib-${lib.id}`, dataHora: lib.dataInicio, tipo: "liberacao", liberacao: lib });
+    const criacao = lib.createdAt ?? lib.dataInicio;
+    eventos.push({ id: `lib-${lib.id}`, dataHora: criacao, tipo: "liberacao", liberacao: lib });
     for (const r of lib.retiradas ?? []) {
       eventos.push({ id: `ret-${lib.id}-${r.dataHora}-${r.quantidade}`, dataHora: r.dataHora, tipo: "retirada", retirada: r, liberacao: lib });
     }
   }
-  // Mais recente primeiro (spec 6)
+  // Mais recente primeiro
   eventos.sort((a, b) => (a.dataHora < b.dataHora ? 1 : a.dataHora > b.dataHora ? -1 : 0));
 
   if (eventos.length === 0) {
-    return <EstadoVazio mensagem="Este paciente ainda não possui eventos registrados." />;
+    return <EstadoVazio mensagem="Não há movimentações históricas registradas para este paciente." />;
+  }
+
+  // Agrupamento por data (Hoje/Ontem/Data)
+  const hoje = new Date().toISOString().slice(0, 10);
+  const ontemDate = new Date();
+  ontemDate.setDate(ontemDate.getDate() - 1);
+  const ontem = ontemDate.toISOString().slice(0, 10);
+  function rotuloData(iso: string): string {
+    const d = iso.slice(0, 10);
+    if (d === hoje) return "Hoje";
+    if (d === ontem) return "Ontem";
+    return formatarData(iso);
+  }
+  const grupos = new Map<string, Evento[]>();
+  for (const ev of eventos) {
+    const k = ev.dataHora.slice(0, 10);
+    if (!grupos.has(k)) grupos.set(k, []);
+    grupos.get(k)!.push(ev);
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <h3 className="text-sm font-semibold text-brand-900">Histórico do paciente — eventos reais em ordem cronológica</h3>
-      <ol className="relative border-l border-zinc-200 pl-6">
-        {eventos.map((ev) => {
-          const isLiberacao = ev.tipo === "liberacao";
-          const lib = ev.liberacao;
-          const dotClass = isLiberacao ? "bg-brand-600" : "bg-emerald-500";
-          const badgeClass = isLiberacao ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-emerald-50 text-emerald-700 border-emerald-200";
-          const titulo = isLiberacao ? (lib.renovacaoDeId ? "LIBERAÇÃO RENOVADA" : "LIBERAÇÃO CRIADA") : "RETIRADA";
-          const dataFmt = isLiberacao ? formatarData(ev.dataHora) : formatarDataHora(ev.dataHora);
-          return (
-            <li key={ev.id} className="relative pb-6 last:pb-0">
-              <span className={`absolute -left-[7px] top-1 h-3 w-3 rounded-full border-2 border-white ${dotClass}`} />
-              <div className={`${CARTAO} p-4`}>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${badgeClass}`}>{titulo}</span>
-                  <span className="text-xs text-zinc-500">{dataFmt}</span>
-                </div>
-                {isLiberacao ? (
-                  <div className="mt-2">
-                    <p className="text-sm font-medium text-brand-900">
-                      {rotuloTipoLiberacao(lib.tipo)} · {lib.quantidade} vales previstos · Período: {descreverPeriodo(lib)}
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      {rotuloOrigemLiberacao(lib)} · Status: {rotuloStatusLiberacao(lib.status)}
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      Autorizada por: {lib.autorizador?.nome ?? "—"} {lib.registrador?.nome && lib.registrador.nome !== lib.autorizador?.nome ? `· Registrada por: ${lib.registrador.nome}` : ""}
-                    </p>
+      {[...grupos.entries()].map(([dataKey, evs]) => (
+        <div key={dataKey} className="flex flex-col gap-3">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{rotuloData(dataKey)}</h4>
+          <ol className="relative border-l border-zinc-200 pl-6">
+            {evs.map((ev) => {
+              if (ev.tipo === "paciente") {
+                return (
+                  <li key={ev.id} className="relative pb-6 last:pb-0">
+                    <span className="absolute -left-[7px] top-1 h-3 w-3 rounded-full border-2 border-white bg-zinc-400" />
+                    <div className={`${CARTAO} p-4`}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded-full border bg-zinc-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-700 border-zinc-200">PACIENTE CADASTRADO</span>
+                        <span className="text-xs text-zinc-500">{formatarDataHora(ev.dataHora)}</span>
+                      </div>
+                      <p className="mt-2 text-sm font-medium text-brand-900">Paciente {ev.paciente.nome} cadastrado no sistema</p>
+                    </div>
+                  </li>
+                );
+              }
+              const isLiberacao = ev.tipo === "liberacao";
+              const lib = ev.liberacao;
+              const dotClass = isLiberacao ? "bg-brand-600" : "bg-emerald-500";
+              const badgeClass = isLiberacao ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-emerald-50 text-emerald-700 border-emerald-200";
+              const titulo = isLiberacao ? (lib.renovacaoDeId ? "LIBERAÇÃO RENOVADA" : "LIBERAÇÃO CRIADA") : "RETIRADA";
+              const dataFmt = isLiberacao ? formatarDataHora(ev.dataHora) : formatarDataHora(ev.dataHora);
+              const saldo = lib.saldo;
+              const acima = saldo < 0;
+              return (
+                <li key={ev.id} className="relative pb-6 last:pb-0">
+                  <span className={`absolute -left-[7px] top-1 h-3 w-3 rounded-full border-2 border-white ${dotClass}`} />
+                  <div className={`${CARTAO} p-4`}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${badgeClass}`}>{titulo}</span>
+                      <span className="text-xs text-zinc-500">{dataFmt}</span>
+                    </div>
+                    {isLiberacao ? (
+                      <div className="mt-2">
+                        <p className="text-sm font-medium text-brand-900">
+                          {rotuloTipoLiberacao(lib.tipo)} · {lib.quantidade} vales previstos · Período: {descreverPeriodo(lib)}
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          {rotuloOrigemLiberacao(lib)} · Status: {rotuloStatusLiberacao(lib.status)} · Previsto: {lib.quantidade} · Retirado: {lib.quantidadeRetirada} · Diferença: <span className={acima ? "font-semibold text-red-700" : "font-semibold text-brand-900"}>{saldo > 0 ? `+${saldo}` : saldo}{acima ? " · Acima da previsão" : ""}</span>
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          Autorizada por: {lib.autorizador?.nome ?? "—"} {lib.registrador?.nome && lib.registrador.nome !== lib.autorizador?.nome ? `· Registrada por: ${lib.registrador.nome}` : ""}
+                        </p>
+                        {lib.retiradas && lib.retiradas.length > 0 && (
+                          <div className="mt-3 rounded-lg border border-zinc-100 bg-zinc-50/50 p-3">
+                            <p className="text-xs font-medium text-zinc-700">Retiradas desta liberação</p>
+                            <ul className="mt-1 flex flex-col gap-1">
+                              {lib.retiradas.map((rr, idx) => (
+                                <li key={idx} className="text-xs text-zinc-600">
+                                  {formatarDataHora(rr.dataHora)} · {rr.quantidade} vale(s) {rr.recepcionistaNome ? `· ${rr.recepcionistaNome}` : ""}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="mt-2">
+                        <p className="text-sm font-medium text-brand-900">{ev.retirada.quantidade} vales retirados</p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          Liberação: {rotuloTipoLiberacao(lib.tipo)} · {descreverPeriodo(lib)} · {lib.quantidade} previstos
+                          {ev.retirada.recepcionistaNome ? ` · Registrado por: ${ev.retirada.recepcionistaNome}` : ""}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="mt-2">
-                    <p className="text-sm font-medium text-brand-900">{ev.retirada.quantidade} vales retirados</p>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      Liberação: {rotuloTipoLiberacao(lib.tipo)} · {descreverPeriodo(lib)} · {lib.quantidade} previstos
-                    </p>
-                  </div>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      ))}
     </div>
   );
 }

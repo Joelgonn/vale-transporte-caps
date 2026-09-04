@@ -91,11 +91,12 @@ export type OrigemHistorico = {
   quantidade: number;
 };
 
-// Item do HISTÓRICO POR PACIENTE (Sprint 38, ampliado Sprint 46).
+// Item do HISTÓRICO POR PACIENTE (Sprint 38, ampliado Sprint 46, refinado Sprint 56).
 // Representa UMA liberação da cadeia do paciente — original (renovacao_de_id nulo)
 // ou renovação (aponta para a anterior). Nenhum campo é inventado: autorizado =
 // quantidade; retirado = Σ retiradas; saldo é derivado no servidor. `ultimaRetirada`
 // é a maior data_hora entre as retiradas da liberação.
+// `createdAt` é o timestamp real de criação do registro (confiável), distinto de dataInicio (vigência).
 // Sprint 46 — inclui lista de retiradas para timeline e paciente origem para header.
 export type ItemHistorico = {
   id: string;
@@ -114,7 +115,9 @@ export type ItemHistorico = {
   ultimaRetirada: string | null;
   saldo: number;
   // Sprint 46 — timeline detalhada (opcional para compatibilidade)
-  retiradas?: { dataHora: string; quantidade: number }[];
+  retiradas?: { dataHora: string; quantidade: number; recepcionistaNome?: string | null }[];
+  // Sprint 56 — timestamp real de criação (confiável para ordenação)
+  createdAt?: string | null;
 };
 
 export type TotaisConsolidado = {
@@ -212,7 +215,7 @@ export type ResultadoListaRelatorio =
     }
   | {
       tipo: "historico";
-      paciente: { id: string; gestor_sus: string; nome: string; origem?: string | null } | null;
+      paciente: { id: string; gestor_sus: string; nome: string; origem?: string | null; created_at?: string | null } | null;
       linhas: ItemHistorico[];
       total: number;
       pagina: number;
