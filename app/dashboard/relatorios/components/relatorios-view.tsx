@@ -85,6 +85,46 @@ function construirUrl(filtros: FiltrosRelatorio, ajustes: Partial<FiltrosRelator
 const INPUT =
   "h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none";
 
+// Barra de navegação unificada dos relatórios — desktop: linha única; mobile: scroll horizontal
+function NavAbas({ filtros }: { filtros: FiltrosRelatorio }) {
+  return (
+    <div className="-mx-4 px-4 lg:mx-0 lg:px-0 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
+      <nav
+        aria-label="Tipo de relatório"
+        className="flex w-max min-w-full lg:w-full lg:min-w-0 items-center gap-1 rounded-xl border border-zinc-200/70 bg-zinc-100/60 p-1.5"
+      >
+        {TIPOS_RELATORIO.map((tipo) => {
+          const ativo = filtros.tipo === tipo;
+          return (
+            <Link
+              key={tipo}
+              title={TOOLTIP_TIPO_RELATORIO[tipo] ?? ""}
+              href={construirUrl(filtros, {
+                tipo,
+                pagina: 1,
+                paciente: null,
+                status: null,
+                origem: null,
+                situacaoConsolidado: null,
+                situacaoLiberacoes: null,
+                situacaoRetiradas: null,
+              })}
+              aria-current={ativo ? "page" : undefined}
+              className={
+                ativo
+                  ? "inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-lg bg-brand-900 px-4 text-sm font-semibold text-white shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                  : "inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-lg px-4 text-sm font-medium text-zinc-600 hover:bg-white hover:text-zinc-900 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+              }
+            >
+              {ROTULO_TIPO_RELATORIO[tipo]}
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
+  );
+}
+
 export default function RelatoriosView(props: RelatoriosViewProps) {
   const { filtros, resultado, resumo, erroInicial, candidatos: _candidatos, pacienteSelecionado } = props;
   void _candidatos;
@@ -117,32 +157,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
           {erroInicial && <FeedbackErro>{erroInicial}</FeedbackErro>}
 
           {/* Seletor de tipo (compartilhado com as demais abas). */}
-          <nav aria-label="Tipo de relatório" className="flex flex-wrap gap-2">
-            {TIPOS_RELATORIO.map((tipo) => {
-              const ativo = filtros.tipo === tipo;
-              return (
-                <Link
-                  key={tipo}
-                  title={TOOLTIP_TIPO_RELATORIO[tipo] ?? ""}
-                  href={construirUrl(filtros, {
-                    tipo,
-                    pagina: 1,
-                    paciente: null,
-                    status: null,
-                    origem: null,
-                  })}
-                  aria-current={ativo ? "page" : undefined}
-                  className={
-                    ativo
-                      ? "inline-flex h-10 items-center rounded-md bg-brand-900 px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-                      : "inline-flex h-10 items-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:border-brand-300 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-reduce:transition-none"
-                  }
-                >
-                  {ROTULO_TIPO_RELATORIO[tipo]}
-                </Link>
-              );
-            })}
-          </nav>
+          <NavAbas filtros={filtros} />
 
           {pacienteSelecionado ? (
             <div className={`${CARTAO} flex items-center justify-between gap-3 p-4`}>
@@ -322,35 +337,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
             />
             {erroInicial && <FeedbackErro>{erroInicial}</FeedbackErro>}
 
-            <nav aria-label="Tipo de relatório" className="flex flex-wrap gap-2">
-              {TIPOS_RELATORIO.map((tipo) => {
-                const ativo = filtros.tipo === tipo;
-                return (
-                  <Link
-                    key={tipo}
-                    title={TOOLTIP_TIPO_RELATORIO[tipo] ?? ""}
-                    href={construirUrl(filtros, {
-                      tipo,
-                      pagina: 1,
-                      paciente: null,
-                      status: null,
-                      origem: null,
-                      situacaoConsolidado: null,
-                      situacaoLiberacoes: null,
-                      situacaoRetiradas: null,
-                    })}
-                    aria-current={ativo ? "page" : undefined}
-                    className={
-                      ativo
-                        ? "inline-flex h-10 items-center rounded-md bg-brand-900 px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-                        : "inline-flex h-10 items-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:border-brand-300 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-reduce:transition-none"
-                    }
-                  >
-                    {ROTULO_TIPO_RELATORIO[tipo]}
-                  </Link>
-                );
-              })}
-            </nav>
+            <NavAbas filtros={filtros} />
 
             <div className={`${CARTAO} p-4`}>
               <PatientSearch
@@ -415,6 +402,8 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
               titulo="Relatórios"
               descricao="Consultas de liberações, retiradas e consolidado — exclusivas do Gestor."
             />
+
+            <NavAbas filtros={filtros} />
 
             {/* Cabeçalho do paciente */}
             <div className="flex items-center gap-4">
@@ -583,6 +572,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
               titulo="Relatórios"
               descricao="Consultas de liberações, retiradas e consolidado — exclusivas do Gestor."
             />
+            <NavAbas filtros={filtros} />
             <div className="flex items-center gap-4">
               <div>
                 <p className="font-medium text-brand-900">{resultado.paciente!.nome}</p>
@@ -601,16 +591,17 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
        );
      }
 
-     // Fallback caso resultado exista mas linhas tenham sido removidas inesperadamente.
-     if (resultado && resultado.linhas.length === 0) {
-       return (
-         <div className="flex flex-1 flex-col py-6">
-           <div className={`${CONTAINER} flex flex-col gap-6`}>
-             <PageHeader
-               titulo="Relatórios"
-               descricao="Consultas de liberações, retiradas e consolidado — exclusivas do Gestor."
-             />
-             <EstadoVazio mensagem="Não há movimentações históricas registradas para este paciente." />
+      // Fallback caso resultado exista mas linhas tenham sido removidas inesperadamente.
+      if (resultado && resultado.linhas.length === 0) {
+        return (
+          <div className="flex flex-1 flex-col py-6">
+            <div className={`${CONTAINER} flex flex-col gap-6`}>
+              <PageHeader
+                titulo="Relatórios"
+                descricao="Consultas de liberações, retiradas e consolidado — exclusivas do Gestor."
+              />
+              <NavAbas filtros={filtros} />
+              <EstadoVazio mensagem="Não há movimentações históricas registradas para este paciente." />
           </div>
         </div>
       );
@@ -656,34 +647,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
           {erroInicial && <FeedbackErro>{erroInicial}</FeedbackErro>}
 
           {/* Seletor de tipo */}
-          <nav aria-label="Tipo de relatório" className="flex flex-wrap gap-2">
-            {TIPOS_RELATORIO.map((tipo) => {
-              const ativo = filtros.tipo === tipo;
-              return (
-                <Link
-                  key={tipo}
-                  title={TOOLTIP_TIPO_RELATORIO[tipo] ?? ""}
-                  href={construirUrl(filtros, {
-                    tipo,
-                    pagina: 1,
-                    paciente: null,
-                    status: null,
-                    origem: null,
-                    situacaoConsolidado: null,
-                    situacaoLiberacoes: null,
-                  })}
-                  aria-current={ativo ? "page" : undefined}
-                  className={
-                    ativo
-                      ? "inline-flex h-10 items-center rounded-md bg-brand-900 px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-                      : "inline-flex h-10 items-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:border-brand-300 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-reduce:transition-none"
-                  }
-                >
-                  {ROTULO_TIPO_RELATORIO[tipo]}
-                </Link>
-              );
-            })}
-          </nav>
+          <NavAbas filtros={filtros} />
 
           {pacienteSelecionado ? (
             <div className={`${CARTAO} flex items-center justify-between gap-3 p-4`}>
@@ -1076,34 +1040,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
 
           {erroInicial && <FeedbackErro>{erroInicial}</FeedbackErro>}
 
-          <nav aria-label="Tipo de relatório" className="flex flex-wrap gap-2">
-            {TIPOS_RELATORIO.map((tipo) => {
-              const ativo = filtros.tipo === tipo;
-              return (
-                <Link
-                  key={tipo}
-                  title={TOOLTIP_TIPO_RELATORIO[tipo] ?? ""}
-                  href={construirUrl(filtros, {
-                    tipo,
-                    pagina: 1,
-                    paciente: null,
-                    status: null,
-                    origem: null,
-                    situacaoConsolidado: null,
-                    situacaoLiberacoes: null,
-                  })}
-                  aria-current={ativo ? "page" : undefined}
-                  className={
-                    ativo
-                      ? "inline-flex h-10 items-center rounded-md bg-brand-900 px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-                      : "inline-flex h-10 items-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:border-brand-300 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-reduce:transition-none"
-                  }
-                >
-                  {ROTULO_TIPO_RELATORIO[tipo]}
-                </Link>
-              );
-            })}
-          </nav>
+          <NavAbas filtros={filtros} />
 
           {pacienteSelecionado ? (
             <div className={`${CARTAO} flex items-center justify-between gap-3 p-4`}>
@@ -1363,22 +1300,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
         <div className={`${CONTAINER} flex flex-col gap-6`}>
           <PageHeader titulo="Relatórios" descricao="Consultas de liberações, retiradas e consolidado — exclusivas do Gestor." />
           {erroInicial && <FeedbackErro>{erroInicial}</FeedbackErro>}
-          <nav aria-label="Tipo de relatório" className="flex flex-wrap gap-2">
-            {TIPOS_RELATORIO.map((tipo) => {
-              const ativo = filtros.tipo === tipo;
-              return (
-                <Link
-                  key={tipo}
-                  title={TOOLTIP_TIPO_RELATORIO[tipo] ?? ""}
-                  href={construirUrl(filtros, { tipo, pagina: 1, paciente: null, status: null, origem: null, situacaoConsolidado: null, situacaoLiberacoes: null, situacaoRetiradas: null })}
-                  aria-current={ativo ? "page" : undefined}
-                  className={ativo ? "inline-flex h-10 items-center rounded-md bg-brand-900 px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600" : "inline-flex h-10 items-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:border-brand-300 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-reduce:transition-none"}
-                >
-                  {ROTULO_TIPO_RELATORIO[tipo]}
-                </Link>
-              );
-            })}
-          </nav>
+          <NavAbas filtros={filtros} />
           {pacienteSelecionado ? (
             <div className={`${CARTAO} flex items-center justify-between gap-3 p-4`}>
               <div className="min-w-0">
@@ -1478,33 +1400,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
         {erroInicial && <FeedbackErro>{erroInicial}</FeedbackErro>}
 
         {/* Seletor de tipo — troca o relatório preservando filtros. */}
-        <nav aria-label="Tipo de relatório" className="flex flex-wrap gap-2">
-          {TIPOS_RELATORIO.map((tipo) => {
-            const ativo = filtros.tipo === tipo;
-            return (
-              <Link
-                  key={tipo}
-                  title={TOOLTIP_TIPO_RELATORIO[tipo] ?? ""}
-                  href={construirUrl(filtros, {
-                  tipo,
-                  pagina: 1,
-                  paciente: null,
-                  status: null,
-                  origem: null,
-                  situacaoConsolidado: null,
-                })}
-                aria-current={ativo ? "page" : undefined}
-                className={
-                  ativo
-                    ? "inline-flex h-10 items-center rounded-md bg-brand-900 px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-                    : "inline-flex h-10 items-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 transition-colors duration-150 hover:border-brand-300 hover:text-brand-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 motion-reduce:transition-none"
-                }
-              >
-                {ROTULO_TIPO_RELATORIO[tipo]}
-              </Link>
-            );
-          })}
-        </nav>
+        <NavAbas filtros={filtros} />
 
         {pacienteSelecionado ? (
           <div className={`${CARTAO} flex items-center justify-between gap-3 p-4`}>
