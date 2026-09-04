@@ -204,7 +204,13 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
                 value={searchQuery}
                 onValueChange={handleQueryChange}
                 onSelect={handleSelect}
-                onCreatePatient={(origem) => router.push(`/dashboard/pacientes?novo=${origem}`)}
+                onCreatePatient={(origem) => {
+                  if (origem === "regular") {
+                    router.push("/dashboard/pacientes?novo=regular");
+                  } else {
+                    router.push("/dashboard/atendimento");
+                  }
+                }}
               />
             </div>
             <div className="flex shrink-0 items-center gap-3">
