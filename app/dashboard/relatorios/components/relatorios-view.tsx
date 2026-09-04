@@ -23,6 +23,7 @@ import {
   CARTAO,
   CONTAINER,
 } from "@/components/ui/visual-tokens";
+import { StatusCard, classificarDiferenca } from "@/components/ui/status-accent";
 import { STATUS_LIBERACAO } from "@/lib/domain/enums";
 import { rotuloOrigemLiberacao } from "@/lib/domain/relatorios/rotulos";
 import { PageHeader } from "@/components/ui/page-header";
@@ -284,7 +285,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                   { rotulo: "Vales retirados", valor: resumo.totalValesRetirados },
                   { rotulo: "Diferença", valor: resumo.saldoTotal },
                 ].map((card) => (
-                  <div key={card.rotulo} className={`${CARTAO} p-4`}>
+                  <StatusCard key={card.rotulo} status="neutro" className="p-4">
                     <dt className="text-xs uppercase tracking-wide text-zinc-500">
                       {card.rotulo}
                     </dt>
@@ -297,7 +298,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                     >
                       {card.valor}
                     </dd>
-                  </div>
+                  </StatusCard>
                 ))}
               </dl>
 
@@ -791,24 +792,24 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
             <>
               {/* NÍVEL 1 — RESUMO OPERACIONAL */}
               <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <div className={`${CARTAO} p-4`}>
+                <StatusCard status="neutro" className="p-4">
                   <dt className="text-xs uppercase tracking-wide text-zinc-500">Previsto</dt>
                   <dd className="mt-1 text-2xl font-semibold text-brand-900">{totais.previsto}</dd>
-                </div>
-                <div className={`${CARTAO} p-4`}>
+                </StatusCard>
+                <StatusCard status="neutro" className="p-4">
                   <dt className="text-xs uppercase tracking-wide text-zinc-500">Retirado</dt>
                   <dd className="mt-1 text-2xl font-semibold text-brand-900">{totais.retirado}</dd>
-                </div>
-                <div className={`${CARTAO} p-4`}>
+                </StatusCard>
+                <StatusCard status={classificarDiferenca(totais.diferenca)} className="p-4">
                   <dt className="text-xs uppercase tracking-wide text-zinc-500">Diferença</dt>
                   <dd className={`mt-1 text-2xl font-semibold ${totais.diferenca < 0 ? "text-red-700" : "text-brand-900"}`}>
                     {totais.diferenca > 0 ? `+${totais.diferenca}` : `${totais.diferenca}`}
                   </dd>
-                </div>
-                <div className={`${CARTAO} p-4`}>
+                </StatusCard>
+                <StatusCard status="neutro" className="p-4">
                   <dt className="text-xs uppercase tracking-wide text-zinc-500">Liberações</dt>
                   <dd className="mt-1 text-2xl font-semibold text-brand-900">{totais.liberacoes}</dd>
-                </div>
+                </StatusCard>
               </dl>
 
               {/* Contadores secundários quando aplicável */}
@@ -818,28 +819,28 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                 contadores.expiradaSemUso > 0) && (
                 <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                   {contadores.estouros > 0 && (
-                    <div className={`${CARTAO} border-l-4 border-l-red-500 p-4`}>
+                    <StatusCard status="critico" className="p-4">
                       <dt className="text-xs uppercase tracking-wide text-zinc-500">Estouros</dt>
                       <dd className="mt-1 text-xl font-semibold text-red-700">{contadores.estouros}</dd>
-                    </div>
+                    </StatusCard>
                   )}
                   {contadores.semRetirada > 0 && (
-                    <div className={`${CARTAO} border-l-4 border-l-amber-400 p-4`}>
+                    <StatusCard status="atencao" className="p-4">
                       <dt className="text-xs uppercase tracking-wide text-zinc-500">Sem uso</dt>
                       <dd className="mt-1 text-xl font-semibold text-amber-700">{contadores.semRetirada}</dd>
-                    </div>
+                    </StatusCard>
                   )}
                   {contadores.proximoVencimento > 0 && (
-                    <div className={`${CARTAO} border-l-4 border-l-orange-400 p-4`}>
+                    <StatusCard status="atencao" className="p-4">
                       <dt className="text-xs uppercase tracking-wide text-zinc-500">Próximas do vencimento</dt>
                       <dd className="mt-1 text-xl font-semibold text-orange-700">{contadores.proximoVencimento}</dd>
-                    </div>
+                    </StatusCard>
                   )}
                   {contadores.expiradaSemUso > 0 && (
-                    <div className={`${CARTAO} border-l-4 border-l-zinc-400 p-4`}>
+                    <StatusCard status="critico" className="p-4">
                       <dt className="text-xs uppercase tracking-wide text-zinc-500">Expiradas sem uso</dt>
                       <dd className="mt-1 text-xl font-semibold text-zinc-700">{contadores.expiradaSemUso}</dd>
-                    </div>
+                    </StatusCard>
                   )}
                 </dl>
               )}
@@ -1163,30 +1164,30 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
           {!erroInicial && liberacoes && totalLib > 0 && (
             <>
               <dl className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-                <div className={`${CARTAO} p-4`}>
+                <StatusCard status="neutro" className="p-4">
                   <dt className="text-xs uppercase tracking-wide text-zinc-500">Liberações</dt>
                   <dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisLib.total}</dd>
-                </div>
-                <div className={`${CARTAO} p-4`}>
+                </StatusCard>
+                <StatusCard status="neutro" className="p-4">
                   <dt className="text-xs uppercase tracking-wide text-zinc-500">Ativas</dt>
                   <dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisLib.ativas}</dd>
-                </div>
-                <div className={`${CARTAO} p-4`}>
+                </StatusCard>
+                <StatusCard status="atencao" className="p-4">
                   <dt className="text-xs uppercase tracking-wide text-zinc-500">Próximas do vencimento</dt>
                   <dd className="mt-1 text-2xl font-semibold text-orange-700">{totaisLib.proximasVencimento}</dd>
-                </div>
-                <div className={`${CARTAO} p-4`}>
+                </StatusCard>
+                <StatusCard status="neutro" className="p-4">
                   <dt className="text-xs uppercase tracking-wide text-zinc-500">Contínuas</dt>
                   <dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisLib.continuas}</dd>
-                </div>
-                <div className={`${CARTAO} p-4`}>
+                </StatusCard>
+                <StatusCard status="neutro" className="p-4">
                   <dt className="text-xs uppercase tracking-wide text-zinc-500">Avulsas</dt>
                   <dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisLib.avulsas}</dd>
-                </div>
-                <div className={`${CARTAO} p-4`}>
+                </StatusCard>
+                <StatusCard status="atencao" className="p-4">
                   <dt className="text-xs uppercase tracking-wide text-zinc-500">Sem retirada</dt>
                   <dd className="mt-1 text-2xl font-semibold text-amber-700">{totaisLib.semRetirada}</dd>
-                </div>
+                </StatusCard>
               </dl>
 
               <div className={`${CARTAO} p-4`}>
@@ -1348,12 +1349,12 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
           {!erroInicial && retiradas && totalRet > 0 && (
             <>
               <dl className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-                <div className={`${CARTAO} p-4`}><dt className="text-xs uppercase tracking-wide text-zinc-500">Retiradas</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.registros}</dd></div>
-                <div className={`${CARTAO} p-4`}><dt className="text-xs uppercase tracking-wide text-zinc-500">Vales retirados</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.valesRetirados}</dd></div>
-                <div className={`${CARTAO} p-4`}><dt className="text-xs uppercase tracking-wide text-zinc-500">Pacientes atendidos</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.pacientesDistintos}</dd></div>
-                <div className={`${CARTAO} p-4`}><dt className="text-xs uppercase tracking-wide text-zinc-500">Retiradas avulsas</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.avulsas}</dd></div>
-                <div className={`${CARTAO} p-4`}><dt className="text-xs uppercase tracking-wide text-zinc-500">Retiradas contínuas</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.continuas}</dd></div>
-                <div className={`${CARTAO} p-4`}><dt className="text-xs uppercase tracking-wide text-zinc-500">Acima da previsão</dt><dd className="mt-1 text-2xl font-semibold text-red-700">{contadoresRet.acimaPrevisao}</dd></div>
+                <StatusCard status="neutro" className="p-4"><dt className="text-xs uppercase tracking-wide text-zinc-500">Retiradas</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.registros}</dd></StatusCard>
+                <StatusCard status="neutro" className="p-4"><dt className="text-xs uppercase tracking-wide text-zinc-500">Vales retirados</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.valesRetirados}</dd></StatusCard>
+                <StatusCard status="neutro" className="p-4"><dt className="text-xs uppercase tracking-wide text-zinc-500">Pacientes atendidos</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.pacientesDistintos}</dd></StatusCard>
+                <StatusCard status="neutro" className="p-4"><dt className="text-xs uppercase tracking-wide text-zinc-500">Retiradas avulsas</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.avulsas}</dd></StatusCard>
+                <StatusCard status="neutro" className="p-4"><dt className="text-xs uppercase tracking-wide text-zinc-500">Retiradas contínuas</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.continuas}</dd></StatusCard>
+                <StatusCard status="critico" className="p-4"><dt className="text-xs uppercase tracking-wide text-zinc-500">Acima da previsão</dt><dd className="mt-1 text-2xl font-semibold text-red-700">{contadoresRet.acimaPrevisao}</dd></StatusCard>
               </dl>
               {(contadoresRet.acimaPrevisao > 0 || contadoresRet.foraVigencia > 0) && (
                 <div className={`${CARTAO} p-4`}>
@@ -1696,7 +1697,6 @@ function TabelaLiberacoes({
           <tbody className="divide-y divide-zinc-100">
             {linhas.map((linha) => {
               const semRetirada = linha.totalRetirado === 0;
-              const expiradaSemUso = linha.status === STATUS_LIBERACAO.EXPIRADA && semRetirada;
               const proximo = isProximoVencimentoLiberacoes(linha);
               const venc = textoVencimentoLiberacoes(linha.dataFim);
               const ehRenovacao = !!linha.renovacaoDeId;
@@ -1704,17 +1704,7 @@ function TabelaLiberacoes({
               return (
                 <tr
                   key={linha.id}
-                  className={`transition-colors duration-150 motion-reduce:transition-none ${
-                    expiradaSemUso
-                      ? "bg-zinc-50 hover:bg-zinc-100"
-                      : semRetirada
-                        ? "bg-amber-50/30 hover:bg-amber-50/50"
-                        : proximo
-                          ? "bg-orange-50/30 hover:bg-orange-50/50"
-                          : ehMultipla
-                            ? "bg-sky-50/40 hover:bg-sky-50/60"
-                            : "hover:bg-brand-50/40"
-                  }`}
+                  className="transition-colors duration-150 hover:bg-brand-50/40 motion-reduce:transition-none"
                 >
                   <td className="px-4 py-3">
                     <p className="font-medium text-brand-900">{linha.paciente?.nome ?? "—"}</p>
@@ -1853,7 +1843,7 @@ function TabelaRetiradas({
               return (
                 <tr
                   key={linha.id}
-                  className={`transition-colors duration-150 motion-reduce:transition-none ${acima ? "bg-red-50/40 hover:bg-red-50/60" : foraVig ? "bg-orange-50/30 hover:bg-orange-50/50" : "hover:bg-brand-50/40"}`}
+                  className="transition-colors duration-150 hover:bg-brand-50/40 motion-reduce:transition-none"
                 >
                   <td className="px-4 py-3">
                     <p className="font-medium text-brand-900">{linha.paciente?.nome ?? "—"}</p>
@@ -2073,15 +2063,7 @@ function TabelaConsolidado({
               return (
                 <tr
                   key={linha.liberacaoId}
-                  className={`transition-colors duration-150 motion-reduce:transition-none ${
-                    ehEstouro
-                      ? "bg-red-50/40 hover:bg-red-50/60"
-                      : ehSemRetirada
-                        ? "bg-amber-50/30 hover:bg-amber-50/50"
-                        : proximo
-                          ? "bg-orange-50/30 hover:bg-orange-50/50"
-                          : "hover:bg-brand-50/40"
-                  }`}
+                  className="transition-colors duration-150 hover:bg-brand-50/40 motion-reduce:transition-none"
                 >
                   <td className="px-4 py-3">
                     <p className="font-medium text-brand-900">{linha.paciente?.nome ?? "—"}</p>
