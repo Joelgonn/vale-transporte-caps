@@ -208,7 +208,9 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
     const todasBrutas: unknown[] = [];
     while (true) {
       // Para filtro por tipo, usamos !inner para que PostgREST filtre linhas de topo
-      const selectTipo = tipoLiberacao ? "liberacoes!inner(id, tipo, quantidade, data_inicio, data_fim, status)" : "liberacoes(id, tipo, quantidade, data_inicio, data_fim, status)";
+      const selectTipo = tipoLiberacao
+        ? "liberacoes!inner(id, tipo, quantidade, vales_por_dia, data_inicio, data_fim, status)"
+        : "liberacoes(id, tipo, quantidade, vales_por_dia, data_inicio, data_fim, status)";
       let query = this.client
         .from("retiradas")
         .select(`*, pacientes(${COLUNAS_PACIENTE_LIBERACOES}), ${selectTipo}, recepcionista:usuarios!retiradas_recepcionista_id_fkey(id, nome)`);

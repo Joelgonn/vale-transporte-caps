@@ -132,10 +132,10 @@ describe("RetiradaForm — fluxo em etapas", () => {
     renderizar();
 
     await selecionarPaciente();
-    mocks.listarLiberacoesAction.mockResolvedValue({ ok: true, data: [liberacao()] });
-    mocks.listarRetiradasAction.mockResolvedValue({ ok: true, data: [retirada("r1", 2)] });
+    mocks.listarLiberacoesAction.mockResolvedValue({ ok: true, data: [] });
+    mocks.listarRetiradasAction.mockResolvedValue({ ok: true, data: [] });
     avancar();
-    await screen.findByRole("radio", { name: /Contínua/ });
+    await screen.findByText(/Nenhuma liberação/);
     avancar();
 
     expect(await screen.findByText("Selecione a liberação.")).toBeInTheDocument();
@@ -184,7 +184,7 @@ describe("RetiradaForm — fluxo em etapas", () => {
       expect(mocks.registrarRetiradaAction).toHaveBeenCalledWith({
         liberacaoId: "l1",
         pacienteId: "p1",
-        quantidade: 1,
+        quantidade: 2,
       });
     });
     expect(

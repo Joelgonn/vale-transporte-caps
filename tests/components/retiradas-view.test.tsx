@@ -207,7 +207,7 @@ describe("RetiradasView — interações", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Continuar" }));
     fireEvent.click(await within(dialog).findByRole("radio", { name: /Contínua/ }));
 
-    // Passo 3 — quantidade já pré-selecionada em 1; segue para revisão.
+    // Passo 3 — quantidade já pré-selecionada em 2 (diária ou fallback); segue para revisão.
     fireEvent.click(within(dialog).getByRole("button", { name: "Continuar" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Continuar" }));
 
@@ -220,7 +220,7 @@ describe("RetiradasView — interações", () => {
     expect(mocks.registrarRetiradaAction).toHaveBeenCalledWith({
       liberacaoId: "l1",
       pacienteId: "p1",
-      quantidade: 1,
+      quantidade: 2,
     });
     expect(screen.getByRole("status")).toHaveTextContent(
       "Retirada registrada com sucesso."

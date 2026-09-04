@@ -190,7 +190,8 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
 
   // Carrega as liberações do paciente (server-side, busca por Gestor SUS) e as
   // retiradas (para somar o que já foi retirado). O acumulado é exibido
-  // como orientação  a autoridade final é o trigger no banco.
+  // como orientação — a autoridade final é o trigger no banco.
+  // Sprint 66 — prioriza contínua ativa e pré-preenche retirada com vales_por_dia
   async function carregarLiberacoes(p: PacienteResumo) {
     setLiberacoesCarregando(true);
     setErroLiberacoes(null);
@@ -227,11 +228,36 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
     setLiberacoes(resultadoLib.data);
     setDisponiveis(disp);
     setConsultadoPacienteId(p.id);
+
+    // Sprint 66 — fluxo principal contínua: pré-seleciona a contínua mais recente e preenche quantidade diária
+    const continuaAtiva = (resultadoLib.data as unknown as Array<{ tipo: string; status: string; data_inicio: string; vales_por_dia?: number | null }>)
+      .filter((l) => l.tipo === "continua" && l.status === "ativa")
+      .sort((a, b) => (a.data_inicio < b.data_inicio ? 1 : -1))[0] as unknown as LiberacaoComPaciente | undefined;
+    if (continuaAtiva) {
+      setLiberacaoSelecionada(continuaAtiva as LiberacaoComPaciente);
+      const diaria = (continuaAtiva as unknown as { vales_por_dia?: number | null }).vales_por_dia;
+      setQuantidade(diaria && diaria >= 1 && diaria <= 10 ? diaria : 2);
+      limparErro("liberacao");
+    } else {
+      // Sem contínua: limpa seleção e prepara avulsa com 2
+      setLiberacaoSelecionada(null);
+      setQuantidade(2);
+    }
   }
 
   function selecionarLiberacao(lib: LiberacaoComPaciente, disp: number) {
     setLiberacaoSelecionada(lib);
-    setQuantidade(disp > 0 ? 1 : null);
+    // Sprint 66 — quantidade inicial é diária da contínua ou 2 para avulsa
+    const diaria = (lib as unknown as { vales_por_dia?: number | null }).vales_por_dia;
+    if (lib.tipo === "continua") {
+      setQuantidade(diaria && diaria >= 1 && diaria <= 10 ? diaria : 2);
+    } else {
+      setQuantidade(2);
+    }
+    // Fallback: se disp for 0 e diária não existir, mantém 2 (não 1) para avulsa
+    if (diaria == null && lib.tipo === "avulsa" && disp <= 0) {
+      setQuantidade(2);
+    }
     limparErro("liberacao");
   }
 
@@ -538,9 +564,10 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
           )}
         </div>
 
-        {/* Passo 2  Liberação */}
+        {/* Passo 2 — Liberação (fluxo principal contínua) */}
         <div className={passo === 2 ? "flex flex-col gap-2" : "hidden"}>
           <span className={ROTULO}>Liberação para retirada</span>
+          <p className="text-xs text-zinc-500">Fluxo principal: liberação contínua ativa com quantidade diária pré-preenchida. Avulsa como alternativa.</p>
 
           {liberacoesCarregando ? (
             <p className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-500">
@@ -556,43 +583,57 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
             <fieldset>
               <legend className="sr-only">Liberação para retirada</legend>
               <ul className="flex flex-col gap-2">
-                {liberacoes.map((lib) => {
-                  const previsto = lib.quantidade;
-                  const retirado = lib.quantidade - (disponiveis[lib.id] ?? 0);
-                  const selecionada = liberacaoSelecionada?.id === lib.id;
-                  return (
-                    <li key={lib.id}>
-                      <label
-                        className={`flex cursor-pointer flex-col gap-1 rounded-md border p-3 text-sm transition-colors ${
-                          selecionada
-                            ? "border-brand-600 bg-brand-600 text-white"
-                            : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="liberacao"
-                          value={lib.id}
-                          checked={selecionada}
-                          disabled={bloq}
-                          onChange={() => selecionarLiberacao(lib, previsto - retirado)}
-                          className="sr-only"
-                        />
-                        <span className="font-medium">
-                          {ROTULO_TIPO_LIBERACAO[lib.tipo]} · {periodoTexto(lib)}
-                        </span>
-                        <span
-                          className={
-                            selecionada ? "text-zinc-300" : "text-xs text-zinc-500"
-                          }
+                {liberacoes
+                  .slice()
+                  .sort((a, b) => {
+                    // Contínua ativa primeiro
+                    const aCont = a.tipo === "continua" && a.status === "ativa" ? 0 : 1;
+                    const bCont = b.tipo === "continua" && b.status === "ativa" ? 0 : 1;
+                    if (aCont !== bCont) return aCont - bCont;
+                    return a.data_inicio < b.data_inicio ? 1 : -1;
+                  })
+                  .map((lib) => {
+                    const previsto = lib.quantidade;
+                    const retirado = lib.quantidade - (disponiveis[lib.id] ?? 0);
+                    const diaria = (lib as unknown as { vales_por_dia?: number | null }).vales_por_dia;
+                    const selecionada = liberacaoSelecionada?.id === lib.id;
+                    const isContinua = lib.tipo === "continua";
+                    return (
+                      <li key={lib.id}>
+                        <label
+                          className={`flex cursor-pointer flex-col gap-1 rounded-md border p-3 text-sm transition-colors ${
+                            selecionada
+                              ? "border-brand-600 bg-brand-600 text-white"
+                              : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                          }`}
                         >
-                          Previsto: {previsto} · Retirado: {retirado}
-                        </span>
-                      </label>
-                    </li>
-                  );
-                })}
+                          <input
+                            type="radio"
+                            name="liberacao"
+                            value={lib.id}
+                            checked={selecionada}
+                            disabled={bloq}
+                            onChange={() => selecionarLiberacao(lib, previsto - retirado)}
+                            className="sr-only"
+                          />
+                          <span className="font-medium">
+                            {ROTULO_TIPO_LIBERACAO[lib.tipo]} · {periodoTexto(lib)}{" "}
+                            {isContinua && diaria ? <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${selecionada ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-700"}`}>{diaria}/dia</span> : null}
+                          </span>
+                          <span className={selecionada ? "text-zinc-300" : "text-xs text-zinc-500"}>
+                            Previsto: {previsto} · Retirado: {retirado}
+                            {isContinua && diaria ? ` · Diária: ${diaria}` : ""}
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
               </ul>
+              {pacienteOrigem !== "esporadico" && liberacoes.some((l) => l.tipo === "continua" && l.status === "ativa") && (
+                <p className="mt-2 text-xs text-zinc-500">
+                  Precisa registrar uma retirada avulsa? Selecione uma liberação avulsa acima ou crie via Atendimento.
+                </p>
+              )}
             </fieldset>
           )}
           {erroDe("liberacao") && (
@@ -637,6 +678,7 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
                 type="number"
                 min={1}
                 step={1}
+                autoFocus
                 value={quantidade != null ? String(quantidade) : ""}
                 disabled={bloq}
                 onChange={(e) => {
@@ -649,8 +691,10 @@ export default function RetiradaForm({ onClose, onSalvo }: RetiradaFormProps) {
                 className={INPUT}
               />
               <p id="ajuda-quantidade" className="text-xs text-zinc-500">
-                A quantidade da liberação é apenas previsão  a retirada é
-                limitada pela vigência da autorização.
+                {liberacaoSelecionada?.tipo === "continua"
+                  ? `Diária da liberação: ${(liberacaoSelecionada as unknown as { vales_por_dia?: number | null }).vales_por_dia ?? 2} — editável antes de registrar.`
+                  : "Padrão avulsa: 2 vales — editável."}{" "}
+                Previsão não limita a retirada.
               </p>
               {erroDe("quantidade") && (
                 <p id="erro-quantidade" className="text-sm text-red-600">
