@@ -134,6 +134,7 @@ describe("LiberacaoForm — criar (fluxo em etapas)", () => {
         tipo: TIPOS_LIBERACAO.CONTINUA,
         quantidade: 1,
         periodoMeses: 3,
+        vales_por_dia: null,
       });
     });
     expect(
@@ -296,15 +297,17 @@ describe("LiberacaoForm — calculadora de previsão (Sprint 42.1)", () => {
         tipo: TIPOS_LIBERACAO.CONTINUA,
         quantidade: 50,
         periodoMeses: 3,
+        vales_por_dia: 4,
       });
     });
 
-    // pureza do payload: nenhum parâmetro auxiliar é persistido
+    // pureza do payload: diasPorSemana não é persistido; vales_por_dia sim (para retirada)
     const chamada = mocks.criarLiberacaoAction.mock.calls.at(-1)![0] as Record<string, unknown>;
     expect(chamada).not.toHaveProperty("valesPorDia");
     expect(chamada).not.toHaveProperty("diasPorSemana");
+    expect(chamada).toHaveProperty("vales_por_dia", 4);
     expect(Object.keys(chamada).sort()).toEqual(
-      ["pacienteId", "periodoMeses", "quantidade", "tipo"].sort()
+      ["pacienteId", "periodoMeses", "quantidade", "tipo", "vales_por_dia"].sort()
     );
   });
 

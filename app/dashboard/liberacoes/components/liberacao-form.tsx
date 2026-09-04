@@ -235,14 +235,15 @@ export default function LiberacaoForm(props: LiberacaoFormProps) {
 
     if (!paciente || !tipoSel || !qtdSel) return { error: "Dados inválidos." };
 
-    const dados: Parameters<typeof criarLiberacaoAction>[0] = {
+    const dados: Parameters<typeof criarLiberacaoAction>[0] & { vales_por_dia?: number | null } = {
       pacienteId: paciente.id,
       tipo: tipoSel,
       quantidade: qtdSel,
+      vales_por_dia: tipoSel === TIPOS_LIBERACAO.CONTINUA ? (calcParams.valesPorDia > 0 ? calcParams.valesPorDia : null) : null,
       periodoMeses: tipoSel === TIPOS_LIBERACAO.CONTINUA ? periodoSel : null,
     };
 
-    const resultado = await criarLiberacaoAction(dados);
+    const resultado = await criarLiberacaoAction(dados as Parameters<typeof criarLiberacaoAction>[0]);
     return resultado.ok ? { sucesso: true } : { error: resultado.error };
   };
 

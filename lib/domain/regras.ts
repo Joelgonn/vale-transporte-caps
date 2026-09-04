@@ -485,6 +485,7 @@ export const CAMPOS_EDICAO_LIBERACAO_POR_PERFIL: Record<
   [PERFIS.GESTOR]: ["status", "unidade_id"],
   [PERFIS.PROFISSIONAL_AUTORIZADOR]: [
     "quantidade",
+    "vales_por_dia",
     "data_inicio",
     "data_fim",
     "justificativa",

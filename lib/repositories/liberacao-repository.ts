@@ -140,17 +140,21 @@ export class LiberacaoRepositoryPostgres implements LiberacaoRepository {
   // profissional_autorizador_id no fluxo do autorizador (a action resolve via
   // public.usuario_atual_id()); na renovação a recepção repassa o da liberação
   // original. O banco permanece a autoridade.
+  // Sprint 67 — persiste vales_por_dia quando informado (diária da contínua)
   async criar(dados: NovaLiberacao): Promise<LiberacaoComPaciente> {
+    const payload: Record<string, unknown> = {
+      paciente_id: dados.pacienteId,
+      tipo: dados.tipo,
+      quantidade: dados.quantidade,
+      periodo_meses: dados.periodoMeses ?? null,
+      profissional_autorizador_id: dados.profissionalAutorizadorId,
+      renovacao_de_id: dados.renovacaoDeId ?? null,
+    };
+    const diaria = (dados as unknown as { vales_por_dia?: number | null }).vales_por_dia;
+    if (diaria != null) payload.vales_por_dia = diaria;
     const { data, error } = await this.client
       .from("liberacoes")
-      .insert({
-        paciente_id: dados.pacienteId,
-        tipo: dados.tipo,
-        quantidade: dados.quantidade,
-        periodo_meses: dados.periodoMeses ?? null,
-        profissional_autorizador_id: dados.profissionalAutorizadorId,
-        renovacao_de_id: dados.renovacaoDeId ?? null,
-      })
+      .insert(payload)
       .select(`*, pacientes(${COLUNAS_PACIENTE})`)
       .single();
 
