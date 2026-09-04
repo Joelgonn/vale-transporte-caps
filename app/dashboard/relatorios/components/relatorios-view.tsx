@@ -833,7 +833,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                   {contadores.proximoVencimento > 0 && (
                     <StatusCard status="atencao" className="p-4">
                       <dt className="text-xs uppercase tracking-wide text-zinc-500">Próximas do vencimento</dt>
-                      <dd className="mt-1 text-xl font-semibold text-orange-700">{contadores.proximoVencimento}</dd>
+                      <dd className="mt-1 text-xl font-semibold text-amber-700">{contadores.proximoVencimento}</dd>
                     </StatusCard>
                   )}
                   {contadores.expiradaSemUso > 0 && (
@@ -865,7 +865,9 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                     className={
                       situacao === "estouro"
                         ? "inline-flex h-8 items-center rounded-full bg-red-600 px-3.5 text-xs font-medium text-white"
-                        : "inline-flex h-8 items-center rounded-full border border-red-200 bg-red-50 px-3.5 text-xs font-medium text-red-700 hover:bg-red-100"
+                        : contadores.estouros > 0
+                          ? "inline-flex h-8 items-center rounded-full border border-red-200 bg-red-50 px-3.5 text-xs font-medium text-red-700 hover:bg-red-100"
+                          : "inline-flex h-8 items-center rounded-full border border-zinc-200 bg-zinc-50 px-3.5 text-xs font-medium text-zinc-500"
                     }
                   >
                     🔴 Estouro · {contadores.estouros}
@@ -875,7 +877,9 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                     className={
                       situacao === "sem_retirada"
                         ? "inline-flex h-8 items-center rounded-full bg-amber-500 px-3.5 text-xs font-medium text-white"
-                        : "inline-flex h-8 items-center rounded-full border border-amber-200 bg-amber-50 px-3.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                        : contadores.semRetirada > 0
+                          ? "inline-flex h-8 items-center rounded-full border border-amber-200 bg-amber-50 px-3.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                          : "inline-flex h-8 items-center rounded-full border border-zinc-200 bg-zinc-50 px-3.5 text-xs font-medium text-zinc-500"
                     }
                   >
                     🟡 Sem retirada · {contadores.semRetirada}
@@ -884,21 +888,25 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                     href={construirUrl(filtros, { situacaoConsolidado: "proximo_vencimento", situacaoLiberacoes: "proximo_vencimento", pagina: 1 })}
                     className={
                       situacao === "proximo_vencimento"
-                        ? "inline-flex h-8 items-center rounded-full bg-orange-500 px-3.5 text-xs font-medium text-white"
-                        : "inline-flex h-8 items-center rounded-full border border-orange-200 bg-orange-50 px-3.5 text-xs font-medium text-orange-700 hover:bg-orange-100"
+                        ? "inline-flex h-8 items-center rounded-full bg-amber-500 px-3.5 text-xs font-medium text-white"
+                        : contadores.proximoVencimento > 0
+                          ? "inline-flex h-8 items-center rounded-full border border-amber-200 bg-amber-50 px-3.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                          : "inline-flex h-8 items-center rounded-full border border-zinc-200 bg-zinc-50 px-3.5 text-xs font-medium text-zinc-500"
                     }
                   >
-                    🟠 Próximo do vencimento · {contadores.proximoVencimento}
+                    🟡 Próximo do vencimento · {contadores.proximoVencimento}
                   </Link>
                   <Link
                     href={construirUrl(filtros, { situacaoConsolidado: "expirada_sem_uso", situacaoLiberacoes: "expirada_sem_uso", pagina: 1 })}
                     className={
                       situacao === "expirada_sem_uso"
-                        ? "inline-flex h-8 items-center rounded-full bg-zinc-700 px-3.5 text-xs font-medium text-white"
-                        : "inline-flex h-8 items-center rounded-full border border-zinc-300 bg-zinc-50 px-3.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                        ? "inline-flex h-8 items-center rounded-full bg-red-600 px-3.5 text-xs font-medium text-white"
+                        : contadores.expiradaSemUso > 0
+                          ? "inline-flex h-8 items-center rounded-full border border-red-200 bg-red-50 px-3.5 text-xs font-medium text-red-700 hover:bg-red-100"
+                          : "inline-flex h-8 items-center rounded-full border border-zinc-200 bg-zinc-50 px-3.5 text-xs font-medium text-zinc-500"
                     }
                   >
-                    ⚪ Expirada sem uso · {contadores.expiradaSemUso}
+                    🔴 Expirada sem uso · {contadores.expiradaSemUso}
                   </Link>
                 </div>
               </div>
@@ -1172,9 +1180,9 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                   <dt className="text-xs uppercase tracking-wide text-zinc-500">Ativas</dt>
                   <dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisLib.ativas}</dd>
                 </StatusCard>
-                <StatusCard status="atencao" className="p-4">
+                <StatusCard status={totaisLib.proximasVencimento > 0 ? "atencao" : "neutro"} className="p-4">
                   <dt className="text-xs uppercase tracking-wide text-zinc-500">Próximas do vencimento</dt>
-                  <dd className="mt-1 text-2xl font-semibold text-orange-700">{totaisLib.proximasVencimento}</dd>
+                  <dd className={`mt-1 text-2xl font-semibold ${totaisLib.proximasVencimento > 0 ? "text-amber-700" : "text-brand-900"}`}>{totaisLib.proximasVencimento}</dd>
                 </StatusCard>
                 <StatusCard status="neutro" className="p-4">
                   <dt className="text-xs uppercase tracking-wide text-zinc-500">Contínuas</dt>
@@ -1184,9 +1192,9 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                   <dt className="text-xs uppercase tracking-wide text-zinc-500">Avulsas</dt>
                   <dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisLib.avulsas}</dd>
                 </StatusCard>
-                <StatusCard status="atencao" className="p-4">
+                <StatusCard status={totaisLib.semRetirada > 0 ? "atencao" : "neutro"} className="p-4">
                   <dt className="text-xs uppercase tracking-wide text-zinc-500">Sem retirada</dt>
-                  <dd className="mt-1 text-2xl font-semibold text-amber-700">{totaisLib.semRetirada}</dd>
+                  <dd className={`mt-1 text-2xl font-semibold ${totaisLib.semRetirada > 0 ? "text-amber-700" : "text-brand-900"}`}>{totaisLib.semRetirada}</dd>
                 </StatusCard>
               </dl>
 
@@ -1208,18 +1216,22 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                     href={construirUrl(filtros, { situacaoLiberacoes: "proximo_vencimento", situacaoConsolidado: "proximo_vencimento", pagina: 1 })}
                     className={
                       sitLib === "proximo_vencimento"
-                        ? "inline-flex h-8 items-center rounded-full bg-orange-500 px-3.5 text-xs font-medium text-white"
-                        : "inline-flex h-8 items-center rounded-full border border-orange-200 bg-orange-50 px-3.5 text-xs font-medium text-orange-700 hover:bg-orange-100"
+                        ? "inline-flex h-8 items-center rounded-full bg-amber-500 px-3.5 text-xs font-medium text-white"
+                        : contadoresLib.proximasVencimento > 0
+                          ? "inline-flex h-8 items-center rounded-full border border-amber-200 bg-amber-50 px-3.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                          : "inline-flex h-8 items-center rounded-full border border-zinc-200 bg-zinc-50 px-3.5 text-xs font-medium text-zinc-500"
                     }
                   >
-                    🟠 Próximas do vencimento · {contadoresLib.proximasVencimento}
+                    🟡 Próximas do vencimento · {contadoresLib.proximasVencimento}
                   </Link>
                   <Link
                     href={construirUrl(filtros, { situacaoLiberacoes: "sem_retirada", situacaoConsolidado: "sem_retirada", pagina: 1 })}
                     className={
                       sitLib === "sem_retirada"
                         ? "inline-flex h-8 items-center rounded-full bg-amber-500 px-3.5 text-xs font-medium text-white"
-                        : "inline-flex h-8 items-center rounded-full border border-amber-200 bg-amber-50 px-3.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                        : contadoresLib.semRetirada > 0
+                          ? "inline-flex h-8 items-center rounded-full border border-amber-200 bg-amber-50 px-3.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                          : "inline-flex h-8 items-center rounded-full border border-zinc-200 bg-zinc-50 px-3.5 text-xs font-medium text-zinc-500"
                     }
                   >
                     🟡 Sem retirada · {contadoresLib.semRetirada}
@@ -1228,21 +1240,25 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                     href={construirUrl(filtros, { situacaoLiberacoes: "expirada_sem_uso", situacaoConsolidado: "expirada_sem_uso", pagina: 1 })}
                     className={
                       sitLib === "expirada_sem_uso"
-                        ? "inline-flex h-8 items-center rounded-full bg-zinc-700 px-3.5 text-xs font-medium text-white"
-                        : "inline-flex h-8 items-center rounded-full border border-zinc-300 bg-zinc-50 px-3.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                        ? "inline-flex h-8 items-center rounded-full bg-red-600 px-3.5 text-xs font-medium text-white"
+                        : contadoresLib.expiradaSemUso > 0
+                          ? "inline-flex h-8 items-center rounded-full border border-red-200 bg-red-50 px-3.5 text-xs font-medium text-red-700 hover:bg-red-100"
+                          : "inline-flex h-8 items-center rounded-full border border-zinc-200 bg-zinc-50 px-3.5 text-xs font-medium text-zinc-500"
                     }
                   >
-                    ⚪ Expiradas sem uso · {contadoresLib.expiradaSemUso}
+                    🔴 Expiradas sem uso · {contadoresLib.expiradaSemUso}
                   </Link>
                   <Link
                     href={construirUrl(filtros, { situacaoLiberacoes: "multiplas_ativas", situacaoConsolidado: "multiplas_ativas", pagina: 1 })}
                     className={
                       sitLib === "multiplas_ativas"
-                        ? "inline-flex h-8 items-center rounded-full bg-sky-600 px-3.5 text-xs font-medium text-white"
-                        : "inline-flex h-8 items-center rounded-full border border-sky-200 bg-sky-50 px-3.5 text-xs font-medium text-sky-700 hover:bg-sky-100"
+                        ? "inline-flex h-8 items-center rounded-full bg-amber-500 px-3.5 text-xs font-medium text-white"
+                        : contadoresLib.multiplasAtivas > 0
+                          ? "inline-flex h-8 items-center rounded-full border border-amber-200 bg-amber-50 px-3.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                          : "inline-flex h-8 items-center rounded-full border border-zinc-200 bg-zinc-50 px-3.5 text-xs font-medium text-zinc-500"
                     }
                   >
-                    🔵 Múltiplas ativas · {contadoresLib.multiplasAtivas} {contadoresLib.multiplasAtivasLiberacoes > 0 ? `· ${contadoresLib.multiplasAtivasLiberacoes} liberações` : ""}
+                    🟡 Múltiplas ativas · {contadoresLib.multiplasAtivas} {contadoresLib.multiplasAtivasLiberacoes > 0 ? `· ${contadoresLib.multiplasAtivasLiberacoes} liberações` : ""}
                   </Link>
                 </div>
               </div>
@@ -1354,7 +1370,7 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                 <StatusCard status="neutro" className="p-4"><dt className="text-xs uppercase tracking-wide text-zinc-500">Pacientes atendidos</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.pacientesDistintos}</dd></StatusCard>
                 <StatusCard status="neutro" className="p-4"><dt className="text-xs uppercase tracking-wide text-zinc-500">Retiradas avulsas</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.avulsas}</dd></StatusCard>
                 <StatusCard status="neutro" className="p-4"><dt className="text-xs uppercase tracking-wide text-zinc-500">Retiradas contínuas</dt><dd className="mt-1 text-2xl font-semibold text-brand-900">{totaisRet.continuas}</dd></StatusCard>
-                <StatusCard status="critico" className="p-4"><dt className="text-xs uppercase tracking-wide text-zinc-500">Acima da previsão</dt><dd className="mt-1 text-2xl font-semibold text-red-700">{contadoresRet.acimaPrevisao}</dd></StatusCard>
+                <StatusCard status={contadoresRet.acimaPrevisao > 0 ? "critico" : "neutro"} className="p-4"><dt className="text-xs uppercase tracking-wide text-zinc-500">Acima da previsão</dt><dd className={`mt-1 text-2xl font-semibold ${contadoresRet.acimaPrevisao > 0 ? "text-red-700" : "text-brand-900"}`}>{contadoresRet.acimaPrevisao}</dd></StatusCard>
               </dl>
               {(contadoresRet.acimaPrevisao > 0 || contadoresRet.foraVigencia > 0) && (
                 <div className={`${CARTAO} p-4`}>
@@ -1362,9 +1378,9 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                   <p className="mt-1 text-xs text-zinc-500">Indicadores operacionais — não indicam erro automático.</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Link href={construirUrl(filtros, { situacaoRetiradas: null, situacaoConsolidado: null, situacaoLiberacoes: null, pagina: 1 })} className={!sitRet ? "inline-flex h-8 items-center rounded-full bg-brand-900 px-3.5 text-xs font-medium text-white" : "inline-flex h-8 items-center rounded-full border border-zinc-300 bg-white px-3.5 text-xs font-medium text-zinc-700 hover:border-zinc-400"}>Todos · {totaisRet.registros}</Link>
-                    <Link href={construirUrl(filtros, { situacaoRetiradas: "acima_previsao", situacaoConsolidado: "acima_previsao", situacaoLiberacoes: "acima_previsao", pagina: 1 })} className={sitRet === "acima_previsao" ? "inline-flex h-8 items-center rounded-full bg-red-600 px-3.5 text-xs font-medium text-white" : "inline-flex h-8 items-center rounded-full border border-red-200 bg-red-50 px-3.5 text-xs font-medium text-red-700 hover:bg-red-100"}>🔴 Acima da previsão · {contadoresRet.acimaPrevisao}</Link>
+                    <Link href={construirUrl(filtros, { situacaoRetiradas: "acima_previsao", situacaoConsolidado: "acima_previsao", situacaoLiberacoes: "acima_previsao", pagina: 1 })} className={sitRet === "acima_previsao" ? "inline-flex h-8 items-center rounded-full bg-red-600 px-3.5 text-xs font-medium text-white" : contadoresRet.acimaPrevisao > 0 ? "inline-flex h-8 items-center rounded-full border border-red-200 bg-red-50 px-3.5 text-xs font-medium text-red-700 hover:bg-red-100" : "inline-flex h-8 items-center rounded-full border border-zinc-200 bg-zinc-50 px-3.5 text-xs font-medium text-zinc-500"}>🔴 Acima da previsão · {contadoresRet.acimaPrevisao}</Link>
                     {contadoresRet.foraVigencia > 0 && (
-                      <Link href={construirUrl(filtros, { situacaoRetiradas: "fora_vigencia", situacaoConsolidado: "fora_vigencia", situacaoLiberacoes: "fora_vigencia", pagina: 1 })} className={sitRet === "fora_vigencia" ? "inline-flex h-8 items-center rounded-full bg-orange-500 px-3.5 text-xs font-medium text-white" : "inline-flex h-8 items-center rounded-full border border-orange-200 bg-orange-50 px-3.5 text-xs font-medium text-orange-700 hover:bg-orange-100"}>🟠 Fora da vigência · {contadoresRet.foraVigencia}</Link>
+                      <Link href={construirUrl(filtros, { situacaoRetiradas: "fora_vigencia", situacaoConsolidado: "fora_vigencia", situacaoLiberacoes: "fora_vigencia", pagina: 1 })} className={sitRet === "fora_vigencia" ? "inline-flex h-8 items-center rounded-full bg-red-600 px-3.5 text-xs font-medium text-white" : "inline-flex h-8 items-center rounded-full border border-red-200 bg-red-50 px-3.5 text-xs font-medium text-red-700 hover:bg-red-100"}>🔴 Fora da vigência · {contadoresRet.foraVigencia}</Link>
                     )}
                   </div>
                 </div>
@@ -1728,14 +1744,14 @@ function TabelaLiberacoes({
                   <td className="px-4 py-3 text-zinc-700">{linha.totalRetirado}</td>
                   <td className="px-4 py-3 text-zinc-600">
                     <span>{descreverPeriodo(linha)}</span>
-                    {venc && <span className="ml-1 text-xs font-medium text-orange-700">· {venc}</span>}
+                    {venc && <span className="ml-1 text-xs font-medium text-amber-700">· {venc}</span>}
                   </td>
                   <td className="px-4 py-3 text-zinc-700">
                     <span className="inline-flex items-center gap-1.5">
                       {rotuloStatusLiberacao(linha.status)}
                       {semRetirada && <span className="h-2 w-2 rounded-full bg-amber-400" aria-hidden />}
-                      {proximo && <span className="h-2 w-2 rounded-full bg-orange-400" aria-hidden />}
-                      {ehMultipla && <span className="h-2 w-2 rounded-full bg-sky-500" aria-hidden />}
+                      {proximo && <span className="h-2 w-2 rounded-full bg-amber-400" aria-hidden />}
+                      {ehMultipla && <span className="h-2 w-2 rounded-full bg-amber-400" aria-hidden />}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-zinc-700">{linha.autorizador?.nome ?? "—"}</td>
@@ -1777,7 +1793,7 @@ function TabelaLiberacoes({
                 {venc && (
                   <div className="flex items-center justify-between gap-3">
                     <dt className="text-xs text-zinc-500">Vencimento</dt>
-                    <dd className="font-medium text-orange-700">{venc}</dd>
+                    <dd className="font-medium text-amber-700">{venc}</dd>
                   </div>
                 )}
                 <div className="flex items-center justify-between gap-3">
@@ -1857,10 +1873,10 @@ function TabelaRetiradas({
                   <td className="px-4 py-3 font-medium text-brand-900">{linha.quantidade}</td>
                   <td className="px-4 py-3 text-zinc-700">{prevista ?? "—"}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${acima ? "text-red-700" : foraVig ? "text-orange-700" : "text-zinc-600"}`}>
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${acima ? "text-red-700" : foraVig ? "text-red-700" : "text-zinc-600"}`}>
                       {situacao}
                       {acima && <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden />}
-                      {foraVig && <span className="h-2 w-2 rounded-full bg-orange-400" aria-hidden />}
+                      {foraVig && <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden />}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-zinc-600">{linha.recepcionista?.nome ?? "—"}</td>
@@ -1898,7 +1914,7 @@ function TabelaRetiradas({
               </div>
               <dl className="mt-3 flex flex-col gap-2 text-sm">
                 <div className="flex items-center justify-between gap-3"><dt className="text-xs text-zinc-500">Previsto</dt><dd className="font-medium text-brand-900">{prevista ?? "—"}</dd></div>
-                <div className="flex items-center justify-between gap-3"><dt className="text-xs text-zinc-500">Situação</dt><dd className={`font-medium ${acima ? "text-red-700" : foraVig ? "text-orange-700" : "text-zinc-700"}`}>{foraVig ? "Fora da vigência" : acima ? "Acima da previsão" : "Normal"}</dd></div>
+                <div className="flex items-center justify-between gap-3"><dt className="text-xs text-zinc-500">Situação</dt><dd className={`font-medium ${acima ? "text-red-700" : foraVig ? "text-amber-700" : "text-zinc-700"}`}>{foraVig ? "Fora da vigência" : acima ? "Acima da previsão" : "Normal"}</dd></div>
                 <div className="flex items-center justify-between gap-3"><dt className="text-xs text-zinc-500">Registrado por</dt><dd className="font-medium text-brand-900">{linha.recepcionista?.nome ?? "—"}</dd></div>
               </dl>
             </li>
@@ -2083,14 +2099,14 @@ function TabelaConsolidado({
                   </td>
                   <td className="px-4 py-3 text-zinc-600">
                     <span>{descreverPeriodo({ tipo: linha.tipo, dataInicio: linha.dataInicio, dataFim: linha.dataFim })}</span>
-                    {vencimento && <span className="ml-1 text-xs font-medium text-orange-700">· {vencimento}</span>}
+                    {vencimento && <span className="ml-1 text-xs font-medium text-amber-700">· {vencimento}</span>}
                   </td>
                   <td className="px-4 py-3 text-zinc-700">
                     <span className="inline-flex items-center gap-1.5">
                       {rotuloStatusLiberacao(linha.status)}
                       {ehSemRetirada && <span className="h-2 w-2 rounded-full bg-amber-400" aria-hidden />}
                       {ehEstouro && <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden />}
-                      {proximo && <span className="h-2 w-2 rounded-full bg-orange-400" aria-hidden />}
+                      {proximo && <span className="h-2 w-2 rounded-full bg-amber-400" aria-hidden />}
                     </span>
                   </td>
                 </tr>
@@ -2140,7 +2156,7 @@ function TabelaConsolidado({
                 {vencimento && (
                   <div className="flex items-center justify-between gap-3">
                     <dt className="text-xs text-zinc-500">Vencimento</dt>
-                    <dd className="font-medium text-orange-700">{vencimento}</dd>
+                    <dd className="font-medium text-amber-700">{vencimento}</dd>
                   </div>
                 )}
                 {ehSemRetirada && (
