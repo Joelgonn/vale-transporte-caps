@@ -20,7 +20,6 @@ import {
   CARTAO,
   CONTAINER,
 } from "@/components/ui/visual-tokens";
-import { StatusCard } from "@/components/ui/status-accent";
 import { PageHeader } from "@/components/ui/page-header";
 import { EstadoVazio } from "@/components/ui/estado-vazio";
 import { FeedbackErro } from "@/components/ui/feedback";
@@ -91,29 +90,29 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
         {/* Resumo operacional — só quando há dados, respeitando filtros */}
         {!erroInicial && total > 0 && (
           <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <StatusCard status="neutro" className="p-4">
-              <dt className="text-xs uppercase tracking-wide text-zinc-500">Eventos no período</dt>
-              <dd className="mt-1 text-2xl font-semibold text-brand-900">{total}</dd>
-            </StatusCard>
-            <StatusCard status="neutro" className="p-4">
-              <dt className="text-xs uppercase tracking-wide text-zinc-500">Responsáveis</dt>
-              <dd className="mt-1 text-2xl font-semibold text-brand-900">{usuariosDistintos}</dd>
-            </StatusCard>
-            <StatusCard status="neutro" className="p-4">
-              <dt className="text-xs uppercase tracking-wide text-zinc-500">Tipos de entidade</dt>
-              <dd className="mt-1 text-2xl font-semibold text-brand-900">{entidadesDistintas}</dd>
-            </StatusCard>
+            <div className={`${CARTAO} p-4`}>
+              <dt className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Eventos no período</dt>
+              <dd className="mt-2 text-2xl font-semibold text-brand-900">{total}</dd>
+            </div>
+            <div className={`${CARTAO} p-4`}>
+              <dt className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Responsáveis</dt>
+              <dd className="mt-2 text-2xl font-semibold text-brand-900">{usuariosDistintos}</dd>
+            </div>
+            <div className={`${CARTAO} p-4`}>
+              <dt className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Tipos de entidade</dt>
+              <dd className="mt-2 text-2xl font-semibold text-brand-900">{entidadesDistintas}</dd>
+            </div>
           </dl>
         )}
 
-        {/* Filtros — aplicados no servidor (GET). Reorganizados em 2 linhas para respiro no desktop e coluna no mobile. */}
+        {/* Filtros — aplicados no servidor (GET). Composição final em card único, sem excesso de altura. */}
         <form
           method="get"
           action="/dashboard/auditoria"
           aria-label="Filtros de auditoria"
-          className={`flex flex-col gap-4 p-4 ${CARTAO}`}
+          className={`flex flex-col gap-4 p-4 sm:p-5 ${CARTAO}`}
         >
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.15fr_1fr_1.5fr]">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="auditoria-filtro-acao" className="text-xs font-medium text-zinc-600">
                 Ação
@@ -172,9 +171,9 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4">
             <p className="text-xs font-medium text-zinc-600">Período do evento</p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[200px_200px_auto] lg:items-end">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="auditoria-filtro-de" className="text-xs font-medium text-zinc-600">
                   De
@@ -186,7 +185,6 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
                   defaultValue={filtros.dataDe ?? ""}
                   className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none"
                 />
-                <p className="text-[11px] text-zinc-500">Data do evento</p>
               </div>
 
               <div className="flex flex-col gap-1.5">
@@ -200,19 +198,18 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
                   defaultValue={filtros.dataAte ?? ""}
                   className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 transition-colors duration-150 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 motion-reduce:transition-none"
                 />
-                <p className="text-[11px] text-zinc-500">Data do evento</p>
               </div>
 
-              <div className="flex gap-2 sm:col-span-2 lg:col-span-1 lg:justify-end lg:items-end">
+              <div className="flex gap-2 self-end sm:col-span-2 lg:col-span-1 lg:justify-start">
                 <button
                   type="submit"
-                  className="inline-flex h-11 flex-1 items-center justify-center rounded-md bg-green-600 px-6 text-sm font-medium text-white transition-colors hover:bg-green-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:flex-none"
+                  className="inline-flex h-10 items-center justify-center rounded-md bg-green-600 px-5 text-sm font-medium text-white transition-colors hover:bg-green-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
                 >
                   Filtrar
                 </button>
                 <Link
                   href={construirUrl(filtros, { acao: null, entidadeTipo: null, dataDe: null, dataAte: null, usuarioId: null, pagina: 1 })}
-                  className={`${BOTAO_SECUNDARIO} flex-1 sm:flex-none justify-center`}
+                  className={BOTAO_SECUNDARIO}
                 >
                   Limpar
                 </Link>
