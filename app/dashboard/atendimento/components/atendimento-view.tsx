@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { criarPacienteAction } from "@/app/actions/pacientes";
 import { criarLiberacaoAction } from "@/app/actions/liberacoes";
@@ -21,7 +21,10 @@ import {
 import { PageHeader } from "@/components/ui/page-header";
 import { FeedbackErro } from "@/components/ui/feedback";
 
-type Props = { perfil: PerfilUsuario };
+type Props = {
+  perfil: PerfilUsuario;
+  pacienteInicial?: { id: string; gestor_sus: string; nome: string; origem?: string | null } | null;
+};
 
 const PASSOS = [
   { id: 1, rotulo: "Paciente" },
@@ -47,6 +50,16 @@ export default function AtendimentoView(props: Props) {
   const [novoNome, setNovoNome] = useState("");
   const [criandoPaciente, setCriandoPaciente] = useState(false);
   const [erroCriarPaciente, setErroCriarPaciente] = useState<string | null>(null);
+
+  // Auto-selecionar paciente inicial (ex: vindo de /dashboard/liberacoes)
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- sync pacienteInicial from URL on mount
+  useEffect(() => {
+    if (props.pacienteInicial && !paciente) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPaciente(props.pacienteInicial as unknown as PacienteSemCpf);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.pacienteInicial]);
 
   // Liberação
   const [modoAtendimento, setModoAtendimento] = useState<"avulsa" | "continua">("avulsa");

@@ -1,9 +1,14 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUsuarioFuncional } from "@/lib/auth/profile";
+import { buscarPacienteAction } from "@/app/actions/pacientes";
 import AtendimentoView from "./components/atendimento-view";
 
-export default async function AtendimentoPage() {
+export default async function AtendimentoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ paciente?: string }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -26,5 +31,16 @@ export default async function AtendimentoPage() {
     );
   }
 
-  return <AtendimentoView perfil={usuario.perfil} />;
+  const { paciente } = await searchParams;
+  const pacienteId = typeof paciente === "string" && paciente.trim() ? paciente.trim() : null;
+
+  let pacienteInicial: { id: string; gestor_sus: string; nome: string; origem?: string | null } | null = null;
+  if (pacienteId) {
+    const r = await buscarPacienteAction(pacienteId);
+    if (r.ok && r.data) {
+      pacienteInicial = r.data as unknown as typeof pacienteInicial;
+    }
+  }
+
+  return <AtendimentoView perfil={usuario.perfil} pacienteInicial={pacienteInicial} />;
 }

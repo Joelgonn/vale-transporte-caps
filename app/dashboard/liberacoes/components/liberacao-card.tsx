@@ -95,7 +95,7 @@ export default function LiberacaoCard({
         )}
         {isAtiva && (
           <Link
-            href="/dashboard/retiradas"
+            href={`/dashboard/atendimento?paciente=${liberacao.paciente_id}`}
             className="inline-flex items-center justify-center rounded-full h-10 px-4 text-sm font-semibold text-brand-900 ring-1 ring-zinc-900/10 transition-colors hover:bg-brand-50/60 hover:text-brand-700 hover:ring-brand-900/15 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 whitespace-nowrap flex-1"
           >
             Registrar retirada
