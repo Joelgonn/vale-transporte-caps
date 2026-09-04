@@ -25,7 +25,7 @@ type Props = { perfil: PerfilUsuario };
 
 const PASSOS = [
   { id: 1, rotulo: "Paciente" },
-  { id: 2, rotulo: "Liberação" },
+  { id: 2, rotulo: "Atendimento" },
   { id: 3, rotulo: "Retirada" },
   { id: 4, rotulo: "Concluído" },
 ];
@@ -52,7 +52,7 @@ export default function AtendimentoView(props: Props) {
   const [liberacaoCriada, setLiberacaoCriada] = useState<LiberacaoComPaciente | null>(null);
   const [erroLiberacao, setErroLiberacao] = useState<string | null>(null);
 
-  // Retirada
+  // Retirada — quantidade inicial é diária da contínua ou 2 para avulsa (editável)
   const [quantidadeRetirada, setQuantidadeRetirada] = useState(2);
   const [registrando, setRegistrando] = useState(false);
   const [erroRetirada, setErroRetirada] = useState<string | null>(null);
@@ -61,7 +61,11 @@ export default function AtendimentoView(props: Props) {
 
   function selecionarPaciente(p: PacienteSemCpf) {
     setPaciente(p);
-    // Carregar liberações para decidir modo
+    // Reset retirada para evitar persistir valor do paciente anterior
+    setQuantidadeRetirada(2);
+    setLiberacaoSelecionada(null);
+    setLiberacaoCriada(null);
+    // Carregar liberações para decidir modo e quantidade inicial
     carregarLiberacoes(p);
   }
 
@@ -72,12 +76,26 @@ export default function AtendimentoView(props: Props) {
     if (r.ok) {
       const filtradas = r.data.filter((l) => l.paciente_id === p.id);
       setLiberacoes(filtradas);
-      const temContinuaAtiva = filtradas.some((l) => l.tipo === TIPOS_LIBERACAO.CONTINUA && l.status === "ativa");
-      // Se paciente esporádico, força avulsa
+      // Encontrar contínua ativa mais recente para fluxo principal
+      const continuaAtiva = filtradas
+        .filter((l) => l.tipo === TIPOS_LIBERACAO.CONTINUA && l.status === "ativa")
+        .sort((a, b) => (a.data_inicio < b.data_inicio ? 1 : -1))[0] as LiberacaoComPaciente & { vales_por_dia?: number | null } | undefined;
+      // Se paciente esporádico, força avulsa com 2
       if (p.origem === ORIGENS_PACIENTE.ESPORADICO) {
         setModoAtendimento("avulsa");
-      } else if (temContinuaAtiva) {
-        // mantém escolha atual, mas sugere operação de contínua
+        setLiberacaoSelecionada(null);
+        setQuantidadeRetirada(2);
+      } else if (continuaAtiva) {
+        // Fluxo principal contínua: pré-seleciona e preenche quantidade diária
+        setModoAtendimento("continua");
+        setLiberacaoSelecionada(continuaAtiva);
+        const diaria = (continuaAtiva as { vales_por_dia?: number | null }).vales_por_dia;
+        setQuantidadeRetirada(diaria && diaria >= 1 && diaria <= 10 ? diaria : 2);
+      } else {
+        // Regular sem contínua: oferece avulsa como alternativa
+        setModoAtendimento("avulsa");
+        setLiberacaoSelecionada(null);
+        setQuantidadeRetirada(2);
       }
     }
   }
@@ -298,38 +316,65 @@ export default function AtendimentoView(props: Props) {
               </p>
             </div>
 
-            {/* Escolha do modo */}
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <button type="button" onClick={() => setModoAtendimento("avulsa")} className={`flex-1 rounded-xl border px-4 py-3 text-left ${modoAtendimento === "avulsa" ? "border-brand-600 bg-brand-600 text-white" : "border-zinc-300 hover:bg-zinc-50"}`}>
-                <p className="font-medium">Criar liberação avulsa</p>
-                <p className={`text-xs ${modoAtendimento === "avulsa" ? "text-white/80" : "text-zinc-500"}`}>Para atendimento pontual (1 dia). Vale para regular e esporádico.</p>
-              </button>
-              <button type="button" disabled={paciente.origem === ORIGENS_PACIENTE.ESPORADICO} onClick={() => setModoAtendimento("continua")} className={`flex-1 rounded-xl border px-4 py-3 text-left ${modoAtendimento === "continua" ? "border-brand-600 bg-brand-600 text-white" : "border-zinc-300 hover:bg-zinc-50"} ${paciente.origem === ORIGENS_PACIENTE.ESPORADICO ? "opacity-40 cursor-not-allowed" : ""}`}>
-                <p className="font-medium">Operar liberação contínua</p>
-                <p className={`text-xs ${modoAtendimento === "continua" ? "text-white/80" : "text-zinc-500"}`}>Localizar autorização contínua já existente.</p>
-              </button>
-            </div>
-            {paciente.origem === ORIGENS_PACIENTE.ESPORADICO && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Paciente esporádico: somente avulsa (RN29). A opção contínua está desabilitada.</p>}
+            {/* Fluxo principal: contínua quando existe, avulsa como alternativa */}
+            {paciente.origem === ORIGENS_PACIENTE.ESPORADICO ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-sm font-medium text-amber-900">Atendimento avulso — paciente esporádico</p>
+                <p className="text-xs text-amber-700">Somente liberação avulsa (RN29). Quantidade inicial da retirada: 2 vales (editável).</p>
+              </div>
+            ) : liberacoes.filter((l) => l.tipo === TIPOS_LIBERACAO.CONTINUA && l.status === "ativa").length > 0 ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                <p className="text-sm font-medium text-emerald-900">Liberação contínua ativa encontrada — fluxo principal</p>
+                <p className="text-xs text-emerald-700">A retirada será pré-preenchida com a quantidade diária da liberação. Avulsa disponível como alternativa abaixo.</p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                <p className="text-sm font-medium text-zinc-700">Nenhuma liberação contínua ativa encontrada</p>
+                <p className="text-xs text-zinc-500">Será realizado atendimento avulso.</p>
+              </div>
+            )}
 
-            {modoAtendimento === "avulsa" ? (
+            {/* Seleção / criação conforme origem e disponibilidade */}
+            {paciente.origem === ORIGENS_PACIENTE.ESPORADICO || liberacoes.filter((l) => l.tipo === TIPOS_LIBERACAO.CONTINUA && l.status === "ativa").length === 0 ? (
               <div className="flex flex-col gap-2">
                 <label className={ROTULO}>Quantidade prevista (avulsa)</label>
                 <input type="number" min={1} max={999} value={quantidadeAvulsa} onChange={(e) => setQuantidadeAvulsa(Math.max(1, Math.min(999, Number(e.target.value) || 1)))} className={INPUT} />
-                <p className="text-xs text-zinc-500">Previsão administrativa — não limita a retirada. Será criada uma liberação avulsa para este paciente.</p>
+                <p className="text-xs text-zinc-500">Previsão administrativa — não limita a retirada. Retirada inicial: 2 vales (editável).</p>
               </div>
             ) : (
               <div className="flex flex-col gap-2">
-                {carregandoLib ? <p className="text-sm text-zinc-500">Carregando liberações...</p> : liberacoes.filter((l) => l.tipo === TIPOS_LIBERACAO.CONTINUA && l.status === "ativa").length === 0 ? <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-500">Nenhuma liberação contínua ativa encontrada para este paciente.</p> : (
+                <p className="text-sm font-medium text-brand-900">Selecione a liberação contínua para este atendimento</p>
+                {carregandoLib ? <p className="text-sm text-zinc-500">Carregando liberações...</p> : (
                   <ul className="flex flex-col gap-2">
-                    {liberacoes.filter((l) => l.tipo === TIPOS_LIBERACAO.CONTINUA && l.status === "ativa").map((lib) => (
-                      <li key={lib.id}>
-                        <label className={`flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3 ${liberacaoSelecionada?.id === lib.id ? "border-brand-600 bg-brand-50" : "border-zinc-200 hover:bg-zinc-50"}`}>
-                          <span><span className="font-medium text-brand-900">Contínua · {lib.quantidade} previstos</span><span className="ml-2 text-xs text-zinc-500">{lib.data_inicio.slice(0,10)} → {lib.data_fim.slice(0,10)}</span></span>
-                          <input type="radio" name="lib-continua" checked={liberacaoSelecionada?.id === lib.id} onChange={() => setLiberacaoSelecionada(lib)} className="sr-only" />
-                          <span className="text-xs font-medium text-brand-700">{liberacaoSelecionada?.id === lib.id ? "Selecionada" : "Selecionar"}</span>
-                        </label>
-                      </li>
-                    ))}
+                    {liberacoes.filter((l) => l.tipo === TIPOS_LIBERACAO.CONTINUA && l.status === "ativa").map((lib) => {
+                      const diaria = (lib as unknown as { vales_por_dia?: number | null }).vales_por_dia;
+                      return (
+                        <li key={lib.id}>
+                          <label
+                            className={`flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3 ${liberacaoSelecionada?.id === lib.id ? "border-brand-600 bg-brand-50" : "border-zinc-200 hover:bg-zinc-50"}`}
+                          >
+                            <span>
+                              <span className="font-medium text-brand-900">Contínua · {diaria ? `${diaria}/dia` : `${lib.quantidade} previstos`}</span>
+                              <span className="ml-2 text-xs text-zinc-500">
+                                {lib.data_inicio.slice(0, 10)} → {lib.data_fim.slice(0, 10)} · Previsto {lib.quantidade}
+                              </span>
+                            </span>
+                            <input
+                              type="radio"
+                              name="lib-continua"
+                              checked={liberacaoSelecionada?.id === lib.id}
+                              onChange={() => {
+                                setLiberacaoSelecionada(lib);
+                                const d = (lib as unknown as { vales_por_dia?: number | null }).vales_por_dia;
+                                setQuantidadeRetirada(d && d >= 1 && d <= 10 ? d : 2);
+                              }}
+                              className="sr-only"
+                            />
+                            <span className="text-xs font-medium text-brand-700">{liberacaoSelecionada?.id === lib.id ? "Selecionada" : "Selecionar"}</span>
+                          </label>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>

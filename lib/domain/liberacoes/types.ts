@@ -5,12 +5,13 @@ import type {
   TipoLiberacao,
 } from "@/lib/domain/enums";
 
-// Espelha a tabela public.liberacoes (migration 20260811000004_liberacoes.sql).
+// Espelha a tabela public.liberacoes (migration 20260811000004_liberacoes.sql + 20260903 vales_por_dia).
 export type Liberacao = {
   id: string;
   paciente_id: string;
   tipo: TipoLiberacao;
   quantidade: QuantidadeLiberacao;
+  vales_por_dia?: number | null;
   periodo_meses: PeriodoLiberacao | null;
   data_inicio: string;
   data_fim: string;
@@ -44,11 +45,14 @@ export type LiberacaoComPaciente = Liberacao & {
 // INFORMADO pela sessão (server-side, via public.usuario_atual_id()) — o
 // cliente não envia. No fluxo de renovação da recepção, o valor é repassado
 // da liberação original juntamente com renovacaoDeId.
+// Sprint 65 — vales_por_dia é a quantidade diária para liberação contínua (usada como
+// quantidade inicial da retirada); quantidade permanece como previsão.
 export type NovaLiberacao = {
   pacienteId: string;
   profissionalAutorizadorId?: string;
   tipo: TipoLiberacao;
   quantidade: QuantidadeLiberacao;
+  vales_por_dia?: number | null;
   periodoMeses?: PeriodoLiberacao | null;
   renovacaoDeId?: string | null;
 };
