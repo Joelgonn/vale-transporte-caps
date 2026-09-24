@@ -55,6 +55,52 @@ export function formatarDataHora(iso: string): string {
   return ano && mes && dia ? `${dia}/${mes}/${ano} · ${hhmm}` : iso;
 }
 
+// ── Sprint 77 — dia/hora LOCAL para a timeline do Histórico ───────────────
+// Timestamps persistidos são UTC; agrupar por `slice(0, 10)` força o dia UTC
+// e um evento próximo da meia-noite cai no dia errado para o usuário.
+// Estas funções interpretam o timestamp no fuso da interface (padrão: fuso
+// local do ambiente; testes passam `timeZone` explícito) — SOMENTE
+// representação visual, sem tocar em data_hora/created_at/banco.
+// Escopo: Histórico. As demais abas mantêm formatarData/formatarDataHora.
+
+// Chave de agrupamento `AAAA-MM-DD` no fuso indicado (determinística via Intl).
+export function obterChaveDiaLocal(iso: string, timeZone?: string): string {
+  const instante = new Date(iso);
+  if (Number.isNaN(instante.getTime())) return iso.slice(0, 10);
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(instante);
+  } catch {
+    return iso.slice(0, 10);
+  }
+}
+
+// `dd/mm/aaaa · hh:mm` no fuso indicado (mesmo fuso do agrupamento, para
+// cabeçalho do grupo e horário do evento nunca divergirem).
+export function formatarDataHoraLocal(iso: string, timeZone?: string): string {
+  const instante = new Date(iso);
+  if (Number.isNaN(instante.getTime())) return iso;
+  try {
+    const partes = new Intl.DateTimeFormat("pt-BR", {
+      timeZone,
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(instante);
+    const ler = (tipo: string) => partes.find((p) => p.type === tipo)?.value ?? "";
+    return `${ler("day")}/${ler("month")}/${ler("year")} · ${ler("hour")}:${ler("minute")}`;
+  } catch {
+    return iso;
+  }
+}
+
 // Descrição curta do período de vigência de uma liberação (RN13/RN21):
 // contínua mostra "de a"; avulsa mostra só o dia de início.
 export function descreverPeriodo(linha: {

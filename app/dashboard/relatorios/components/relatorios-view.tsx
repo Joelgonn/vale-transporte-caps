@@ -13,8 +13,9 @@ import {
 import {
   ROTULO_TIPO_RELATORIO,
   descreverPeriodo,
-  formatarData,
   formatarDataHora,
+  formatarDataHoraLocal,
+  obterChaveDiaLocal,
   rotuloStatusLiberacao,
   rotuloTipoLiberacao,
 } from "@/lib/domain/relatorios/rotulos";
@@ -123,6 +124,89 @@ function NavAbas({ filtros }: { filtros: FiltrosRelatorio }) {
         })}
       </nav>
     </div>
+  );
+}
+
+// Sprint 77 — filtros do Histórico (status + origem), SEMPRE visíveis.
+// O repository suporta ambos (status filtra liberações; origem filtra
+// original × renovação via renovacao_de_id); antes o bloco só aparecia com
+// filtro já ativo, escondendo os controles no estado inicial.
+// GET nativo: URL representa o estado (deep link, refresh, back/forward).
+function FiltrosHistorico({
+  filtros,
+  pacienteId,
+}: {
+  filtros: FiltrosRelatorio;
+  pacienteId: string;
+}) {
+  return (
+    <form
+      method="get"
+      action="/dashboard/relatorios"
+      aria-label="Filtros adicionais do histórico"
+      className={`${CONTAINER} flex flex-col gap-3 p-4 lg:flex-row lg:items-end ${CARTAO}`}
+    >
+      <input type="hidden" name="tipo" value="historico" />
+      <input type="hidden" name="paciente" value={pacienteId} />
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="historico-filtro-status" className="text-xs font-medium text-zinc-600">
+          Status
+        </label>
+        <select
+          id="historico-filtro-status"
+          name="status"
+          defaultValue={filtros.status ?? ""}
+          className={INPUT}
+        >
+          <option value="">Todos</option>
+          {Object.values(STATUS_LIBERACAO).map((s) => (
+            <option key={s} value={s}>
+              {rotuloStatusLiberacao(s)}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="historico-filtro-origem" className="text-xs font-medium text-zinc-600">
+          Origem
+        </label>
+        <select
+          id="historico-filtro-origem"
+          name="origem"
+          defaultValue={filtros.origem ?? ""}
+          className={INPUT}
+        >
+          <option value="">Todos</option>
+          <option value="original">Somente originais</option>
+          <option value="renovacao">Somente renovações</option>
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1.5 lg:ml-1 lg:flex-row">
+        <button
+          type="submit"
+          className="inline-flex h-11 items-center justify-center rounded-md bg-green-600 px-5 text-sm font-medium text-white transition-colors hover:bg-green-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+        >
+          Aplicar
+        </button>
+        <Link
+          href={construirUrl(filtros, {
+            paciente: pacienteId,
+            status: null,
+            origem: null,
+            tipoLiberacao: null,
+            de: null,
+            ate: null,
+            pagina: 1,
+          })}
+          className={BOTAO_SECUNDARIO}
+        >
+          Limpar
+        </Link>
+      </div>
+    </form>
   );
 }
 
@@ -362,7 +446,9 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
     }
 
     // Etapa de histórico: paciente selecionado, renderizar linha do tempo.
-    // resultado.paciente pode ser null (patient not found).
+    // resultado.paciente pode ser null (patient not found). Sprint 77: volta
+    // à busca via navegação React (sem recarregar a aplicação), preservando
+    // aba e limpando o paciente inválido da URL.
     if (ehHistorico && resultado && ((resultado as { paciente?: unknown }).paciente == null)) {
       return (
         <div className="flex flex-1 flex-col py-6">
@@ -374,7 +460,20 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
             <FeedbackErro>Paciente não encontrado.</FeedbackErro>
             <button
               type="button"
-              onClick={() => window.location.reload()}
+              onClick={() =>
+                router.replace(
+                  construirUrl(filtros, {
+                    paciente: null,
+                    busca: null,
+                    status: null,
+                    origem: null,
+                    tipoLiberacao: null,
+                    de: null,
+                    ate: null,
+                    pagina: 1,
+                  })
+                )
+              }
               className="inline-flex h-10 items-center rounded-md bg-brand-900 px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
             >
               Buscar outro paciente
@@ -388,13 +487,9 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
     if (ehHistorico && resultado && resultado.linhas.length > 0) {
       const paciente = ((resultado as { paciente?: { id: string; gestor_sus: string; nome: string; origem?: string | null; created_at?: string | null } | null }).paciente!);
       const total = resultado.total;
-      const porPagina = resultado.porPagina;
-      const totalPaginas = Math.max(1, Math.ceil(total / porPagina));
 
-      // Determina se há filtros ativos além do paciente.
-      const filtroStatusAtivo = !!filtros.status;
-      const filtroOrigemAtiva = !!filtros.origem;
-      temFiltrosAdicionais = filtroStatusAtivo || filtroOrigemAtiva || !!filtros.de || !!filtros.ate || !!filtros.tipoLiberacao;
+      // Determina se há filtros ativos além do paciente (mensagem de vazio).
+      temFiltrosAdicionais = !!filtros.status || !!filtros.origem || !!filtros.de || !!filtros.ate || !!filtros.tipoLiberacao;
 
       return (
         <div className="flex flex-1 flex-col py-6">
@@ -440,132 +535,30 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
               />
             )}
 
-            {/* Filtros aplicados (status + origem) — apenas para histórico */}
-            {temFiltrosAdicionais && (
-              <form
-                method="get"
-                action="/dashboard/relatorios"
-                aria-label="Filtros adicionais do histórico"
-                className={`${CONTAINER} flex flex-col gap-3 p-4 lg:flex-row lg:items-end ${CARTAO}`}
-              >
-                <input type="hidden" name="tipo" value="historico" />
-                <input type="hidden" name="paciente" value={paciente.id} />
-
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="historico-filtro-status" className="text-xs font-medium text-zinc-600">
-                    Status
-                  </label>
-                  <select
-                    id="historico-filtro-status"
-                    name="status"
-                    defaultValue={filtros.status ?? ""}
-                    className={INPUT}
-                  >
-                    <option value="">Todos</option>
-                    {Object.values(STATUS_LIBERACAO).map((s) => (
-                      <option key={s} value={s}>
-                        {rotuloStatusLiberacao(s)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="historico-filtro-origem" className="text-xs font-medium text-zinc-600">
-                    Origem
-                  </label>
-                  <select
-                    id="historico-filtro-origem"
-                    name="origem"
-                    defaultValue={filtros.origem ?? ""}
-                    className={INPUT}
-                  >
-                    <option value="">Todos</option>
-                    <option value="original">Somente originais</option>
-                    <option value="renovacao">Somente renovações</option>
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-1.5 lg:ml-1 lg:flex-row">
-                  <button
-                    type="submit"
-                    className="inline-flex h-11 items-center justify-center rounded-md bg-green-600 px-5 text-sm font-medium text-white transition-colors hover:bg-green-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-                  >
-                    Aplicar
-                  </button>
-                  <Link
-                    href={construirUrl(filtros, {
-                      paciente: paciente.id,
-                      status: null,
-                      origem: null,
-                      tipoLiberacao: null,
-                      de: null,
-                      ate: null,
-                      pagina: 1,
-                    })}
-                    className={BOTAO_SECUNDARIO}
-                  >
-                    Limpar
-                  </Link>
-                </div>
-              </form>
-            )}
+            {/* Filtros do histórico (status + origem) — sempre visíveis */}
+            <FiltrosHistorico filtros={filtros} pacienteId={paciente.id} />
 
             {/* Linha do tempo funcional — eventos reais ordenados cronologicamente (mais recente primeiro) */}
             <HistoricoTimeline linhas={resultado.linhas} paciente={paciente} />
 
-            {/* Paginação preservando paciente e filtros */}
+            {/* Sprint 77 — sem paginação no Histórico: o repository entrega o
+                conjunto completo do paciente (porPagina = max(total, 1),
+                pagina sempre 1) para a timeline permanecer íntegra; o controle
+                anterior era morto e ainda descartava filtros de período. */}
             {total > 0 && (
-              <nav
-                aria-label="Paginação"
-                className="flex flex-wrap items-center justify-between gap-3"
-              >
-                <p className="text-sm text-zinc-500">
-                  Página {filtros.pagina} de {totalPaginas}
-                </p>
-                <div className="flex gap-2">
-                  {filtros.pagina > 1 && (
-                    <Link
-                      href={construirUrl(filtros, {
-                        paciente: paciente.id,
-                        status: filtroStatusAtivo ? filtros.status : null,
-                        origem: filtroOrigemAtiva ? filtros.origem : null,
-                        tipoLiberacao: null,
-                        de: null,
-                        ate: null,
-                        pagina: filtros.pagina - 1,
-                      })}
-                      className={BOTAO_SECUNDARIO}
-                    >
-                      Anterior
-                    </Link>
-                  )}
-                  {filtros.pagina < totalPaginas && (
-                    <Link
-                      href={construirUrl(filtros, {
-                        paciente: paciente.id,
-                        status: filtroStatusAtivo ? filtros.status : null,
-                        origem: filtroOrigemAtiva ? filtros.origem : null,
-                        tipoLiberacao: null,
-                        de: null,
-                        ate: null,
-                        pagina: filtros.pagina + 1,
-                      })}
-                      className={BOTAO_SECUNDARIO}
-                    >
-                      Próxima
-                    </Link>
-                  )}
-                </div>
-              </nav>
+              <p className="text-sm text-zinc-500" aria-live="polite">
+                Linha do tempo completa — {total} {total === 1 ? "registro" : "registros"}.
+              </p>
             )}
           </div>
         </div>
       );
     }
 
-    // Histórico com zero itens (paciente selecionado mas sem liberações).
+    // Histórico com zero itens (paciente selecionado mas sem liberações —
+    // inclui filtros que excluíram tudo: o form permite ajustar sem trocar).
     if (resultado && resultado.linhas.length === 0 && resultado.paciente != null) {
+      const algumFiltro = !!filtros.status || !!filtros.origem || !!filtros.de || !!filtros.ate || !!filtros.tipoLiberacao;
       return (
         <div className="flex flex-1 flex-col py-6">
           <div className={`${CONTAINER} flex flex-col gap-6`}>
@@ -586,11 +579,18 @@ export default function RelatoriosView(props: RelatoriosViewProps) {
                 Trocar paciente
               </Link>
             </div>
-            <EstadoVazio mensagem="Não há movimentações históricas registradas para este paciente." />
-           </div>
-         </div>
-       );
-     }
+            <FiltrosHistorico filtros={filtros} pacienteId={resultado.paciente!.id} />
+            <EstadoVazio
+              mensagem={
+                algumFiltro
+                  ? "O paciente não possui liberações para os filtros."
+                  : "Não há movimentações históricas registradas para este paciente."
+              }
+            />
+          </div>
+        </div>
+      );
+    }
 
       // Fallback caso resultado exista mas linhas tenham sido removidas inesperadamente.
       if (resultado && resultado.linhas.length === 0) {
@@ -1948,27 +1948,32 @@ function HistoricoTimeline({
       eventos.push({ id: `ret-${lib.id}-${r.dataHora}-${r.quantidade}`, dataHora: r.dataHora, tipo: "retirada", retirada: r, liberacao: lib });
     }
   }
-  // Mais recente primeiro
+  // Contrato de ordenação (Sprint 77): o domínio constrói eventos em ordem
+  // ascendente (ordenarEventos, para montagem cronológica); a APRESENTAÇÃO
+  // inverte para mais-recente-primeiro. Regra única, documentada aqui e
+  // coberta por teste — não duplicar ordenação em outros lugares.
   eventos.sort((a, b) => (a.dataHora < b.dataHora ? 1 : a.dataHora > b.dataHora ? -1 : 0));
 
   if (eventos.length === 0) {
     return <EstadoVazio mensagem="Não há movimentações históricas registradas para este paciente." />;
   }
 
-  // Agrupamento por data (Hoje/Ontem/Data)
-  const hoje = new Date().toISOString().slice(0, 10);
+  // Agrupamento pelo DIA LOCAL (Sprint 77): timestamps são UTC; agrupar por
+  // slice(0, 10) força o dia UTC e erra perto da meia-noite. Cabeçalho e
+  // horário do evento usam o mesmo fuso, para nunca divergirem.
+  const hoje = obterChaveDiaLocal(new Date().toISOString());
   const ontemDate = new Date();
   ontemDate.setDate(ontemDate.getDate() - 1);
-  const ontem = ontemDate.toISOString().slice(0, 10);
-  function rotuloData(iso: string): string {
-    const d = iso.slice(0, 10);
-    if (d === hoje) return "Hoje";
-    if (d === ontem) return "Ontem";
-    return formatarData(iso);
+  const ontem = obterChaveDiaLocal(ontemDate.toISOString());
+  function rotuloData(chaveDia: string): string {
+    if (chaveDia === hoje) return "Hoje";
+    if (chaveDia === ontem) return "Ontem";
+    const [ano, mes, dia] = chaveDia.split("-");
+    return ano && mes && dia ? `${dia}/${mes}/${ano}` : chaveDia;
   }
   const grupos = new Map<string, Evento[]>();
   for (const ev of eventos) {
-    const k = ev.dataHora.slice(0, 10);
+    const k = obterChaveDiaLocal(ev.dataHora);
     if (!grupos.has(k)) grupos.set(k, []);
     grupos.get(k)!.push(ev);
   }
@@ -1988,7 +1993,7 @@ function HistoricoTimeline({
                     <div className={`${CARTAO} p-4`}>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center rounded-full border bg-zinc-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-700 border-zinc-200">PACIENTE CADASTRADO</span>
-                        <span className="text-xs text-zinc-500">{formatarDataHora(ev.dataHora)}</span>
+                        <span className="text-xs text-zinc-500">{formatarDataHoraLocal(ev.dataHora)}</span>
                       </div>
                       <p className="mt-2 text-sm font-medium text-brand-900">Paciente {ev.paciente.nome} cadastrado no sistema</p>
                     </div>
@@ -2000,7 +2005,7 @@ function HistoricoTimeline({
               const dotClass = isLiberacao ? "bg-brand-600" : "bg-emerald-500";
               const badgeClass = isLiberacao ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-emerald-50 text-emerald-700 border-emerald-200";
               const titulo = isLiberacao ? (lib.renovacaoDeId ? "LIBERAÇÃO RENOVADA" : "LIBERAÇÃO CRIADA") : "RETIRADA";
-              const dataFmt = isLiberacao ? formatarDataHora(ev.dataHora) : formatarDataHora(ev.dataHora);
+              const dataFmt = formatarDataHoraLocal(ev.dataHora);
               const saldo = lib.saldo;
               const acima = saldo < 0;
               return (
@@ -2028,7 +2033,7 @@ function HistoricoTimeline({
                             <ul className="mt-1 flex flex-col gap-1">
                               {lib.retiradas.map((rr, idx) => (
                                 <li key={idx} className="text-xs text-zinc-600">
-                                  {formatarDataHora(rr.dataHora)} · {rr.quantidade} vale(s) {rr.recepcionistaNome ? `· ${rr.recepcionistaNome}` : ""}
+                                  {formatarDataHoraLocal(rr.dataHora)} · {rr.quantidade} vale(s) {rr.recepcionistaNome ? `· ${rr.recepcionistaNome}` : ""}
                                 </li>
                               ))}
                             </ul>

@@ -4,8 +4,12 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import RelatoriosView from "@/app/dashboard/relatorios/components/relatorios-view";
 
+const { mocksRouter } = vi.hoisted(() => ({
+  mocksRouter: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+}));
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => mocksRouter,
 }));
 
 vi.mock("@/app/actions/pacientes", () => ({
@@ -18,6 +22,7 @@ vi.mock("@/app/actions/usuarios", () => ({
 }));
 import type {
   FiltrosRelatorio,
+  ItemHistorico,
   ResultadoListaRelatorio,
   ResultadoResumoRelatorio,
 } from "@/lib/domain/relatorios/types";
@@ -296,6 +301,136 @@ describe("RelatoriosView — filtros", () => {
     expect(screen.getByLabelText("Tipo de liberação")).toBeInTheDocument();
   });
 });
+describe("RelatoriosView — Histórico por paciente (Sprint 77)", () => {
+  function filtrosHistorico(sobre?: Partial<FiltrosRelatorio>): FiltrosRelatorio {
+    return {
+      tipo: "historico",
+      de: null,
+      ate: null,
+      busca: null,
+      tipoLiberacao: null,
+      pagina: 1,
+      paciente: "p1",
+      status: null,
+      origem: null,
+      ...sobre,
+    };
+  }
+
+  function itemHistorico(sobre?: Partial<ItemHistorico>): ItemHistorico {
+    return {
+      id: "l1",
+      dataInicio: "2026-01-01T00:00:00.000Z",
+      dataFim: "2026-04-01T00:00:00.000Z",
+      tipo: "continua",
+      quantidade: 4,
+      periodoMeses: 3,
+      status: "ativa",
+      renovacaoDeId: null,
+      autorizador: { id: "u1", nome: "Dr. João" },
+      registrador: { id: "u2", nome: "Joana Recep" },
+      origem: null,
+      quantidadeRetirada: 2,
+      numeroRetiradas: 1,
+      ultimaRetirada: "2026-01-05T12:00:00.000Z",
+      saldo: 2,
+      retiradas: [{ dataHora: "2026-01-05T12:00:00.000Z", quantidade: 2, recepcionistaNome: "Joana Recep" }],
+      createdAt: "2026-01-01T12:00:00.000Z",
+      ...sobre,
+    };
+  }
+
+  function resultadoHistorico(sobre?: {
+    paciente?: ResultadoListaRelatorio extends never ? never : { id: string; gestor_sus: string; nome: string; created_at?: string | null } | null;
+    linhas?: ItemHistorico[];
+  }) {
+    const linhas = sobre?.linhas ?? [itemHistorico()];
+    return {
+      tipo: "historico" as const,
+      paciente: sobre && "paciente" in sobre ? sobre.paciente! : { id: "p1", gestor_sus: "123456", nome: "Maria da Silva", created_at: "2025-12-20T12:00:00.000Z" },
+      linhas,
+      total: linhas.length,
+      pagina: 1,
+      porPagina: Math.max(linhas.length, 1),
+    };
+  }
+
+  it("filtros de status e origem ficam sempre visíveis, mesmo sem filtro ativo", () => {
+    renderizar({ filtros: filtrosHistorico(), resultado: resultadoHistorico() });
+    expect(screen.getByLabelText("Status")).toBeInTheDocument();
+    expect(screen.getByLabelText("Origem")).toBeInTheDocument();
+    expect(screen.getAllByRole("option", { name: "Todos" })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Aplicar" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Limpar" })).toBeInTheDocument();
+  });
+
+  it("filtro ativo é preservado no controle e na URL de limpeza", () => {
+    renderizar({
+      filtros: filtrosHistorico({ status: "ativa", origem: "original" }),
+      resultado: resultadoHistorico(),
+    });
+    expect(screen.getByLabelText("Status")).toHaveValue("ativa");
+    expect(screen.getByLabelText("Origem")).toHaveValue("original");
+    const limpar = screen.getByRole("link", { name: "Limpar" });
+    const href = limpar.getAttribute("href") ?? "";
+    expect(href).toContain("paciente=p1");
+    expect(href).not.toContain("status=");
+    expect(href).not.toContain("origem=");
+  });
+
+  it("não exibe paginação morta; indica linha do tempo completa", () => {
+    renderizar({ filtros: filtrosHistorico(), resultado: resultadoHistorico() });
+    expect(screen.queryByRole("navigation", { name: "Paginação" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Anterior" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Próxima" })).not.toBeInTheDocument();
+    expect(screen.getByText(/linha do tempo completa/i)).toBeInTheDocument();
+  });
+
+  it("ordena eventos com o mais recente no topo (contrato de apresentação)", () => {
+    renderizar({ filtros: filtrosHistorico(), resultado: resultadoHistorico() });
+    const texto = document.body.textContent ?? "";
+    // Retirada (05/01) deve aparecer antes da criação da liberação (01/01).
+    expect(texto.indexOf("vales retirados")).toBeLessThan(texto.indexOf("LIBERAÇÃO CRIADA"));
+    expect(texto.indexOf("LIBERAÇÃO CRIADA")).toBeLessThan(texto.indexOf("PACIENTE CADASTRADO"));
+  });
+
+  it("paciente não encontrado volta à busca via navegação React (sem reload)", () => {
+    mocksRouter.replace.mockClear();
+    renderizar({
+      filtros: filtrosHistorico(),
+      resultado: { ...resultadoHistorico(), paciente: null, linhas: [], total: 0, porPagina: 1 },
+    });
+    expect(screen.getByText("Paciente não encontrado.")).toBeInTheDocument();
+    // O código antigo chamava window.location.reload() aqui e nunca o router;
+    // a navegação via replace prova o novo fluxo.
+    screen.getByRole("button", { name: "Buscar outro paciente" }).click();
+    expect(mocksRouter.replace).toHaveBeenCalledTimes(1);
+    const url = String(mocksRouter.replace.mock.calls[0][0]);
+    expect(url).toContain("tipo=historico");
+    expect(url).not.toContain("paciente=");
+  });
+
+  it("sem liberações, mantém filtros para ajustar sem trocar de paciente", () => {
+    renderizar({
+      filtros: filtrosHistorico({ status: "cancelada" }),
+      resultado: resultadoHistorico({ linhas: [] }),
+    });
+    expect(screen.getByLabelText("Status")).toHaveValue("cancelada");
+    expect(screen.getByText("O paciente não possui liberações para os filtros.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Trocar paciente" })).toBeInTheDocument();
+  });
+
+  it("deep link com paciente e filtros preserva estado", () => {
+    renderizar({
+      filtros: filtrosHistorico({ status: "ativa" }),
+      resultado: resultadoHistorico(),
+    });
+    expect(screen.getByText("Maria da Silva")).toBeInTheDocument();
+    const trocar = screen.getByRole("link", { name: "Trocar paciente" });
+    expect(trocar.getAttribute("href") ?? "").toContain("tipo=historico");
+  });
+});
+
 describe("RelatoriosView — aba Resumo (Sprint 40)", () => {
   const resumoCheio: ResultadoResumoRelatorio = {
     totalPacientes: 2,

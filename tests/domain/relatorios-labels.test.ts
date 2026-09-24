@@ -13,6 +13,8 @@ import {
   descreverPeriodo,
   formatarData,
   formatarDataHora,
+  formatarDataHoraLocal,
+  obterChaveDiaLocal,
   rotuloStatusLiberacao,
   rotuloTipoLiberacao,
   rotuloTipoRelatorio,
@@ -140,6 +142,25 @@ describe("rótulos e formatação dos relatórios", () => {
   it("formata datas de forma determinística (sem fuso local)", () => {
     expect(formatarData("2026-01-01T00:00:00.000Z")).toBe("01/01/2026");
     expect(formatarDataHora("2026-01-05T10:30:00.000000+00:00")).toBe("05/01/2026 · 10:30");
+  });
+
+  it("Sprint 77 — agrupa pelo dia local: evento perto da meia-noite não cai no dia UTC errado", () => {
+    const SP = "America/Sao_Paulo";
+    // 23:30 local (02/02) = 02:30Z do dia seguinte — slice UTC diria 03/02.
+    expect(obterChaveDiaLocal("2026-02-03T02:30:00.000Z", SP)).toBe("2026-02-02");
+    // 00:30 local (03/02) = 03:30Z do mesmo dia.
+    expect(obterChaveDiaLocal("2026-02-03T03:30:00.000Z", SP)).toBe("2026-02-03");
+    // Meio do dia: estável.
+    expect(obterChaveDiaLocal("2026-02-03T15:00:00.000Z", SP)).toBe("2026-02-03");
+    // Entrada inválida: fallback para o prefixo, sem lançar.
+    expect(obterChaveDiaLocal("invalido", SP)).toBe("invalido");
+  });
+
+  it("Sprint 77 — horário do evento usa o mesmo fuso do agrupamento", () => {
+    const SP = "America/Sao_Paulo";
+    expect(formatarDataHoraLocal("2026-02-03T02:30:00.000Z", SP)).toBe("02/02/2026 · 23:30");
+    expect(formatarDataHoraLocal("2026-02-03T03:30:00.000Z", SP)).toBe("03/02/2026 · 00:30");
+    expect(formatarDataHoraLocal("invalido", SP)).toBe("invalido");
   });
 
   it("descreve período: avulsa mostra só o dia; contínua mostra 'de a'", () => {
