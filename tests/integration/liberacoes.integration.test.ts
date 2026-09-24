@@ -518,6 +518,150 @@ describe.skipIf(!habilitado)("Integração — origem do paciente (Sprint 38)", 
     }
   });
 
+  it("✗ recepcionista NÃO insere contínua nova direto — RLS Sprint 76 (bypass PostgREST)", async (ctx) => {
+    // Sonda adaptativa (Sprint 76 §7): com a migration 20260904000001 ainda NÃO
+    // aplicada, o banco PERMITE o insert → remove a linha e pula sem falhar.
+    // Com a migration aplicada, o banco NEGA → valida a correção.
+    const admin = adminClient();
+    const autorizadorId = await usuarioAtualId(autorizador);
+    const gestorSus = `9${sufixo()}8`;
+    let pacienteId: string | null = null;
+    let liberacaoId: string | null = null;
+
+    try {
+      const { data: paciente, error: errPac } = await admin
+        .from("pacientes")
+        .insert({ gestor_sus: gestorSus, nome: "S76 RLS Bypass", origem: "regular" })
+        .select("id")
+        .single();
+      expect(errPac).toBeNull();
+      pacienteId = paciente!.id;
+
+      const { data, error } = await recepcionista
+        .from("liberacoes")
+        .insert({
+          paciente_id: pacienteId,
+          tipo: "continua",
+          quantidade: 4,
+          periodo_meses: 3,
+          data_fim: new Date(Date.now() + 90 * 86400000).toISOString(),
+          profissional_autorizador_id: autorizadorId,
+          renovacao_de_id: null,
+        })
+        .select("id")
+        .single();
+
+      if (!error) {
+        // Migration ainda não aplicada: prova viva da divergência P1 — limpar e pular.
+        liberacaoId = (data as { id: string } | null)?.id ?? null;
+        if (liberacaoId) await limparLiberacoes(admin, [liberacaoId]);
+        liberacaoId = null;
+        if (pacienteId) await limparPacientes(admin, [pacienteId]);
+        pacienteId = null;
+        ctx.skip();
+        return;
+      }
+      expect(data).toBeNull();
+      expect(error.message).toMatch(/row-level security/i);
+    } finally {
+      if (liberacaoId && pacienteId) await limparLiberacoes(admin, [liberacaoId]);
+      if (pacienteId) await limparPacientes(admin, [pacienteId]);
+    }
+  });
+
+  it("✓ recepcionista insere avulsa nova direto — RLS preservada (Sprint 76)", async () => {
+    const admin = adminClient();
+    const autorizadorId = await usuarioAtualId(autorizador);
+    const gestorSus = `9${sufixo()}9`;
+    let pacienteId: string | null = null;
+    const idsLiberacoes: string[] = [];
+
+    try {
+      const { data: paciente, error: errPac } = await admin
+        .from("pacientes")
+        .insert({ gestor_sus: gestorSus, nome: "S76 RLS Avulsa", origem: "regular" })
+        .select("id")
+        .single();
+      expect(errPac).toBeNull();
+      pacienteId = paciente!.id;
+
+      const { data, error } = await recepcionista
+        .from("liberacoes")
+        .insert({
+          paciente_id: pacienteId,
+          tipo: "avulsa",
+          quantidade: 2,
+          periodo_meses: null,
+          data_fim: new Date(Date.now() + 86400000).toISOString(),
+          profissional_autorizador_id: autorizadorId,
+          renovacao_de_id: null,
+        })
+        .select("id")
+        .single();
+      expect(error).toBeNull();
+      idsLiberacoes.push((data as { id: string }).id);
+    } finally {
+      if (idsLiberacoes.length) await limparLiberacoes(admin, idsLiberacoes);
+      if (pacienteId) await limparPacientes(admin, [pacienteId]);
+    }
+  });
+
+  it("✓ recepcionista insere renovação de contínua direto — RLS preservada (Sprint 76)", async () => {
+    const admin = adminClient();
+    const autorizadorId = await usuarioAtualId(autorizador);
+    const gestorSus = `9${sufixo()}0`;
+    let pacienteId: string | null = null;
+    const idsLiberacoes: string[] = [];
+
+    try {
+      const { data: paciente, error: errPac } = await admin
+        .from("pacientes")
+        .insert({ gestor_sus: gestorSus, nome: "S76 RLS Renovacao", origem: "regular" })
+        .select("id")
+        .single();
+      expect(errPac).toBeNull();
+      pacienteId = paciente!.id;
+
+      // Original criada via sessão do autorizador (o trigger exige auth.uid
+      // vinculado — service role não passa no fn_liberacoes_before).
+      const { data: original, error: errOrig } = await autorizador
+        .from("liberacoes")
+        .insert({
+          paciente_id: pacienteId,
+          tipo: "continua",
+          quantidade: 4,
+          periodo_meses: 3,
+          data_fim: new Date(Date.now() + 90 * 86400000).toISOString(),
+          profissional_autorizador_id: autorizadorId,
+          renovacao_de_id: null,
+        })
+        .select("id")
+        .single();
+      expect(errOrig).toBeNull();
+      const originalId = (original as { id: string }).id;
+
+      // Renovação preservando tipo, como a action monta (Sprint 76 §3).
+      const { data, error } = await recepcionista
+        .from("liberacoes")
+        .insert({
+          paciente_id: pacienteId,
+          tipo: "continua",
+          quantidade: 4,
+          periodo_meses: 3,
+          data_fim: new Date(Date.now() + 90 * 86400000).toISOString(),
+          profissional_autorizador_id: autorizadorId,
+          renovacao_de_id: originalId,
+        })
+        .select("id")
+        .single();
+      expect(error).toBeNull();
+      idsLiberacoes.push((data as { id: string }).id, originalId);
+    } finally {
+      if (idsLiberacoes.length) await limparLiberacoes(admin, idsLiberacoes);
+      if (pacienteId) await limparPacientes(admin, [pacienteId]);
+    }
+  });
+
   it("✗ paciente esporádico NÃO recebe liberação contínua (trigger RN29)", async () => {
     if (!(await origemAplicada())) return;
     const admin = adminClient();

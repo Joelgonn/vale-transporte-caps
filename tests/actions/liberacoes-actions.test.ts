@@ -311,6 +311,86 @@ describe("criarLiberacaoAction — identidade da sessão", () => {
     expect(fake.criarLiberacao.mock.calls[0][0]).not.toHaveProperty("data_fim");
   });
 
+  it("Sprint 76 — recepção + avulsa nova → permitido (action repassa ao serviço)", async () => {
+    comPerfil({ perfil: PERFIS.RECEPCIONISTA, statusAtivo: true, usuarioId: "u-recep" });
+    const fake = serviceFake();
+    mocks.createService.mockResolvedValue(fake);
+    mocks.buscarPaciente.mockResolvedValue({ id: "p1", origem: "regular" });
+
+    const resultado = await criarLiberacaoAction({
+      pacienteId: "p1",
+      tipo: TIPOS_LIBERACAO.AVULSA,
+      quantidade: 2,
+      periodoMeses: null,
+    });
+
+    expect(resultado.ok).toBe(true);
+    expect(fake.criarLiberacao).toHaveBeenCalledWith(
+      expect.objectContaining({ tipo: TIPOS_LIBERACAO.AVULSA }),
+      "regular"
+    );
+  });
+
+  it("Sprint 76 — recepção + contínua nova → negado ACESSO_NEGADO sem chamar o serviço", async () => {
+    comPerfil({ perfil: PERFIS.RECEPCIONISTA, statusAtivo: true, usuarioId: "u-recep" });
+    const fake = serviceFake();
+    mocks.createService.mockResolvedValue(fake);
+
+    const resultado = await criarLiberacaoAction({
+      pacienteId: "p1",
+      tipo: TIPOS_LIBERACAO.CONTINUA,
+      quantidade: 4,
+      periodoMeses: 3,
+    });
+
+    expect(resultado.ok).toBe(false);
+    if (!resultado.ok) expect(resultado.error).toMatch(/contínua/i);
+    expect(mocks.createService).not.toHaveBeenCalled();
+    expect(fake.criarLiberacao).not.toHaveBeenCalled();
+  });
+
+  it("Sprint 76 — gestor + contínua nova → permitido (comportamento preservado)", async () => {
+    comPerfil({ perfil: PERFIS.GESTOR, statusAtivo: true, usuarioId: "u-gestor" });
+    const fake = serviceFake();
+    fake.listarLiberacoes.mockResolvedValue([]);
+    mocks.createService.mockResolvedValue(fake);
+    mocks.buscarPaciente.mockResolvedValue({ id: "p1", origem: "regular" });
+
+    const resultado = await criarLiberacaoAction({
+      pacienteId: "p1",
+      tipo: TIPOS_LIBERACAO.CONTINUA,
+      quantidade: 4,
+      periodoMeses: 3,
+    });
+
+    expect(resultado.ok).toBe(true);
+    expect(fake.criarLiberacao).toHaveBeenCalledWith(
+      expect.objectContaining({ tipo: TIPOS_LIBERACAO.CONTINUA }),
+      "regular"
+    );
+  });
+
+  it("Sprint 76 — autorizador + contínua nova → permitido (comportamento preservado)", async () => {
+    comPerfil({ perfil: PERFIS.PROFISSIONAL_AUTORIZADOR, statusAtivo: true, usuarioId: "u-autor" });
+    const fake = serviceFake();
+    fake.listarLiberacoes.mockResolvedValue([]);
+    mocks.createService.mockResolvedValue(fake);
+    mocks.buscarPaciente.mockResolvedValue({ id: "p1", origem: "regular" });
+
+    const resultado = await criarLiberacaoAction({
+      pacienteId: "p1",
+      tipo: TIPOS_LIBERACAO.CONTINUA,
+      quantidade: 4,
+      periodoMeses: 3,
+    });
+
+    expect(resultado.ok).toBe(true);
+    expect(fake.criarLiberacao).toHaveBeenCalledWith(
+      expect.objectContaining({ tipo: TIPOS_LIBERACAO.CONTINUA }),
+      "regular"
+    );
+  });
+
   it("renovação sem liberação original (não encontrada) é rejeitada sem criar", async () => {
     comPerfil({ perfil: PERFIS.RECEPCIONISTA, statusAtivo: true });
     const fake = serviceFake();
