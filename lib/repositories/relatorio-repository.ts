@@ -154,17 +154,14 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
 
     const totaisBase = calcularTotaisLiberacoes(todasLinhas);
     const contadores = calcularContadoresLiberacoes(todasLinhas);
-    // Totais refletem base (conjunto filtrado por período/tipo/status/paciente) — mesmo que contadores
-    // Para situacao, filtramos e recalculamos totais sobre filtrado? Spec: indicadores devem refletir conjunto atual dos filtros (inclui status etc, mas não situação até clicar)
-    // Quando situação ativa, tabela mostra filtrado, mas cards devem continuar do base? Sprint 53 fez cards do filtrado. Para Liberações, spec §4: indicadores devem representar conjunto atual dos filtros (inclui situação? diz se selecionar paciente período tipo status). Vamos manter totais como base, e quando situação ativa, tabela usa filtrado. Contadores sempre base.
+    // Regra de totais (consistente com o Consolidado): base = conjunto dos
+    // filtros de consulta; com filtro de situação ativo, totais recalculados
+    // sobre o filtrado. Contadores sempre sobre a base.
     const filtradas = filtrarPorSituacaoLiberacoes(todasLinhas, situacao);
     const total = filtradas.length;
     const inicio = (filtros.pagina - 1) * porPagina;
     const linhasPaginadas = filtradas.slice(inicio, inicio + porPagina);
 
-    // Se há filtro de situação, totais da camada de cards devem refletir filtrado ou base?
-    // Spec §4: se selecionar paciente/status, indicadores refletem aquele paciente. Implica totais devem recalcular conforme filtros incluindo situação? Para consistência com Consolidado (totais sobre filtrado), se situação ativa, mostramos filtrado.
-    // Vamos usar: se situação ativa, totais = calcular sobre filtrado; senão base.
     const totais = situacao ? calcularTotaisLiberacoes(filtradas) : totaisBase;
 
     return {
@@ -347,8 +344,8 @@ export class RelatorioRepositoryPostgres implements RelatorioRepository {
       };
     }
 
-    // Busca o paciente no v_pacientes (sem CPF, RLS-safe) para o cabeçalho.
-    // Sprint 46 — inclui origem para badge Regular/Esporádico no header premium.
+    // Busca o paciente no v_pacientes (sem CPF, RLS-safe) para o cabeçalho
+    // (nome/SUS/origem textual) e para o evento de cadastro na timeline.
     // Sprint 56 — inclui created_at para evento de cadastro na timeline.
     const { data: paciente, error: erroPaciente } = await this.client
       .from("v_pacientes")

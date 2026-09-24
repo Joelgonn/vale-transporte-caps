@@ -8,6 +8,7 @@ import {
   ACOES_AUDITORIA,
   ENTIDADES_AUDITORIA,
 } from "@/lib/domain/auditoria/labels";
+import { formatarDataHoraLocal } from "@/lib/domain/relatorios/rotulos";
 
 describe("rotulos da auditoria", () => {
   it("rotula ações canônicas da fn_auditoria", () => {
@@ -56,7 +57,11 @@ describe("rotulos de campo e valores", () => {
     ).toBe("13/08/2026");
     expect(
       formatarValorCampoAuditoria("retiradas", "data_hora", "2026-08-13T09:31:00Z")
-    ).toBe("13/08/2026 · 09:31");
+    ).toBe(formatarDataHoraLocal("2026-08-13T09:31:00Z"));
+    // data_hora é timestamp de evento: acompanha o fuso local (Sprint 78).
+    expect(
+      formatarValorCampoAuditoria("retiradas", "data_hora", "2026-08-13T09:31:00Z")
+    ).toMatch(/^\d{2}\/\d{2}\/\d{4} · \d{2}:\d{2}$/);
     expect(formatarValorCampoAuditoria("liberacoes", "quantidade", 4)).toBe("4");
   });
 

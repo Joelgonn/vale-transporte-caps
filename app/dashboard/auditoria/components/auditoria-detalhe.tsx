@@ -8,20 +8,12 @@ import {
   rotuloEntidadeAuditoria,
 } from "@/lib/domain/auditoria/labels";
 import { CARTAO } from "@/components/ui/visual-tokens";
+import { formatarDataHoraLocal } from "@/lib/domain/relatorios/rotulos";
 
 type AuditoriaDetalheProps = {
   evento: EventoAuditoria;
   onFechar: () => void;
 };
-
-// Conversão determinística de ISO do banco (timestamptz) para "13/08/2026 · 09:31"
-// — mesmo critério das retiradas: sem depender do fuso do navegador.
-function formatarDataHora(iso: string): string {
-  const [data, hora] = iso.split("T");
-  const [ano, mes, dia] = (data ?? "").split("-");
-  const hhmm = (hora ?? "").slice(0, 5);
-  return ano && mes && dia ? `${dia}/${mes}/${ano} · ${hhmm}` : iso;
-}
 
 // Diálogo de detalhes de um evento de auditoria (Sprint 21). Modal acessível:
 // foco entra no painel, ESC fecha e o foco retorna ao gatilho no fechamento.
@@ -65,7 +57,7 @@ export default function AuditoriaDetalhe({ evento, onFechar }: AuditoriaDetalheP
               {rotuloAcaoAuditoria(evento.acao)}
             </h2>
             <p className="text-sm text-zinc-500">
-              {rotuloEntidadeAuditoria(evento.entidadeTipo)} · {formatarDataHora(evento.dataHora)}
+              {rotuloEntidadeAuditoria(evento.entidadeTipo)} · {formatarDataHoraLocal(evento.dataHora)}
             </p>
           </div>
           <button
@@ -101,7 +93,7 @@ export default function AuditoriaDetalhe({ evento, onFechar }: AuditoriaDetalheP
           </div>
           <div>
             <dt className="text-xs text-zinc-500">Data e hora</dt>
-            <dd className="font-medium text-brand-900">{formatarDataHora(evento.dataHora)}</dd>
+            <dd className="font-medium text-brand-900">{formatarDataHoraLocal(evento.dataHora)}</dd>
           </div>
         </dl>
 

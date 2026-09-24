@@ -10,6 +10,7 @@ import {
   ROTULO_STATUS_LIBERACAO,
   ROTULO_TIPO_LIBERACAO,
 } from "@/lib/domain/enums";
+import { formatarDataHoraLocal } from "@/lib/domain/relatorios/rotulos";
 
 // Identificadores canônicos gerados pela fn_auditoria (migration 07).
 export const ACOES_AUDITORIA = [
@@ -203,7 +204,10 @@ export function formatarValorCampoAuditoria(
     /^\d{4}-\d{2}-\d{2}/.test(valor) &&
     campo.startsWith("data_")
   ) {
-    return formatarData(valor, campo === "data_hora");
+    // Sprint 78: só data_hora é timestamp de evento (fuso local, mesmo
+    // critério do Histórico); demais data_* são datas de negócio (UTC-slice).
+    if (campo === "data_hora") return formatarDataHoraLocal(valor);
+    return formatarData(valor, false);
   }
   if (typeof valor === "string" || typeof valor === "number") {
     return String(valor);

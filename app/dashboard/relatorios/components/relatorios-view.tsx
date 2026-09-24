@@ -13,7 +13,6 @@ import {
 import {
   ROTULO_TIPO_RELATORIO,
   descreverPeriodo,
-  formatarDataHora,
   formatarDataHoraLocal,
   obterChaveDiaLocal,
   rotuloStatusLiberacao,
@@ -1869,7 +1868,7 @@ function TabelaRetiradas({
                     {linha.paciente?.origem ? (ROTULO_ORIGEM_PACIENTE[linha.paciente.origem as keyof typeof ROTULO_ORIGEM_PACIENTE] ?? linha.paciente.origem) : "—"}
                   </td>
                   <td className="px-4 py-3 text-zinc-700">{linha.liberacao ? rotuloTipoLiberacao(linha.liberacao.tipo) : "—"}</td>
-                  <td className="px-4 py-3 text-zinc-600">{formatarDataHora(linha.dataHora)}</td>
+                  <td className="px-4 py-3 text-zinc-600">{formatarDataHoraLocal(linha.dataHora)}</td>
                   <td className="px-4 py-3 font-medium text-brand-900">{linha.quantidade}</td>
                   <td className="px-4 py-3 text-zinc-700">{prevista ?? "—"}</td>
                   <td className="px-4 py-3">
@@ -1907,7 +1906,7 @@ function TabelaRetiradas({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-base font-semibold text-brand-900">{linha.paciente?.nome ?? "—"}</p>
-                  <p className="text-xs text-zinc-500">{formatarDataHora(linha.dataHora)} · {linha.liberacao ? rotuloTipoLiberacao(linha.liberacao.tipo) : "—"}</p>
+                  <p className="text-xs text-zinc-500">{formatarDataHoraLocal(linha.dataHora)} · {linha.liberacao ? rotuloTipoLiberacao(linha.liberacao.tipo) : "—"}</p>
                   {linha.paciente?.origem && <p className="text-xs text-zinc-500">{ROTULO_ORIGEM_PACIENTE[linha.paciente.origem as keyof typeof ROTULO_ORIGEM_PACIENTE] ?? linha.paciente.origem}</p>}
                 </div>
                 <p className={`shrink-0 text-sm font-semibold ${acima ? "text-red-700" : "text-brand-900"}`}>{linha.quantidade} vale(s)</p>
@@ -1948,10 +1947,10 @@ function HistoricoTimeline({
       eventos.push({ id: `ret-${lib.id}-${r.dataHora}-${r.quantidade}`, dataHora: r.dataHora, tipo: "retirada", retirada: r, liberacao: lib });
     }
   }
-  // Contrato de ordenação (Sprint 77): o domínio constrói eventos em ordem
-  // ascendente (ordenarEventos, para montagem cronológica); a APRESENTAÇÃO
-  // inverte para mais-recente-primeiro. Regra única, documentada aqui e
-  // coberta por teste — não duplicar ordenação em outros lugares.
+  // Contrato de ordenação (Sprint 77/78): a timeline apresenta eventos com o
+  // mais recente no topo (descendente por dataHora). O domínio oferece
+  // ordenarEventos (ascendente) para o mapeamento de auditoria_logs; aqui a
+  // ordenação é local e única — não duplicar em outros lugares.
   eventos.sort((a, b) => (a.dataHora < b.dataHora ? 1 : a.dataHora > b.dataHora ? -1 : 0));
 
   if (eventos.length === 0) {

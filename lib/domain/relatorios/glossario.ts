@@ -33,4 +33,6 @@ export const GLOSSARIO_RETIRADAS = {
 } as const;
 
 // Nota de vigência da convenção de previsão (Sprint 44 P2).
-export const CONVENCAO_PREVISAO = "Para fins de previsão administrativa do CAPS, 1 mês = 4 semanas (SEMANAS_POR_MES=4). Não persistimos valesPorDia/diasPorSemana.";
+// vales_por_dia persiste na coluna liberacoes.vales_por_dia (1–10 ou NULL);
+// diasPorSemana permanece só auxiliar de cálculo, sem persistência.
+export const CONVENCAO_PREVISAO = "Para fins de previsão administrativa do CAPS, 1 mês = 4 semanas (SEMANAS_POR_MES=4). Não persistimos diasPorSemana.";

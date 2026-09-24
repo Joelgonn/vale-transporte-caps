@@ -4,6 +4,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import AuditoriaView from "@/app/dashboard/auditoria/components/auditoria-view";
 import type { EventoAuditoria, FiltrosAuditoria } from "@/lib/domain/auditoria/types";
+import { formatarDataHoraLocal } from "@/lib/domain/relatorios/rotulos";
 
 function evento(sobre?: Partial<EventoAuditoria>): EventoAuditoria {
   return {
@@ -55,7 +56,10 @@ describe("AuditoriaView — leitura", () => {
     renderizar();
     expect(screen.getAllByText("Perfil de usuário alterado").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Usuário").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("13/08/2026 · 09:31").length).toBeGreaterThan(0);
+    // Sprint 78: timestamp de evento no fuso local (mesmo critério do Histórico).
+    expect(
+      screen.getAllByText(formatarDataHoraLocal("2026-08-13T09:31:00+00:00")).length
+    ).toBeGreaterThan(0);
     expect(screen.getAllByText("João Recep").length).toBeGreaterThan(0);
   });
 
@@ -174,5 +178,21 @@ describe("AuditoriaView — detalhes do evento", () => {
 
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
+describe("AuditoriaView — resumo operacional (Sprint 78 P3)", () => {
+  it("total de eventos usa o universo do período; demais contadores declaram a página", () => {
+    renderizar({
+      eventos: [
+        evento(),
+        evento({ id: 2, usuarioId: "u9", responsavel: { id: "u9", nome: "Outra" } }),
+      ],
+      total: 100,
+      porPagina: 20,
+    });
+    expect(screen.getByText("Eventos no período")).toBeInTheDocument();
+    expect(screen.getByText("Responsáveis nesta página")).toBeInTheDocument();
+    expect(screen.getByText("Tipos de entidade nesta página")).toBeInTheDocument();
   });
 });

@@ -55,13 +55,16 @@ export function formatarDataHora(iso: string): string {
   return ano && mes && dia ? `${dia}/${mes}/${ano} · ${hhmm}` : iso;
 }
 
-// ── Sprint 77 — dia/hora LOCAL para a timeline do Histórico ───────────────
-// Timestamps persistidos são UTC; agrupar por `slice(0, 10)` força o dia UTC
-// e um evento próximo da meia-noite cai no dia errado para o usuário.
+// ── Dia/hora LOCAL para timestamps de evento (Sprint 77 Histórico, Sprint 78
+// Retiradas + Auditoria) ──────────────────────────────────────────────────
+// Timestamps persistidos são UTC; exibir/agrupar por `slice(0, 10)` força o dia
+// UTC e um evento próximo da meia-noite cai no dia errado para o usuário.
 // Estas funções interpretam o timestamp no fuso da interface (padrão: fuso
 // local do ambiente; testes passam `timeZone` explícito) — SOMENTE
 // representação visual, sem tocar em data_hora/created_at/banco.
-// Escopo: Histórico. As demais abas mantêm formatarData/formatarDataHora.
+// Escopo: timestamps de EVENTO (retirada.data_hora, auditoria.data_hora,
+// timeline do Histórico). Datas de NEGÓCIO (data_inicio/data_fim) mantêm
+// formatarData/formatarDataHora (UTC-slice determinístico).
 
 // Chave de agrupamento `AAAA-MM-DD` no fuso indicado (determinística via Intl).
 export function obterChaveDiaLocal(iso: string, timeZone?: string): string {

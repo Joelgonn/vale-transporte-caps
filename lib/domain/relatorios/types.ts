@@ -17,8 +17,10 @@ export type TipoRelatorio = (typeof TIPOS_RELATORIO)[number];
 
 // Filtros da consulta. Todos são opcionais e aplicados NO SERVIDOR (PostgREST
 // eq/gte/lte + range) — nunca filtramos no navegador sobre dados incompletos.
-// `status` e `origem` existem somente no histórico por paciente; `paciente`
-// seleciona o paciente do histórico (id de v_pacientes).
+// `status` vale para histórico e liberações; `origem` (original/renovacao)
+// somente no histórico; `paciente` seleciona o paciente do histórico e do
+// resumo (id de v_pacientes); `tipoLiberacao` (tl) vale para resumo,
+// liberações e retiradas.
 // Sprint 53 — `situacaoConsolidado` é filtro de visualização do consolidado
 // (estouro/sem_retirada/proximo_vencimento/expirada_sem_uso).
 // Sprint 54 — `situacaoLiberacoes` e `status` também para liberações.

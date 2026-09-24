@@ -26,6 +26,7 @@ import type {
   ResultadoListaRelatorio,
   ResultadoResumoRelatorio,
 } from "@/lib/domain/relatorios/types";
+import { formatarDataHoraLocal } from "@/lib/domain/relatorios/rotulos";
 
 function filtros(sobre?: Partial<FiltrosRelatorio>): FiltrosRelatorio {
   return {
@@ -191,7 +192,10 @@ describe("RelatoriosView — tabela de retiradas", () => {
         contadores: { acimaPrevisao: 1, foraVigencia: 0 },
       },
     });
-    expect(screen.getAllByText("05/01/2026 · 10:30").length).toBeGreaterThan(0);
+    // Sprint 78: timestamp de evento no fuso local (mesmo da timeline do Histórico).
+    expect(
+      screen.getAllByText(formatarDataHoraLocal("2026-01-05T10:30:00.000000+00:00")).length
+    ).toBeGreaterThan(0);
     expect(screen.getAllByText("Avulsa").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Joana Recep").length).toBeGreaterThan(0);
   });

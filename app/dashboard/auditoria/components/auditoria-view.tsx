@@ -14,6 +14,7 @@ import type {
   EventoAuditoria,
   FiltrosAuditoria,
 } from "@/lib/domain/auditoria/types";
+import { formatarDataHoraLocal } from "@/lib/domain/relatorios/rotulos";
 import {
   BADGE_NEUTRO,
   BOTAO_SECUNDARIO,
@@ -33,15 +34,6 @@ type AuditoriaViewProps = {
   erroInicial: string | null;
   responsaveis: { id: string; nome: string }[];
 };
-
-// Conversão determinística de ISO do banco (timestamptz) — mesmo critério das
-// retiradas: sem depender do fuso local do navegador/servidor.
-function formatarDataHora(iso: string): string {
-  const [data, hora] = iso.split("T");
-  const [ano, mes, dia] = (data ?? "").split("-");
-  const hhmm = (hora ?? "").slice(0, 5);
-  return ano && mes && dia ? `${dia}/${mes}/${ano} · ${hhmm}` : iso;
-}
 
 // URL com os filtros atuais + ajustes (paginação/limpar). Usada nos links de
 // paginação — mantém os filtros do usuário ao trocar de página.
@@ -76,7 +68,10 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
     setDetalhe(evento);
   }
 
-  // Resumo operacional derivado dos eventos já filtrados (sem nova query)
+  // Resumo operacional derivado dos eventos já filtrados (sem nova query).
+  // Sprint 78 (P3): "Eventos" usa o total global do período; "Responsáveis" e
+  // "Tipos de entidade" derivam da PÁGINA atual — os rótulos declaram o
+  // universo exato para não sugerir abrangência do período.
   const usuariosDistintos = new Set(eventos.map((e) => e.usuarioId)).size;
   const entidadesDistintas = new Set(eventos.map((e) => e.entidadeTipo)).size;
 
@@ -95,11 +90,11 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
               <dd className="mt-2 text-2xl font-semibold text-brand-900">{total}</dd>
             </div>
             <div className={`${CARTAO} p-4`}>
-              <dt className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Responsáveis</dt>
+              <dt className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Responsáveis nesta página</dt>
               <dd className="mt-2 text-2xl font-semibold text-brand-900">{usuariosDistintos}</dd>
             </div>
             <div className={`${CARTAO} p-4`}>
-              <dt className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Tipos de entidade</dt>
+              <dt className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Tipos de entidade nesta página</dt>
               <dd className="mt-2 text-2xl font-semibold text-brand-900">{entidadesDistintas}</dd>
             </div>
           </dl>
@@ -261,7 +256,7 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
                         <span className={BADGE_NEUTRO}>{rotuloEntidadeAuditoria(evento.entidadeTipo)}</span>
                       </td>
                       <td className="px-4 py-3 text-zinc-600">
-                        {formatarDataHora(evento.dataHora)}
+                        {formatarDataHoraLocal(evento.dataHora)}
                       </td>
                       <td className="px-4 py-3 text-zinc-600">
                         {evento.responsavel?.nome ?? "—"}
@@ -298,7 +293,7 @@ export default function AuditoriaView(props: AuditoriaViewProps) {
                       <span className={BADGE_NEUTRO}>{rotuloEntidadeAuditoria(evento.entidadeTipo)}</span>
                     </div>
                     <p className="text-xs text-zinc-500">
-                      {formatarDataHora(evento.dataHora)} · #{evento.id}
+                      {formatarDataHoraLocal(evento.dataHora)} · #{evento.id}
                     </p>
                   </div>
                   <dl className="mt-3 flex flex-col gap-2 text-sm">

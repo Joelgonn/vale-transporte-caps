@@ -1,8 +1,7 @@
-// Sprint 44 — P2 Histórico: preparar domínio para ESTADO ATUAL + EVENTOS
-// O histórico hoje é principalmente estado atual + soma de retiradas.
-// Para a próxima UX, precisamos expor também a linha do tempo de eventos
-// (criação, renovação, retirada, alteração de previsão/vigência, cancelamento)
-// reutilizando auditoria_logs como fonte da verdade — sem duplicar trilha.
+// Mapeamento auditoria_logs → eventos de histórico (tipos + ordenação).
+// A timeline atual do Histórico monta eventos a partir de ItemHistorico
+// (liberação criada/renovada + retiradas); este módulo serve ao mapeamento
+// canônico de auditoria (ações/entidades da fn_auditoria) — sem duplicar trilha.
 
 export type TipoEventoHistorico =
   | "liberacao.criada"
