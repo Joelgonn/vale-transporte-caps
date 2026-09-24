@@ -348,7 +348,12 @@ describe.skipIf(!habilitado)("Estabilização — renovação via PostgREST dire
     }
   });
 
-  it("recepção CRIA liberação nova via PostgREST direto — Sprint44 (todos criam)", async () => {
+  // Sprint 76 (revoga premissa Sprint 44) — a recepção NÃO cria liberação
+  // contínua nova via PostgREST direto: a policy
+  // liberacoes_insert_recepcionista_44 exige (tipo = avulsa OR
+  // renovacao_de_id IS NOT NULL). A negação deve permanecer estável: erro
+  // 42501 de row-level security e nenhuma linha criada.
+  it("recepção NÃO CRIA liberação contínua nova via PostgREST direto — RLS Sprint 76 (negação estável)", async () => {
     const admin = adminClient();
     const autorizadorId = await usuarioAtualId(autorizador);
     const pacienteId = await pacienteTeste(admin);
@@ -367,9 +372,13 @@ describe.skipIf(!habilitado)("Estabilização — renovação via PostgREST dire
         .select("id")
         .single();
 
-      expect(error).toBeNull();
-      expect(data?.id).toBeTruthy();
-      id = data!.id;
+      // Guarda para limpeza caso a RLS volte a permitir (regressão).
+      id = data?.id ?? null;
+      expect(error).not.toBeNull();
+      expect(error?.code).toBe("42501");
+      expect(error?.message).toMatch(/row-level security/i);
+      expect(data).toBeNull();
+      expect(id).toBeNull();
     } finally {
       if (id) await limparLiberacoes(admin, [id]);
     }

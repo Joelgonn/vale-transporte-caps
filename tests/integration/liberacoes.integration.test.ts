@@ -253,9 +253,13 @@ describe.skipIf(!habilitado)("Integração — liberações (Sprints 18/19)", ()
     }
   });
 
-  // Sprint 44 — os três perfis podem criar liberações (contínua/avulsa) no
-  // fluxo operacional (autorização vs operação). A recepção CRIA.
-  it("recepção CRIA liberação nova — Sprint44 (todos os perfis criam)", async () => {
+  // Sprint 76 (revoga premissa Sprint 44) — a recepção NÃO cria liberação
+  // contínua nova: a action nega (ACESSO_NEGADO) e a RLS nega o INSERT direto
+  // (policy liberacoes_insert_recepcionista_44 + 42501). Este teste exercita a
+  // camada serviço → repositório → RLS: o serviço não tem check de perfil para
+  // contínua, então a negação efetiva aqui vem do banco, mapeada para
+  // ACESSO_NEGADO pelo repositório. Nenhuma linha é criada (id permanece nulo).
+  it("recepção NÃO CRIA liberação contínua nova — RLS Sprint 76 (regra Sprint 47/76)", async () => {
     const admin = adminClient();
     const autorizadorId = await usuarioAtualId(autorizador);
     const pacienteId = await pacienteTeste(admin);
@@ -272,10 +276,16 @@ describe.skipIf(!habilitado)("Integração — liberações (Sprints 18/19)", ()
     };
     let id: string | null = null;
     try {
-      const criada = await recepcionistaService.criarLiberacao(novaPelaRecepcao);
-      id = criada.id;
-      expect(criada.status).toBe("ativa");
-      expect(criada.paciente_id).toBe(pacienteId);
+      const erro = await erroDe(
+        recepcionistaService.criarLiberacao(novaPelaRecepcao).then((criada) => {
+          // Só executa se a RLS permitir (regressão): guarda para limpeza no finally.
+          id = criada.id;
+          return criada;
+        })
+      );
+      expect(erro).toBeInstanceOf(AppError);
+      expect((erro as AppError).code).toBe("ACESSO_NEGADO");
+      expect(id).toBeNull();
     } finally {
       if (id) await limparLiberacoes(admin, [id]);
     }
