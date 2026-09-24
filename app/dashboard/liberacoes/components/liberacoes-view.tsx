@@ -10,6 +10,7 @@ import type { PacienteSemCpf } from "@/lib/domain/pacientes/types";
 import { listarLiberacoesAction } from "@/app/actions/liberacoes";
 import {
   BOTAO_PRIMARIO,
+  BOTAO_SECUNDARIO,
   CARTAO,
   CONTAINER,
 } from "@/components/ui/visual-tokens";
@@ -152,28 +153,25 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
 
   function handleQueryChange(q: string) {
     setSearchQuery(q);
-    if (selecionado) {
-      requestIdRef.current++;
-      setSelecionado(null);
-      setFetchState({ loading: false, error: null, continua: null });
-      if (props.pacienteSelecionado) {
-        router.push("/dashboard/liberacoes");
+    // Sprint 74.1: com paciente selecionado o campo de busca fica oculto,
+    // então a digitação só ocorre no estado inicial (sem seleção).
+    // Mantém limpeza de estado transitório apenas quando não há seleção.
+    if (!selecionado) {
+      if (fetchState.continua || fetchState.error || fetchState.loading) {
+        requestIdRef.current++;
+        setFetchState({ loading: false, error: null, continua: null });
       }
-      return;
-    }
-    if (fetchState.continua || fetchState.error || fetchState.loading) {
-      requestIdRef.current++;
-      setFetchState({ loading: false, error: null, continua: null });
     }
     void q;
   }
 
-  function handleClear() {
+  function handleTrocarPaciente() {
     requestIdRef.current++;
     setSelecionado(null);
     setFetchState({ loading: false, error: null, continua: null });
     setSearchQuery("");
     setFeedback(null);
+    setRetryTick(0);
     router.replace("/dashboard/liberacoes");
   }
 
@@ -194,53 +192,46 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
       <div className={`${CONTAINER} flex flex-col gap-6`}>
         <PageHeader titulo="Liberações" descricao={descricao} />
 
-        <div className={`${CARTAO} p-5`}>
-          <div className="flex flex-col gap-4 md:flex-row md:items-end">
-            <div className="flex-1 min-w-0">
-              <PatientSearch
-                id="busca-liberacoes"
-                label="Buscar por paciente ou Gestor SUS"
-                placeholder="🔎 Nome ou Gestor SUS..."
-                value={searchQuery}
-                onValueChange={handleQueryChange}
-                onSelect={handleSelect}
-                onCreatePatient={(origem) => {
-                  if (origem === "regular") {
-                    router.push("/dashboard/pacientes?novo=regular");
-                  } else {
-                    router.push("/dashboard/atendimento");
-                  }
-                }}
-              />
-            </div>
-            <div className="flex shrink-0 items-center gap-3">
-              {(selecionado || searchQuery) && (
-                <button
-                  type="button"
-                  onClick={handleClear}
-                  className="inline-flex items-center justify-center rounded-full bg-white px-4 py-2.5 text-sm font-medium text-zinc-600 ring-1 ring-zinc-900/10 transition-colors hover:bg-zinc-50 hover:text-brand-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Limpar
-                </button>
-              )}
+        {!selecionado ? (
+          <div className={`${CARTAO} p-5`}>
+            <div className="flex flex-col gap-4 md:flex-row md:items-end">
+              <div className="flex-1 min-w-0">
+                <PatientSearch
+                  id="busca-liberacoes"
+                  label="Buscar paciente"
+                  placeholder="🔎 Nome ou Gestor SUS..."
+                  value={searchQuery}
+                  onValueChange={handleQueryChange}
+                  onSelect={handleSelect}
+                  onCreatePatient={(origem) => {
+                    if (origem === "regular") {
+                      router.push("/dashboard/pacientes?novo=regular");
+                    } else {
+                      router.push("/dashboard/atendimento");
+                    }
+                  }}
+                />
+              </div>
               {permissoes.podeCriarAvulsa && !permissoes.podeCriarContinua ? (
-                <Link href="/dashboard/atendimento" className={BOTAO_PRIMARIO}>
-                  Novo atendimento
-                </Link>
+                <div className="flex shrink-0 items-center gap-3">
+                  <Link href="/dashboard/atendimento" className={BOTAO_PRIMARIO}>
+                    Novo atendimento
+                  </Link>
+                </div>
               ) : null}
             </div>
-          </div>
 
-          <p id="nova-liberacao-descricao" className="sr-only" aria-live="polite">
-            {motivoDesabilitado ?? ""}
-          </p>
-
-          {!selecionado && motivoDesabilitado && (
-            <p className="mt-3 text-sm text-zinc-500">
-              {motivoDesabilitado}
+            <p id="nova-liberacao-descricao" className="sr-only" aria-live="polite">
+              {motivoDesabilitado ?? ""}
             </p>
-          )}
-        </div>
+
+            {motivoDesabilitado && (
+              <p className="mt-3 text-sm text-zinc-500">
+                {motivoDesabilitado}
+              </p>
+            )}
+          </div>
+        ) : null}
 
         {props.erroInicial && !selecionado && <FeedbackErro>{props.erroInicial}</FeedbackErro>}
 
@@ -249,32 +240,43 @@ export default function LiberacoesView(props: LiberacoesViewProps) {
         {selecionado && (
           <>
             <div className={`${CARTAO} p-5`}>
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-lg font-semibold text-brand-900 truncate">{selecionado.nome}</p>
-                  <p className="mt-1 text-sm text-zinc-500">
-                    Gestor SUS {selecionado.gestor_sus}{selecionado.origem === "esporadico" ? " · Esporádico" : " · Regular"}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
+              <p id="nova-liberacao-descricao" className="sr-only" aria-live="polite">
+                {motivoDesabilitado ?? ""}
+              </p>
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Paciente selecionado</p>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-brand-900">{selecionado.nome}</p>
+                    <p className="text-xs text-zinc-500">
+                      Gestor SUS {selecionado.gestor_sus} ·{" "}
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${selecionado.origem === ORIGENS_PACIENTE.ESPORADICO ? "bg-amber-100 text-amber-800" : "bg-zinc-100 text-zinc-700"}`}
+                      >
+                        {selecionado.origem === ORIGENS_PACIENTE.ESPORADICO ? "Esporádico" : "Regular"}
+                      </span>
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    onClick={handleClear}
-                    className="inline-flex items-center justify-center rounded-full bg-white px-4 py-2.5 text-sm font-medium text-zinc-600 ring-1 ring-zinc-900/10 transition-colors hover:bg-zinc-50 hover:text-brand-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleTrocarPaciente}
+                    className={BOTAO_SECUNDARIO}
                   >
-                    Limpar
+                    Trocar paciente
                   </button>
-                  {canCreateContinua && (
-                    <button
-                      type="button"
-                      onClick={() => setFormAberto({ modo: "criar", pacienteInicial: selecionado })}
-                      className={BOTAO_PRIMARIO}
-                    >
-                      + Nova liberação contínua
-                    </button>
-                  )}
                 </div>
               </div>
+              {canCreateContinua && (
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setFormAberto({ modo: "criar", pacienteInicial: selecionado })}
+                    className={BOTAO_PRIMARIO}
+                  >
+                    + Nova liberação contínua
+                  </button>
+                </div>
+              )}
 
               {(loadingSituacao || temErroSituacao || isEsporadico || temContinuaAtiva) && (
                 <div className="mt-4 pt-4 border-t border-zinc-100 flex flex-col gap-2" role="status" aria-live="polite">

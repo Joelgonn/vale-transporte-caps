@@ -175,37 +175,49 @@ describe("LiberacoesView — contínua expirada/cancelada permite nova", () => {
   });
 });
 
-describe("LiberacoesView — busca negativa invalida seleção", () => {
-  it("alterar busca após seleção limpa paciente", () => {
-    mocks.listarPacientesAction.mockResolvedValue({
-      ok: true,
-      data: [{ id: "p2", gestor_sus: "999", nome: "Novo", origem: "regular" }],
-    });
+describe("LiberacoesView — Sprint 74.1 coerência visual com seleção", () => {
+  it("oculta campo de busca quando há paciente selecionado", () => {
     renderizar({
       perfil: PERFIS.GESTOR,
       pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
       liberacoes: [],
     });
 
-    const input = screen.getByRole("combobox", { name: /buscar/i });
-    fireEvent.change(input, { target: { value: "xyz" } });
-
-    expect(screen.queryByRole("button", { name: /nova liberação contínua/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/maria/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /buscar/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/paciente selecionado/i)).toBeInTheDocument();
+    expect(screen.getByText(/maria/i)).toBeInTheDocument();
   });
-});
 
-describe("LiberacoesView — Limpar", () => {
-  it("Limpar remove seleção e URL", () => {
+  it("exibe estado inicial com busca quando sem paciente", () => {
+    renderizar({ perfil: PERFIS.GESTOR, liberacoes: [] });
+
+    expect(screen.getByRole("combobox", { name: /buscar/i })).toBeInTheDocument();
+    expect(screen.queryByText(/paciente selecionado/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /trocar paciente/i })).not.toBeInTheDocument();
+  });
+
+  it("existe apenas uma ação para abandonar a seleção: Trocar paciente", () => {
     renderizar({
       perfil: PERFIS.GESTOR,
       pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
       liberacoes: [liberacao()],
     });
 
-    const btn = Array.from(document.querySelectorAll("button")).find(
-      (b) => b.textContent?.trim() === "Limpar"
-    ) as HTMLElement;
+    expect(screen.queryByText(/^limpar$/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /trocar paciente/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /trocar paciente/i })).toHaveLength(1);
+  });
+});
+
+describe("LiberacoesView — Trocar paciente", () => {
+  it("Trocar paciente remove seleção e URL", () => {
+    renderizar({
+      perfil: PERFIS.GESTOR,
+      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
+      liberacoes: [liberacao()],
+    });
+
+    const btn = screen.getByRole("button", { name: /trocar paciente/i });
     expect(btn).toBeInTheDocument();
     fireEvent.click(btn);
 
@@ -277,44 +289,44 @@ describe("LiberacoesView — permissões preservadas", () => {
   });
 });
 
-describe("LiberacoesView — busca sem resultado limpa estado", () => {
-  it("alterar busca limpa seleção anterior e remove botão", () => {
-    mocks.listarPacientesAction.mockResolvedValue({ ok: true, data: [] });
+describe("LiberacoesView — trocar e selecionar novamente", () => {
+  it("Trocar paciente retorna ao estado inicial com busca e sem contexto", () => {
     renderizar({
       perfil: PERFIS.GESTOR,
       pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
       liberacoes: [liberacao()],
     });
 
-    const input = screen.getByRole("combobox", { name: /buscar/i });
-    fireEvent.change(input, { target: { value: "xyz" } });
+    expect(screen.queryByRole("combobox", { name: /buscar/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /trocar paciente/i }));
 
+    expect(screen.getByRole("combobox", { name: /buscar/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /nova liberação contínua/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/esporádico/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/contínua ativa/i)).not.toBeInTheDocument();
   });
 
-  it("nova busca válida após busca negativa habilita botão", async () => {
-    mocks.listarPacientesAction.mockResolvedValue({ ok: true, data: [] });
+  it("nova seleção após trocar habilita botão", async () => {
     renderizar({
       perfil: PERFIS.GESTOR,
       pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Maria", origem: "regular" },
       liberacoes: [liberacao()],
     });
 
-    const input = screen.getByRole("combobox", { name: /buscar/i });
-    fireEvent.change(input, { target: { value: "xyz" } });
-    expect(screen.queryByRole("button", { name: /nova liberação contínua/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /trocar paciente/i }));
+    expect(screen.getByRole("combobox", { name: /buscar/i })).toBeInTheDocument();
 
     mocks.listarPacientesAction.mockResolvedValue({
       ok: true,
       data: [{ id: "p2", gestor_sus: "999", nome: "Novo Paciente", origem: "regular" }],
     });
     mocks.listarLiberacoesAction.mockResolvedValue({ ok: true, data: [] });
+    const input = screen.getByRole("combobox", { name: /buscar/i });
     fireEvent.change(input, { target: { value: "novo" } });
     fireEvent.click(await screen.findByText("Novo Paciente"));
 
     await vi.waitFor(() => expect(screen.getByRole("button", { name: /nova liberação contínua/i })).toBeInTheDocument());
+    expect(screen.queryByRole("combobox", { name: /buscar/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/esporádico/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/contínua ativa/i)).not.toBeInTheDocument();
   });
@@ -325,25 +337,34 @@ describe("LiberacoesView — race condition protege seleção atual", () => {
     let resolveA: (value: { ok: boolean; data: LiberacaoComPaciente[] }) => void;
     const promiseA = new Promise<{ ok: boolean; data: LiberacaoComPaciente[] }>((resolve) => { resolveA = resolve; });
 
-    mocks.listarLiberacoesAction.mockImplementation((...args) => {
-      if (args[1] === "p1") return promiseA;
-      if (args[1] === "p2") return Promise.resolve({ ok: true, data: [] });
+    mocks.listarLiberacoesAction.mockImplementation((...args: unknown[]) => {
+      const pacienteId = args[1] as string | undefined;
+      if (pacienteId === "p1") return promiseA;
+      if (pacienteId === "p2") return Promise.resolve({ ok: true, data: [] });
       return Promise.resolve({ ok: true, data: [] });
     });
 
-    renderizar({
-      perfil: PERFIS.GESTOR,
-      pacienteSelecionado: { id: "p1", gestor_sus: "123456", nome: "Paciente A", origem: "regular" },
-      liberacoes: [],
+    // Estado inicial sem paciente (Sprint 74.1: busca visível apenas sem seleção)
+    renderizar({ perfil: PERFIS.GESTOR, liberacoes: [] });
+
+    mocks.listarPacientesAction.mockResolvedValue({
+      ok: true,
+      data: [{ id: "p1", gestor_sus: "123456", nome: "Paciente A", origem: "regular" }],
     });
+
+    const input = screen.getByRole("combobox", { name: /buscar/i });
+    fireEvent.change(input, { target: { value: "paciente a" } });
+    fireEvent.click(await screen.findByText("Paciente A"));
+
+    // Troca antes da resposta de A chegar; seleciona B em seguida
+    fireEvent.click(await screen.findByRole("button", { name: /trocar paciente/i }));
 
     mocks.listarPacientesAction.mockResolvedValue({
       ok: true,
       data: [{ id: "p2", gestor_sus: "999", nome: "Paciente B", origem: "regular" }],
     });
-
-    const input = screen.getByRole("combobox", { name: /buscar/i });
-    fireEvent.change(input, { target: { value: "paciente b" } });
+    const input2 = screen.getByRole("combobox", { name: /buscar/i });
+    fireEvent.change(input2, { target: { value: "paciente b" } });
     fireEvent.click(await screen.findByText("Paciente B"));
 
     await vi.waitFor(() => {
@@ -360,8 +381,8 @@ describe("LiberacoesView — race condition protege seleção atual", () => {
   });
 });
 
-describe("LiberacoesView — Limpar limpa tudo", () => {
-  it("Limpar remove seleção, busca, URL, feedback e remove botão Nova liberação", () => {
+describe("LiberacoesView — Trocar paciente limpa tudo", () => {
+  it("Trocar paciente remove seleção, busca, URL, feedback e remove botão Nova liberação", () => {
     mocks.push.mockClear();
     mocks.replace.mockClear();
     renderizar({
@@ -370,11 +391,9 @@ describe("LiberacoesView — Limpar limpa tudo", () => {
       liberacoes: [liberacao()],
     });
 
-    const btnLimpar = Array.from(document.querySelectorAll("button")).find(
-      (b) => b.textContent?.trim() === "Limpar"
-    ) as HTMLElement;
-    expect(btnLimpar).toBeInTheDocument();
-    fireEvent.click(btnLimpar);
+    const btnTrocar = screen.getByRole("button", { name: /trocar paciente/i });
+    expect(btnTrocar).toBeInTheDocument();
+    fireEvent.click(btnTrocar);
 
     expect(mocks.replace).toHaveBeenCalledWith("/dashboard/liberacoes");
     expect(screen.queryByRole("button", { name: /nova liberação contínua/i })).not.toBeInTheDocument();
